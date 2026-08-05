@@ -35,7 +35,7 @@
 
 ## ⚡ 快速开始
 
-1. 安装内部分发的 `extension.vsix` 包（安装后需重新加载窗口）。
+1. 从 [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=libiaorobot.libiao-copilot) 安装（或在 VS Code 扩展面板搜索 **Libiao Copilot**），安装后重新加载窗口。
 2. 若已启用 `johnny-zhao.oai-compatible-copilot`，请先禁用，避免模型重复。
 3. 打开设置，配置 `libiaoCopilot.baseUrl`（公司网关地址，由管理员提供）。
 4. 运行命令面板中的 `Libiao Copilot: 设置 API Key`，输入个人密钥。

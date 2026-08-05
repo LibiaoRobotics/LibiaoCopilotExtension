@@ -6,6 +6,15 @@
 	"author": {
 		"name": "LIBIAO ROBOTICS HOLDINGS PTE. LTD."
 	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/LibiaoRobotics/LibiaoCopilotExtension.git"
+	},
+	"homepage": "https://marketplace.visualstudio.com/items?itemName=libiaorobot.libiao-copilot",
+	"bugs": {
+		"url": "https://github.com/LibiaoRobotics/LibiaoCopilotExtension/issues"
+	},
+	"pricing": "Free",
 	"icon": "assets/logo.png",
 	"keywords": [
 		"ai",
@@ -804,7 +813,7 @@
 		"format": "prettier --write .",
 		"watch": "tsc -watch -p ./",
 		"test": "npm run compile && vscode-test",
-		"build": "vsce package -o extension.vsix --allow-missing-repository --no-rewrite-relative-links"
+		"build": "vsce package -o extension.vsix"
 	},
 	"dependencies": {
 		"@microsoft/tiktokenizer": "^1.0.10"
