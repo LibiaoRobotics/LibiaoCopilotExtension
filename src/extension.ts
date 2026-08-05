@@ -7,8 +7,17 @@ import { logger } from "./logger";
 import { normalizeUserModels } from "./utils";
 import { abortCommitGeneration, generateCommitMsg } from "./gitCommit/commitMessageGenerator";
 import { TokenizerManager } from "./tokenizer/tokenizerManager";
+import { checkAllModels, runStartupHealthCheck } from "./healthCheck";
+import { clearModelListCache } from "./provideModel";
 
 export function activate(context: vscode.ExtensionContext) {
+	const officialExtension = vscode.extensions.getExtension("johnny-zhao.oai-compatible-copilot");
+	if (officialExtension) {
+		void vscode.window.showWarningMessage(
+			"OAI Compatible Provider is also enabled. Disable it to avoid duplicate models in Copilot Chat."
+		);
+	}
+
 	// Initialize logger
 	logger.init();
 
@@ -18,12 +27,12 @@ export function activate(context: vscode.ExtensionContext) {
 	const tokenCountStatusBarItem: vscode.StatusBarItem = initStatusBar(context);
 	const provider = new HuggingFaceChatModelProvider(context.secrets, tokenCountStatusBarItem);
 	// Register the Hugging Face provider under the vendor id used in package.json
-	vscode.lm.registerLanguageModelChatProvider("oaicopilot", provider);
+	context.subscriptions.push(vscode.lm.registerLanguageModelChatProvider("libiao-copilot", provider));
 
 	// Management command to configure API key
 	context.subscriptions.push(
-		vscode.commands.registerCommand("oaicopilot.setApikey", async () => {
-			const existing = await context.secrets.get("oaicopilot.apiKey");
+		vscode.commands.registerCommand("libiaoCopilot.setApikey", async () => {
+			const existing = await context.secrets.get("libiaoCopilot.apiKey");
 			const apiKey = await vscode.window.showInputBox({
 				title: "OAI Compatible Provider API Key",
 				prompt: existing ? "Update your OAI Compatible API key" : "Enter your OAI Compatible API key",
@@ -35,21 +44,23 @@ export function activate(context: vscode.ExtensionContext) {
 				return; // user canceled
 			}
 			if (!apiKey.trim()) {
-				await context.secrets.delete("oaicopilot.apiKey");
+				await context.secrets.delete("libiaoCopilot.apiKey");
+				clearModelListCache();
 				vscode.window.showInformationMessage("OAI Compatible API key cleared.");
 				return;
 			}
-			await context.secrets.store("oaicopilot.apiKey", apiKey.trim());
+			await context.secrets.store("libiaoCopilot.apiKey", apiKey.trim());
+			clearModelListCache();
 			vscode.window.showInformationMessage("OAI Compatible API key saved.");
 		})
 	);
 
 	// Management command to configure provider-specific API keys
 	context.subscriptions.push(
-		vscode.commands.registerCommand("oaicopilot.setProviderApikey", async () => {
+		vscode.commands.registerCommand("libiaoCopilot.setProviderApikey", async () => {
 			// Get provider list from configuration
 			const config = vscode.workspace.getConfiguration();
-			const userModels = normalizeUserModels(config.get<HFModelItem[]>("oaicopilot.models", []));
+			const userModels = normalizeUserModels(config.get<HFModelItem[]>("libiaoCopilot.models", []));
 
 			// Extract unique providers (case-insensitive)
 			const providers = Array.from(
@@ -58,7 +69,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 			if (providers.length === 0) {
 				vscode.window.showErrorMessage(
-					"No providers found in oaicopilot.models configuration. Please configure models first."
+					"No providers found in libiaoCopilot.models configuration. Please configure models first."
 				);
 				return;
 			}
@@ -74,7 +85,7 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 
 			// Get existing API key for selected provider
-			const providerKey = `oaicopilot.apiKey.${selectedProvider}`;
+			const providerKey = `libiaoCopilot.apiKey.${selectedProvider}`;
 			const existing = await context.secrets.get(providerKey);
 
 			// Prompt for API key
@@ -92,27 +103,36 @@ export function activate(context: vscode.ExtensionContext) {
 
 			if (!apiKey.trim()) {
 				await context.secrets.delete(providerKey);
+				clearModelListCache();
 				vscode.window.showInformationMessage(`API key for ${selectedProvider} cleared.`);
 				return;
 			}
 
 			await context.secrets.store(providerKey, apiKey.trim());
+			clearModelListCache();
 			vscode.window.showInformationMessage(`API key for ${selectedProvider} saved.`);
 		})
 	);
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand("oaicopilot.openConfig", async () => {
+		vscode.commands.registerCommand("libiaoCopilot.openConfig", async () => {
 			ConfigViewPanel.openPanel(context.extensionUri, context.secrets);
 		})
 	);
 
+	context.subscriptions.push(
+		vscode.commands.registerCommand("libiaoCopilot.checkModelHealth", async () => {
+			await checkAllModels(context.secrets, true);
+		})
+	);
+	void runStartupHealthCheck(context);
+
 	// Register the generateGitCommitMessage command handler
 	context.subscriptions.push(
-		vscode.commands.registerCommand("oaicopilot.generateGitCommitMessage", async (scm) => {
+		vscode.commands.registerCommand("libiaoCopilot.generateGitCommitMessage", async (scm) => {
 			generateCommitMsg(context.secrets, scm);
 		}),
-		vscode.commands.registerCommand("oaicopilot.abortGitCommitMessage", () => {
+		vscode.commands.registerCommand("libiaoCopilot.abortGitCommitMessage", () => {
 			abortCommitGeneration();
 		})
 	);
@@ -120,8 +140,16 @@ export function activate(context: vscode.ExtensionContext) {
 	// Watch for logLevel configuration changes
 	context.subscriptions.push(
 		vscode.workspace.onDidChangeConfiguration((e) => {
-			if (e.affectsConfiguration("oaicopilot.logLevel")) {
+			if (e.affectsConfiguration("libiaoCopilot.logLevel")) {
 				logger.reloadConfig();
+			}
+			if (
+				e.affectsConfiguration("libiaoCopilot.models") ||
+				e.affectsConfiguration("libiaoCopilot.baseUrl") ||
+				e.affectsConfiguration("libiaoCopilot.modelCacheTtlMinutes")
+			) {
+				// Cached provider listings may no longer match the new configuration.
+				clearModelListCache();
 			}
 		})
 	);

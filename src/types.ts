@@ -28,11 +28,14 @@ export interface HFModelItem {
 	providers?: HFProvider[];
 	architecture?: HFArchitecture;
 	context_length?: number;
+	context_sizes?: number[];
+	default_context_size?: number;
 	vision?: boolean;
 	max_tokens?: number;
 	// OpenAI new standard parameter
 	max_completion_tokens?: number;
 	reasoning_effort?: string;
+	reasoning_efforts?: string[];
 	enable_thinking?: boolean;
 	thinking_budget?: number;
 	// New thinking configuration for Zai provider
@@ -91,7 +94,7 @@ export interface HFModelItem {
 
 	/**
 	 * Model-specific delay in milliseconds between consecutive requests.
-	 * If not specified, falls back to global `oaicopilot.delay` configuration.
+	 * If not specified, falls back to global `libiaoCopilot.delay` configuration.
 	 */
 	delay?: number;
 

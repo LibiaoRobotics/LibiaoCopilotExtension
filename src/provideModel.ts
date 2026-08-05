@@ -3,9 +3,8 @@ import { CancellationToken, LanguageModelChatInformation } from "vscode";
 
 import type { HFApiMode, HFModelItem, HFModelsResponse } from "./types";
 import {
-	createReasoningEffortConfigurationSchema,
+	createModelConfigurationSchema,
 	type ModelPickerChatInformation,
-	isReasoningEffortValue,
 } from "./modelConfiguration";
 import { normalizeUserModels } from "./utils";
 import { VersionManager } from "./versionManager";
@@ -15,7 +14,84 @@ import { logger } from "./logger";
 
 const DEFAULT_CONTEXT_LENGTH = 128000;
 const DEFAULT_MAX_TOKENS = 4096;
-const EXTENSION_LABEL = "OAICopilot";
+const EXTENSION_LABEL = "Libiao Copilot";
+
+/**
+ * Model id of the placeholder entry shown when no model could be verified
+ * (missing/wrong base URL or API key, network error). VS Code hides the
+ * whole provider section when an empty list is returned, so a single
+ * non-selectable entry keeps the "Libiao Copilot" section visible together
+ * with the reason.
+ */
+export const NO_MODELS_PLACEHOLDER_ID = "__libiao-no-models__";
+
+/** Why no group could be queried against its provider. */
+export type NoModelsReason =
+	| { kind: "noApiKey" }
+	| { kind: "invalidBaseUrl" }
+	| { kind: "fetchFailed"; error: string }
+	| { kind: "emptyListing" };
+
+/**
+ * TTL cache for provider model listings, keyed by `${apiMode}|${baseUrl}`.
+ * VS Code invokes model discovery frequently (activation, picker open,
+ * config changes, periodic refresh); the cache avoids hitting the provider
+ * on every call. When a refresh fails, a stale entry is served so the
+ * picker never goes empty during a provider outage.
+ */
+interface ModelListCacheEntry {
+	models: HFModelItem[];
+	fetchedAt: number;
+}
+
+const modelListCache = new Map<string, ModelListCacheEntry>();
+
+/** Clear all cached model lists (e.g. when configuration or keys change). */
+export function clearModelListCache(): void {
+	modelListCache.clear();
+}
+
+function getModelCacheTtlMs(): number {
+	const minutes = vscode.workspace.getConfiguration().get<number>("libiaoCopilot.modelCacheTtlMinutes", 10);
+	return Number.isFinite(minutes) && minutes > 0 ? minutes * 60_000 : 0;
+}
+
+/**
+ * Fetch models with TTL caching. Returns cached results while fresh; on a
+ * failed refresh, falls back to the stale entry when one exists.
+ */
+async function fetchModelsCached(
+	baseUrl: string,
+	apiKey: string,
+	apiMode?: HFApiMode | string
+): Promise<{ models: HFModelItem[]; fromCache: boolean }> {
+	const key = `${apiMode ?? "openai"}|${baseUrl}`;
+	const ttlMs = getModelCacheTtlMs();
+	const entry = modelListCache.get(key);
+
+	if (ttlMs > 0 && entry && Date.now() - entry.fetchedAt < ttlMs) {
+		return { models: entry.models, fromCache: true };
+	}
+
+	try {
+		const { models } = await fetchModels(baseUrl, apiKey, apiMode);
+		if (ttlMs > 0) {
+			modelListCache.set(key, { models, fetchedAt: Date.now() });
+		} else {
+			modelListCache.delete(key);
+		}
+		return { models, fromCache: false };
+	} catch (error) {
+		if (entry) {
+			logger.warn("models.cache.staleFallback", {
+				baseUrl,
+				error: error instanceof Error ? error.message : String(error),
+			});
+			return { models: entry.models, fromCache: true };
+		}
+		throw error;
+	}
+}
 
 /**
  * Get the list of available language models contributed by this provider
@@ -30,45 +106,37 @@ export async function prepareLanguageModelChatInformation(
 ): Promise<LanguageModelChatInformation[]> {
 	// Check for user-configured models first
 	const config = vscode.workspace.getConfiguration();
-	const userModels = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+	const userModels = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
+	const configuredModels = userModels.filter((m) => !m.id.startsWith("__provider__"));
 
 	let infos: ModelPickerChatInformation[];
-	if (userModels && userModels.length > 0) {
-		// Return user-provided models directly
-		infos = userModels
-			.filter((m) => !m.id.startsWith("__provider__"))
-			.map((m) => {
-				const contextLen = m?.context_length ?? DEFAULT_CONTEXT_LENGTH;
-				const maxOutput = m?.max_completion_tokens ?? m?.max_tokens ?? DEFAULT_MAX_TOKENS;
-				const maxInput = Math.max(1, contextLen - maxOutput);
-
-				// Use configId when present so each model configuration stays distinct.
-				const modelId = m.configId ? `${m.id}::${m.configId}` : m.id;
-				const modelName = m.displayName || (m.configId ? `${m.id}::${m.configId}` : `${m.id}`);
-				const detail = m.owned_by ? `${m.owned_by} (${EXTENSION_LABEL})` : EXTENSION_LABEL;
-				const reasoningEffort = isReasoningEffortValue(m.reasoning_effort) ? m.reasoning_effort : undefined;
-
-				return {
-					id: modelId,
-					name: modelName,
-					detail: detail,
-					tooltip: detail,
-					family: m.family ?? EXTENSION_LABEL,
-					version: "1.0.0",
-					maxInputTokens: maxInput,
-					maxOutputTokens: maxOutput,
-					isUserSelectable: true,
-					...(reasoningEffort
-						? { configurationSchema: createReasoningEffortConfigurationSchema(reasoningEffort) }
-						: {}),
-					capabilities: {
-						toolCalling: true,
-						imageInput: m?.vision ?? false,
-					},
-				} satisfies ModelPickerChatInformation;
-			});
+	let source: string;
+	if (configuredModels.length > 0) {
+		// Merge mode: configured models act as a metadata layer on top of the
+		// provider's live model list. Configured models missing from the provider
+		// are dropped, while provider models without configuration are exposed
+		// with default metadata so newly published models appear automatically.
+		// Groups whose endpoint cannot be queried (missing URL/key, or a failed
+		// fetch) are hidden; see mergeConfiguredModelWithProviders.
+		const globalBaseUrl = config.get<string>("libiaoCopilot.baseUrl", "");
+		const merged = await mergeConfiguredModelWithProviders({
+			secrets,
+			configuredModels,
+			globalBaseUrl,
+		});
+		if (merged.models.length === 0) {
+			// Nothing verified: show a single non-selectable placeholder so the
+			// "Libiao Copilot" section stays visible together with the reason,
+			// instead of the picker hiding the provider entirely.
+			infos = [createNoModelsPlaceholderInfo(merged.reason)];
+			source = "config+api (placeholder)";
+		} else {
+			infos = merged.models.map(toModelPickerInfo);
+			source = "config+api";
+		}
 	} else {
 		// Fallback: Fetch models from API
+		source = "api";
 		const apiKey = await ensureApiKey(options.silent, secrets);
 		if (!apiKey) {
 			if (options.silent) {
@@ -78,12 +146,16 @@ export async function prepareLanguageModelChatInformation(
 			}
 		}
 
-		const config = vscode.workspace.getConfiguration();
-		const BASE_URL = config.get<string>("oaicopilot.baseUrl", "");
+		const BASE_URL = config.get<string>("libiaoCopilot.baseUrl", "");
 		if (!BASE_URL || !BASE_URL.startsWith("http")) {
-			throw new Error(`Invalid base URL configuration.`);
+			// Base URL not configured: do not fetch, stay silent on
+			// background calls so the picker simply shows no models.
+			if (options.silent) {
+				return [];
+			}
+			throw new Error(`Invalid base URL configuration. Please set "libiaoCopilot.baseUrl" first.`);
 		}
-		const { models } = await fetchModels(BASE_URL, apiKey);
+		const { models } = await fetchModelsCached(BASE_URL, apiKey);
 
 		infos = models.flatMap((m) => {
 			const providers = m?.providers ?? [];
@@ -142,8 +214,302 @@ export async function prepareLanguageModelChatInformation(
 		});
 	}
 
-	logger.info("models.loaded", { count: infos.length, source: userModels && userModels.length > 0 ? "config" : "api" });
+	logger.info("models.loaded", { count: infos.length, source });
 	return infos;
+}
+
+/**
+ * Convert a merged/discovered model item into a model picker entry.
+ */
+function toModelPickerInfo(m: HFModelItem): ModelPickerChatInformation {
+	const contextLen = m?.context_length ?? DEFAULT_CONTEXT_LENGTH;
+	const maxOutput = m?.max_completion_tokens ?? m?.max_tokens ?? DEFAULT_MAX_TOKENS;
+	const maxInput = Math.max(1, contextLen - maxOutput);
+
+	// Use configId when present so each model configuration stays distinct.
+	const modelId = m.configId ? `${m.id}::${m.configId}` : m.id;
+	const modelName = m.displayName || modelId;
+	const detail = m.owned_by ? `${m.owned_by} (${EXTENSION_LABEL})` : EXTENSION_LABEL;
+	const configurationSchema = createModelConfigurationSchema(m);
+
+	return {
+		id: modelId,
+		name: modelName,
+		detail: detail,
+		tooltip: detail,
+		family: m.family ?? EXTENSION_LABEL,
+		version: "1.0.0",
+		maxInputTokens: maxInput,
+		maxOutputTokens: maxOutput,
+		isUserSelectable: true,
+		...(configurationSchema ? { configurationSchema } : {}),
+		capabilities: {
+			toolCalling: true,
+			imageInput: m?.vision ?? false,
+		},
+	} satisfies ModelPickerChatInformation;
+}
+
+/**
+ * Convert a no-models reason into a single concise, user-facing message.
+ * The message is shown directly on the placeholder entry, so it must be
+ * short and actionable in one line.
+ */
+function noModelsReasonMessage(reason?: NoModelsReason): string {
+	switch (reason?.kind) {
+		case "noApiKey":
+			return "未配置 API Key，请运行命令「设置 API Key」";
+		case "invalidBaseUrl":
+			return "未配置基础地址，请先设置 libiaoCopilot.baseUrl";
+		case "fetchFailed":
+			return fetchFailureMessage(reason.error);
+		case "emptyListing":
+			return "供应商未返回任何模型";
+		default:
+			return "暂无可用模型";
+	}
+}
+
+/**
+ * Classify a provider fetch failure: auth errors (401/403) mean the API
+ * key lacks permission — only then is the key mentioned. Every other
+ * failure (404, connection refused, unknown host, ...) points at the base
+ * URL; the two causes are never mixed in a single message.
+ */
+function fetchFailureMessage(error: string): string {
+	if (/\b40[13]\b/.test(error)) {
+		return "权限不足（401/403），请检查 API Key";
+	}
+	if (/\b404\b/.test(error)) {
+		return "基础地址错误（404），请检查 libiaoCopilot.baseUrl";
+	}
+	if (/\b(fetch failed|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|ECONNRESET|timeout)\b/i.test(error)) {
+		return "无法连接服务端点，请检查 libiaoCopilot.baseUrl";
+	}
+	return "模型列表查询失败，请检查 libiaoCopilot.baseUrl";
+}
+
+/**
+ * Build the non-selectable placeholder entry shown when no model could be
+ * verified, keeping the provider section visible. The reason is shown
+ * directly as the entry text — no hover/click required.
+ */
+function createNoModelsPlaceholderInfo(reason?: NoModelsReason): ModelPickerChatInformation {
+	const message = noModelsReasonMessage(reason);
+	return {
+		id: NO_MODELS_PLACEHOLDER_ID,
+		name: message,
+		tooltip: message,
+		family: EXTENSION_LABEL,
+		version: "1.0.0",
+		maxInputTokens: Math.max(1, DEFAULT_CONTEXT_LENGTH - DEFAULT_MAX_TOKENS),
+		maxOutputTokens: DEFAULT_MAX_TOKENS,
+		isUserSelectable: false,
+		statusIcon: new vscode.ThemeIcon("warning"),
+		capabilities: {
+			toolCalling: false,
+			imageInput: false,
+		},
+	} satisfies ModelPickerChatInformation;
+}
+
+interface EndpointGroup {
+	baseUrl: string;
+	apiMode: HFApiMode;
+	models: HFModelItem[];
+}
+
+/**
+ * Merge configured models with the live model list of their providers.
+ *
+ * Configured models are grouped by the endpoint they actually talk to
+ * (per-model `baseUrl`/`apiMode`, falling back to the global settings) and
+ * each group is checked against that endpoint's `/models` response:
+ * - configured models missing from the provider list are dropped;
+ * - provider models without a configuration entry are exposed with default
+ *   metadata so newly published models show up automatically.
+ * Groups whose endpoint cannot be queried — missing URL, missing API key,
+ * or a failed fetch (wrong URL/key, network error) — are hidden: configured
+ * entries cannot be validated against the provider in that case and must
+ * never be fabricated into the picker. When no group is queryable, the
+ * result carries a `reason` so the caller renders a non-selectable
+ * placeholder entry that keeps the provider section visible (returning an
+ * empty array would make VS Code hide the provider section entirely).
+ * Outage tolerance is provided by the TTL cache instead: a failed refresh
+ * serves the previously successful (stale) listing when one exists (see
+ * fetchModelsCached).
+ */
+async function mergeConfiguredModelWithProviders(options: {
+	secrets: vscode.SecretStorage;
+	configuredModels: HFModelItem[];
+	globalBaseUrl: string;
+}): Promise<{ models: HFModelItem[]; reason?: NoModelsReason }> {
+	const { secrets, configuredModels, globalBaseUrl } = options;
+
+	const groups = new Map<string, EndpointGroup>();
+	for (const m of configuredModels) {
+		const baseUrl = m.baseUrl || globalBaseUrl;
+		const apiMode = m.apiMode ?? "openai";
+		const key = `${apiMode}|${baseUrl}`;
+		let group = groups.get(key);
+		if (!group) {
+			group = { baseUrl, apiMode, models: [] };
+			groups.set(key, group);
+		}
+		group.models.push(m);
+	}
+
+	const merged: HFModelItem[] = [];
+	let queryableGroups = 0;
+	let groupsMissingKey = 0;
+	let groupsInvalidUrl = 0;
+	const fetchErrors: string[] = [];
+	for (const group of groups.values()) {
+		const outcome = await fetchProviderModelsForGroup(group, secrets);
+		if (outcome.kind !== "ok") {
+			// No verified provider listing for this endpoint (missing URL,
+			// missing key, or a failed fetch): hide the group instead of
+			// fabricating unverified configured entries into the picker.
+			if (outcome.kind === "notConfigured") {
+				if (outcome.reason === "noApiKey") {
+					groupsMissingKey++;
+				} else {
+					groupsInvalidUrl++;
+				}
+			} else {
+				fetchErrors.push(`${group.baseUrl}: ${outcome.error}`);
+			}
+			continue;
+		}
+		queryableGroups++;
+
+		const providerModels = outcome.models;
+		const availableIds = new Set(providerModels.map((m) => m.id));
+		const configuredIds = new Set<string>();
+		for (const m of group.models) {
+			configuredIds.add(m.id);
+			if (availableIds.has(m.id)) {
+				merged.push(m);
+			} else {
+				logger.warn("models.merge.configuredMissing", { modelId: m.id, baseUrl: group.baseUrl });
+			}
+		}
+
+		// Expose provider models that have no configuration entry
+		// (e.g. newly published models), with default metadata.
+		const discovered = providerModels
+			.filter((m) => !configuredIds.has(m.id))
+			.sort((a, b) => a.id.localeCompare(b.id));
+		for (const m of discovered) {
+			merged.push(toDiscoveredModelItem(m));
+		}
+	}
+
+	if (queryableGroups === 0) {
+		// Nothing queryable: report why so the caller can render a
+		// placeholder entry. Priority: fetch error > missing key > bad URL.
+		logger.warn("models.merge.noQueryableGroups", {
+			groupsMissingKey,
+			groupsInvalidUrl,
+			fetchErrors,
+		});
+		const reason: NoModelsReason =
+			fetchErrors.length > 0
+				? { kind: "fetchFailed", error: fetchErrors[0] }
+				: groupsMissingKey > 0
+					? { kind: "noApiKey" }
+					: { kind: "invalidBaseUrl" };
+		return { models: [], reason };
+	}
+
+	// A queryable provider may legitimately return an empty listing; the
+	// caller then shows the placeholder without a configuration reason.
+	return { models: merged };
+}
+
+/**
+ * Result of querying one endpoint group.
+ * - `ok`: the provider listing was fetched.
+ * - `notConfigured`: the endpoint lacks a URL or API key.
+ * - `failed`: the fetch itself failed at runtime (wrong URL/key, network).
+ * Any non-`ok` outcome means the group is hidden: callers never fall back
+ * to unverified configured entries.
+ */
+type GroupFetchOutcome =
+	| { kind: "ok"; models: HFModelItem[] }
+	| { kind: "notConfigured"; reason: "invalidBaseUrl" | "noApiKey" }
+	| { kind: "failed"; error: string };
+
+/**
+ * Fetch the model list for one endpoint group. Any non-`ok` outcome (missing
+ * URL/key, or a failed fetch) means the caller should hide the group rather
+ * than show unverified configured entries.
+ */
+async function fetchProviderModelsForGroup(
+	group: EndpointGroup,
+	secrets: vscode.SecretStorage
+): Promise<GroupFetchOutcome> {
+	if (!group.baseUrl || !group.baseUrl.startsWith("http")) {
+		logger.warn("models.merge.invalidBaseUrl", { baseUrl: group.baseUrl });
+		return { kind: "notConfigured", reason: "invalidBaseUrl" };
+	}
+
+	const apiKey = await resolveGroupApiKey(group, secrets);
+	if (!apiKey) {
+		logger.warn("models.merge.noApiKey", { baseUrl: group.baseUrl });
+		return { kind: "notConfigured", reason: "noApiKey" };
+	}
+
+	try {
+		const { models } = await fetchModelsCached(group.baseUrl, apiKey, group.apiMode);
+		return { kind: "ok", models };
+	} catch (error) {
+		logger.warn("models.merge.fetchFailed", {
+			baseUrl: group.baseUrl,
+			error: error instanceof Error ? error.message : String(error),
+		});
+		return { kind: "failed", error: error instanceof Error ? error.message : String(error) };
+	}
+}
+
+/**
+ * Resolve an API key for an endpoint group: the global key first, then any
+ * provider-specific key referenced by the group's configured models.
+ */
+async function resolveGroupApiKey(group: EndpointGroup, secrets: vscode.SecretStorage): Promise<string | undefined> {
+	const globalKey = await secrets.get("libiaoCopilot.apiKey");
+	if (globalKey) {
+		return globalKey;
+	}
+
+	const providers = Array.from(
+		new Set(
+			group.models
+				.map((m) => m.owned_by?.toLowerCase().trim())
+				.filter((p): p is string => typeof p === "string" && p !== "")
+		)
+	);
+	for (const provider of providers) {
+		const key = await secrets.get(`libiaoCopilot.apiKey.${provider}`);
+		if (key) {
+			return key;
+		}
+	}
+	return undefined;
+}
+
+/**
+ * Build a picker entry for a provider model that has no configuration,
+ * deriving vision/context hints from the API response where available.
+ */
+function toDiscoveredModelItem(m: HFModelItem): HFModelItem {
+	const modalities = m.architecture?.input_modalities ?? [];
+	const vision = m.vision ?? (Array.isArray(modalities) && modalities.includes("image"));
+	return {
+		...m,
+		context_length: m.context_length ?? m.providers?.[0]?.context_length,
+		vision,
+	};
 }
 
 /**
@@ -209,7 +575,7 @@ export async function fetchModels(
  */
 async function ensureApiKey(silent: boolean, secrets: vscode.SecretStorage): Promise<string | undefined> {
 	// Fall back to generic API key
-	let apiKey = await secrets.get("oaicopilot.apiKey");
+	let apiKey = await secrets.get("libiaoCopilot.apiKey");
 
 	if (!apiKey && !silent) {
 		const entered = await vscode.window.showInputBox({
@@ -220,7 +586,7 @@ async function ensureApiKey(silent: boolean, secrets: vscode.SecretStorage): Pro
 		});
 		if (entered && entered.trim()) {
 			apiKey = entered.trim();
-			await secrets.store("oaicopilot.apiKey", apiKey);
+			await secrets.store("libiaoCopilot.apiKey", apiKey);
 		}
 	}
 	return apiKey;

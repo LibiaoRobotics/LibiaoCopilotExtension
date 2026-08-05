@@ -8,7 +8,11 @@ import {
 } from "vscode";
 
 import type { HFModelItem, ReasoningConfig, TokenUsage } from "../types";
-import { getConfiguredReasoningEffort, isReasoningEffortPickerEnabled } from "../modelConfiguration";
+import {
+	getConfiguredReasoningEffort,
+	isReasoningEffortPickerEnabled,
+	isReasoningEffortValue,
+} from "../modelConfiguration";
 
 import type {
 	OpenAIChatMessage,
@@ -174,7 +178,8 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 
 		// OpenAI reasoning configuration
 		if (isReasoningEffortPickerEnabled(um)) {
-			rb.reasoning_effort = getConfiguredReasoningEffort(options, um.reasoning_effort);
+			const allowedEfforts = um.reasoning_efforts?.filter(isReasoningEffortValue);
+			rb.reasoning_effort = getConfiguredReasoningEffort(options, um.reasoning_effort, allowedEfforts);
 		} else if (um?.reasoning_effort !== undefined) {
 			rb.reasoning_effort = um.reasoning_effort;
 		}

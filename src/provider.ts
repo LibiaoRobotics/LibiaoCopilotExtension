@@ -15,7 +15,7 @@ import type { OllamaRequestBody } from "./ollama/ollamaTypes";
 
 import { parseModelId, createRetryConfig, executeWithRetry, normalizeUserModels } from "./utils";
 
-import { prepareLanguageModelChatInformation } from "./provideModel";
+import { prepareLanguageModelChatInformation, NO_MODELS_PLACEHOLDER_ID } from "./provideModel";
 import { countMessageTokens } from "./provideToken";
 import { updateContextStatusBar } from "./statusBar";
 import { OllamaApi } from "./ollama/ollamaApi";
@@ -93,8 +93,11 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 		options: ProvideLanguageModelChatResponseOptions,
 		progress: Progress<LanguageModelResponsePart2>,
 		token: CancellationToken
-	): Promise<void> {
-		const trackingProgress: Progress<LanguageModelResponsePart2> = {
+	): Promise<void> {		if (model.id === NO_MODELS_PLACEHOLDER_ID) {
+			// Placeholder entry: no verified models exist, so never send a
+			// request — fail fast with an actionable message.
+			throw new Error("No models available. Please check the base URL and API Key configuration.");
+		}		const trackingProgress: Progress<LanguageModelResponsePart2> = {
 			report: (part) => {
 				try {
 					progress.report(part);
@@ -110,7 +113,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 		try {
 			// get model config from user settings
 			const config = vscode.workspace.getConfiguration();
-			const userModels = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+			const userModels = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
 
 			// Parse model ID to handle config ID
 			const parsedModelId = parseModelId(model.id);
@@ -132,7 +135,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 
 			// Check if using Ollama native API mode
 			const apiMode = um?.apiMode ?? "openai";
-			const baseUrl = um?.baseUrl || config.get<string>("oaicopilot.baseUrl", "");
+			const baseUrl = um?.baseUrl || config.get<string>("libiaoCopilot.baseUrl", "");
 
 			logger.info("request.start", {
 				modelId: model.id,
@@ -151,7 +154,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 
 			// Apply delay between consecutive requests
 			const modelDelay = um?.delay;
-			const globalDelay = config.get<number>("oaicopilot.delay", 0);
+			const globalDelay = config.get<number>("libiaoCopilot.delay", 0);
 			const delayMs = modelDelay !== undefined ? modelDelay : globalDelay;
 
 			if (delayMs > 0 && this._lastRequestTime !== null) {
@@ -526,7 +529,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 		let apiKey: string | undefined;
 		if (provider && provider.trim() !== "") {
 			const normalizedProvider = provider.trim().toLowerCase();
-			const providerKey = `oaicopilot.apiKey.${normalizedProvider}`;
+			const providerKey = `libiaoCopilot.apiKey.${normalizedProvider}`;
 			apiKey = await this.secrets.get(providerKey);
 
 			if (!apiKey && !useGenericKey) {
@@ -545,7 +548,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 
 		// Fall back to generic API key
 		if (!apiKey) {
-			apiKey = await this.secrets.get("oaicopilot.apiKey");
+			apiKey = await this.secrets.get("libiaoCopilot.apiKey");
 		}
 
 		if (!apiKey && useGenericKey) {
@@ -557,7 +560,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			});
 			if (entered && entered.trim()) {
 				apiKey = entered.trim();
-				await this.secrets.store("oaicopilot.apiKey", apiKey);
+				await this.secrets.store("libiaoCopilot.apiKey", apiKey);
 			}
 		}
 		return apiKey;

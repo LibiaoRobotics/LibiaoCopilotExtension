@@ -233,6 +233,18 @@
 							<input id="modelContextLength" type="number" class="model-input" placeholder="128000" min="1" />
 						</div>
 						<div class="field">
+							<label for="modelContextSizes">Context Sizes</label>
+							<div class="field-description">Selectable context sizes, separated by commas.</div>
+							<input id="modelContextSizes" type="text" class="model-input" placeholder="131072, 262144, 524288" />
+						</div>
+						<div class="field">
+							<label for="modelDefaultContextSize">Default Context Size</label>
+							<div class="field-description">Default value selected in the Copilot Context Size menu.</div>
+							<input id="modelDefaultContextSize" type="number" class="model-input" placeholder="524288" min="1" />
+						</div>
+					</div>
+					<div class="row">
+						<div class="field">
 							<label for="modelMaxTokens">Max Tokens</label>
 							<div class="field-description">Maximum number of tokens to generate (range: [1, context_length)).</div>
 							<input id="modelMaxTokens" type="number" class="model-input" placeholder="4096" min="1" />

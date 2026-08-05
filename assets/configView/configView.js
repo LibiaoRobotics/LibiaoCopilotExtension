@@ -38,6 +38,8 @@ const modelConfigIdInput = document.getElementById("modelConfigId");
 const modelBaseUrlInput = document.getElementById("modelBaseUrl");
 const modelFamilyInput = document.getElementById("modelFamily");
 const modelContextLengthInput = document.getElementById("modelContextLength");
+const modelContextSizesInput = document.getElementById("modelContextSizes");
+const modelDefaultContextSizeInput = document.getElementById("modelDefaultContextSize");
 const modelMaxTokensInput = document.getElementById("modelMaxTokens");
 const modelVisionInput = document.getElementById("modelVision");
 const modelApiModeInput = document.getElementById("modelApiMode");
@@ -540,6 +542,8 @@ function resetModelForm() {
 	modelBaseUrlInput.value = "";
 	modelFamilyInput.value = "";
 	modelContextLengthInput.value = 128000;
+	modelContextSizesInput.value = "";
+	modelDefaultContextSizeInput.value = "";
 	modelMaxTokensInput.value = 4096;
 	modelVisionInput.value = "";
 	modelApiModeInput.value = "openai";
@@ -588,6 +592,12 @@ function collectModelFormData() {
 		baseUrl: modelBaseUrlInput.value.trim() || undefined,
 		family: modelFamilyInput.value.trim() || undefined,
 		context_length: modelContextLengthInput.value ? parseInt(modelContextLengthInput.value) : undefined,
+		context_sizes: modelContextSizesInput.value
+			? modelContextSizesInput.value.split(",").map((value) => parseInt(value.trim()))
+			: undefined,
+		default_context_size: modelDefaultContextSizeInput.value
+			? parseInt(modelDefaultContextSizeInput.value)
+			: undefined,
 		max_tokens: modelMaxTokensInput.value ? parseInt(modelMaxTokensInput.value) : undefined,
 		vision: modelVisionInput.value ? modelVisionInput.value === "true" : undefined,
 		apiMode: modelApiModeInput.value || undefined,
@@ -724,6 +734,21 @@ function validateModelData(modelData) {
 	// Validate numeric fields if provided
 	if (modelData.context_length !== undefined && (isNaN(modelData.context_length) || modelData.context_length <= 0)) {
 		showModelError("Context Length must be a positive number.");
+		return false;
+	}
+	if (modelData.context_sizes?.some((value) => isNaN(value) || value <= 0)) {
+		showModelError("Context Sizes must contain only positive integers.");
+		return false;
+	}
+	if (modelData.context_sizes?.some((value) => value > modelData.context_length)) {
+		showModelError("Context Sizes cannot exceed Context Length.");
+		return false;
+	}
+	if (
+		modelData.default_context_size !== undefined &&
+		!modelData.context_sizes?.includes(modelData.default_context_size)
+	) {
+		showModelError("Default Context Size must be included in Context Sizes.");
 		return false;
 	}
 	if (modelData.max_tokens !== undefined && (isNaN(modelData.max_tokens) || modelData.max_tokens <= 0)) {
@@ -897,6 +922,8 @@ function populateModelForm(model) {
 	modelBaseUrlInput.value = model.baseUrl || "";
 	modelFamilyInput.value = model.family || "";
 	modelContextLengthInput.value = model.context_length || "";
+	modelContextSizesInput.value = model.context_sizes?.join(", ") || "";
+	modelDefaultContextSizeInput.value = model.default_context_size || "";
 	modelMaxTokensInput.value = model.max_tokens || "";
 	modelVisionInput.value = model.vision !== undefined ? String(model.vision) : "";
 	modelApiModeInput.value = model.apiMode || "openai";

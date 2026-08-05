@@ -1,8 +1,11 @@
 {
-	"name": "oai-compatible-copilot",
-	"publisher": "johnny-zhao",
-	"displayName": "OAI Compatible Provider for Copilot",
-	"description": "An extension that integrates OpenAI/Ollama/Anthropic/Gemini API Providers into GitHub Copilot Chat",
+	"name": "libiao-copilot",
+	"publisher": "libiaorobot",
+	"displayName": "Libiao Copilot",
+	"description": "立镖机器人的 OpenAI 兼容模型供应商扩展，为 GitHub Copilot Chat 提供模型支持",
+	"author": {
+		"name": "LIBIAO ROBOTICS HOLDINGS PTE. LTD."
+	},
 	"icon": "assets/logo.png",
 	"keywords": [
 		"ai",
@@ -21,28 +24,17 @@
 		"git-commit",
 		"thinking"
 	],
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/JohnnyZ93/oai-compatible-copilot"
-	},
-	"version": "0.4.2",
+	"version": "1.0.0",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
+	"activationEvents": [
+		"onStartupFinished"
+	],
 	"categories": [
 		"AI",
 		"Chat"
 	],
-	"badges": [
-		{
-			"url": "https://img.shields.io/github/stars/JohnnyZ93/oai-compatible-copilot?style=social",
-			"description": "Star oai-compatible-copilot on Github",
-			"href": "https://github.com/JohnnyZ93/oai-compatible-copilot"
-		}
-	],
-	"bugs": {
-		"url": "https://github.com/JohnnyZ93/oai-compatible-copilot/issues"
-	},
 	"license": "MIT",
 	"enabledApiProposals": [
 		"chatProvider"
@@ -50,147 +42,448 @@
 	"contributes": {
 		"languageModelChatProviders": [
 			{
-				"vendor": "oaicopilot",
-				"displayName": "OAI Compatible",
-				"managementCommand": "oaicopilot.setApikey"
+				"vendor": "libiao-copilot",
+				"displayName": "Libiao Copilot",
+				"managementCommand": "libiaoCopilot.setApikey"
 			}
 		],
 		"commands": [
 			{
-				"command": "oaicopilot.setApikey",
-				"category": "OAICopilot",
-				"title": "Set OAI Compatible Apikey"
+				"command": "libiaoCopilot.setApikey",
+				"category": "Libiao Copilot",
+				"title": "设置 API Key"
 			},
 			{
-				"command": "oaicopilot.setProviderApikey",
-				"category": "OAICopilot",
-				"title": "Set OAI Compatible Multi-Provider Apikey"
+				"command": "libiaoCopilot.setProviderApikey",
+				"category": "Libiao Copilot",
+				"title": "设置供应商 API Key"
 			},
 			{
-				"command": "oaicopilot.openConfig",
-				"category": "OAICopilot",
-				"title": "Open Configuration UI"
+				"command": "libiaoCopilot.openConfig",
+				"category": "Libiao Copilot",
+				"title": "打开配置界面"
 			},
 			{
-				"command": "oaicopilot.generateGitCommitMessage",
-				"title": "Generate Commit Message with OAICopilot",
-				"category": "OAICopilot",
+				"command": "libiaoCopilot.checkModelHealth",
+				"category": "Libiao Copilot",
+				"title": "检查模型可用性"
+			},
+			{
+				"command": "libiaoCopilot.generateGitCommitMessage",
+				"title": "使用 Libiao Copilot 生成提交信息",
+				"category": "Libiao Copilot",
 				"icon": "$(wand)"
 			},
 			{
-				"command": "oaicopilot.abortGitCommitMessage",
-				"title": "Generate Commit Message with OAICopilot - Stop",
-				"category": "OAICopilot",
+				"command": "libiaoCopilot.abortGitCommitMessage",
+				"title": "使用 Libiao Copilot 生成提交信息 - 停止",
+				"category": "Libiao Copilot",
 				"icon": "$(debug-stop)"
 			}
 		],
 		"menus": {
 			"scm/title": [
 				{
-					"command": "oaicopilot.generateGitCommitMessage",
+					"command": "libiaoCopilot.generateGitCommitMessage",
 					"group": "navigation",
-					"when": "config.git.enabled && scmProvider == git && !oaicopilot.isGeneratingCommit"
+					"when": "config.git.enabled && scmProvider == git && !libiaoCopilot.isGeneratingCommit"
 				},
 				{
-					"command": "oaicopilot.abortGitCommitMessage",
+					"command": "libiaoCopilot.abortGitCommitMessage",
 					"group": "navigation",
-					"when": "config.git.enabled && scmProvider == git && oaicopilot.isGeneratingCommit"
+					"when": "config.git.enabled && scmProvider == git && libiaoCopilot.isGeneratingCommit"
 				}
 			],
 			"commandPalette": [
 				{
-					"command": "oaicopilot.generateGitCommitMessage",
-					"when": "config.git.enabled && !oaicopilot.isGeneratingCommit"
+					"command": "libiaoCopilot.generateGitCommitMessage",
+					"when": "config.git.enabled && !libiaoCopilot.isGeneratingCommit"
 				},
 				{
-					"command": "oaicopilot.abortGitCommitMessage",
-					"when": "config.git.enabled && oaicopilot.isGeneratingCommit"
+					"command": "libiaoCopilot.abortGitCommitMessage",
+					"when": "config.git.enabled && libiaoCopilot.isGeneratingCommit"
 				}
 			]
 		},
 		"configuration": {
-			"title": "OAI Compatible Copilot",
+			"title": "Libiao Copilot",
 			"properties": {
-				"oaicopilot.logLevel": {
-				"type": "string",
-				"default": "off",
-				"enum": [
-					"off",
-					"debug",
-					"info",
-					"warn",
-					"error"
-				],
-				"description": "Debug log level. Logs are written to ~/.copilot/oaicopilot/logs/ as JSON lines. Default is 'off' (no logging)."
-			},
-			"oaicopilot.baseUrl": {
+				"libiaoCopilot.logLevel": {
 					"type": "string",
-					"default": "https://router.huggingface.co/v1",
-					"description": "The base URL for the Openai Compatible Inference API. Default value is Hugging Face."
+					"default": "off",
+					"enum": [
+						"off",
+						"debug",
+						"info",
+						"warn",
+						"error"
+					],
+					"description": "调试日志级别。日志以 JSON Lines 格式写入 ~/.copilot/libiaoCopilot/logs/。默认 'off'（不记录日志）。"
 				},
-				"oaicopilot.models": {
+				"libiaoCopilot.baseUrl": {
+					"type": "string",
+					"default": "",
+					"description": "OpenAI 兼容 API 的基础地址（例如 https://your-gateway.com/v1）。未配置时不会拉取模型列表。"
+				},
+				"libiaoCopilot.models": {
 					"type": "array",
-					"default": [],
+					"default": [
+						{
+							"id": "qwen3.8-max-preview",
+							"owned_by": "libiaorobot",
+							"context_length": 1000000,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 65536,
+							"reasoning_effort": "xhigh",
+							"reasoning_efforts": ["low", "medium", "xhigh"],
+							"vision": true
+						},
+						{
+							"id": "qwen3.8-max",
+							"owned_by": "libiaorobot",
+							"context_length": 1000000,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 128000,
+							"reasoning_effort": "xhigh",
+							"reasoning_efforts": ["low", "medium", "xhigh"],
+							"vision": true
+						},
+						{
+							"id": "deepseek-v4-pro",
+							"owned_by": "libiaorobot",
+							"context_length": 1000000,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 384000,
+							"reasoning_effort": "max",
+							"reasoning_efforts": ["low", "high", "xhigh", "max"],
+							"include_reasoning_in_request": true
+						},
+						{
+							"id": "deepseek-v4-flash",
+							"owned_by": "libiaorobot",
+							"context_length": 1000000,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 384000,
+							"reasoning_effort": "max",
+							"reasoning_efforts": ["low", "high", "xhigh", "max"],
+							"include_reasoning_in_request": true
+						},
+						{
+							"id": "gemini-3.1-pro-preview",
+							"owned_by": "libiaorobot",
+							"context_length": 1048576,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 65536,
+							"reasoning_effort": "high",
+							"reasoning_efforts": ["low", "medium", "high"],
+							"vision": true
+						},
+						{
+							"id": "gemini-3.1-flash-image",
+							"owned_by": "libiaorobot",
+							"context_length": 131072,
+							"context_sizes": [
+								65536,
+								131072
+							],
+							"default_context_size": 131072,
+							"max_tokens": 32768,
+							"vision": true
+						},
+						{
+							"id": "gemini-3.5-flash",
+							"owned_by": "libiaorobot",
+							"context_length": 1048576,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 65536,
+							"reasoning_effort": "medium",
+							"reasoning_efforts": ["low", "medium", "high"],
+							"vision": true
+						},
+						{
+							"id": "gemini-3.6-flash",
+							"owned_by": "libiaorobot",
+							"context_length": 1048576,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 65536,
+							"reasoning_effort": "medium",
+							"reasoning_efforts": ["low", "medium", "high"],
+							"vision": true
+						},
+						{
+							"id": "gpt-5.6-luna",
+							"owned_by": "libiaorobot",
+							"context_length": 1050000,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 128000,
+							"reasoning_effort": "medium",
+							"reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
+							"vision": true
+						},
+						{
+							"id": "gpt-5.6-sol",
+							"owned_by": "libiaorobot",
+							"context_length": 1050000,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 128000,
+							"reasoning_effort": "medium",
+							"reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
+							"vision": true
+						},
+						{
+							"id": "gpt-5.6-terra",
+							"owned_by": "libiaorobot",
+							"context_length": 1050000,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 128000,
+							"reasoning_effort": "medium",
+							"reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
+							"vision": true
+						},
+						{
+							"id": "gpt-5.5",
+							"owned_by": "libiaorobot",
+							"context_length": 1050000,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 128000,
+							"reasoning_effort": "medium",
+							"reasoning_efforts": ["low", "medium", "high", "xhigh"],
+							"vision": true
+						},
+						{
+							"id": "claude-opus-4-8",
+							"owned_by": "libiaorobot",
+							"context_length": 1000000,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 128000,
+							"reasoning_effort": "high",
+							"reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
+							"vision": true
+						},
+						{
+							"id": "claude-opus-5",
+							"owned_by": "libiaorobot",
+							"context_length": 1000000,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 128000,
+							"reasoning_effort": "high",
+							"reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
+							"vision": true
+						},
+						{
+							"id": "claude-sonnet-5",
+							"owned_by": "libiaorobot",
+							"context_length": 1000000,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 128000,
+							"reasoning_effort": "high",
+							"reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
+							"vision": true
+						},
+						{
+							"id": "MiniMax-M3",
+							"owned_by": "libiaorobot",
+							"context_length": 1000000,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 65536,
+							"vision": true
+						},
+						{
+							"id": "glm-5.2",
+							"owned_by": "libiaorobot",
+							"context_length": 1048576,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 131072,
+							"thinking": {
+								"type": "enabled"
+							},
+							"include_reasoning_in_request": true,
+							"vision": false
+						},
+						{
+							"id": "qwen3.7-plus",
+							"owned_by": "libiaorobot",
+							"context_length": 1000000,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 131072,
+							"enable_thinking": true,
+							"include_reasoning_in_request": true,
+							"vision": true
+						},
+						{
+							"id": "qwen3.7-max",
+							"owned_by": "libiaorobot",
+							"context_length": 1000000,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 65536,
+							"enable_thinking": true,
+							"include_reasoning_in_request": true,
+							"vision": false
+						}
+					],
 					"items": {
 						"type": "object",
 						"properties": {
 							"id": {
 								"type": "string",
-								"description": "Model ID (e.g., 'glm-4.6')."
+								"description": "模型 ID（例如 'glm-4.6'）。"
 							},
 							"displayName": {
 								"type": "string",
-								"description": "(Optional) Display name for the model that will be shown in the Copilot interface. If not provided, will be generated automatically."
+								"description": "（可选）模型显示名称，显示在 Copilot 界面中。不提供则自动生成。"
 							},
 							"configId": {
 								"type": "string",
-								"description": "(Optional) Configuration ID for this model. Allows defining the same model with different settings (e.g. 'glm-4.6::thinking', 'glm-4.6::no-thinking')."
+								"description": "（可选）该模型的配置 ID。允许为同一模型定义不同配置（如 'glm-4.6::thinking'、'glm-4.6::no-thinking'）。"
 							},
 							"owned_by": {
 								"type": "string",
-								"description": "Model provider (e.g., 'zai', 'openai')."
+								"description": "模型供应商（例如 'zai'、'openai'）。"
 							},
 							"provider": {
 								"type": "string",
-								"description": "(Alias of owned_by) Model provider (e.g., 'zai', 'openai')."
+								"description": "（owned_by 的别名）模型供应商（例如 'zai'、'openai'）。"
 							},
 							"provide": {
 								"type": "string",
-								"description": "(Alias of owned_by) Model provider (e.g., 'zai', 'openai')."
+								"description": "（owned_by 的别名）模型供应商（例如 'zai'、'openai'）。"
 							},
 							"family": {
 								"type": "string",
-								"description": "Model family (e.g., 'gpt-4', 'claude-3', 'gemini'). Enables model-specific optimizations and behaviors. Defaults to 'oai-compatible' if not specified."
+								"description": "模型家族（例如 'gpt-4'、'claude-3'、'gemini'），用于启用模型专属的优化行为。未指定时默认 'oai-compatible'。"
 							},
 							"baseUrl": {
 								"type": "string",
-								"description": "Base URL for the model provider. If not provided, the global oaicopilot.baseUrl will be used."
+								"description": "该模型供应商的基础地址。未提供时使用全局 libiaoCopilot.baseUrl。"
 							},
 							"context_length": {
 								"type": "number",
 								"default": 128000,
 								"minimum": 1000,
 								"maximum": 10000000,
-								"description": "Model support context length. Default is 128000."
+								"description": "模型支持的上下文长度。默认 128000。"
+							},
+							"context_sizes": {
+								"type": "array",
+								"items": {
+									"type": "number",
+									"minimum": 1000
+								},
+								"description": "在 Copilot 模型配置菜单中展示的可选上下文大小列表。"
+							},
+							"default_context_size": {
+								"type": "number",
+								"minimum": 1000,
+								"description": "默认上下文大小，必须包含在 context_sizes 中。"
 							},
 							"vision": {
 								"type": "boolean",
 								"default": false,
-								"description": "Model support vision. Default is false."
+								"description": "模型是否支持视觉能力。默认 false。"
 							},
 							"max_tokens": {
 								"type": "number",
 								"default": 4096,
 								"minimum": 1,
 								"maximum": 10000000,
-								"description": "Maximum number of tokens to generate (range: [1, context_length)). Default is 4096."
+								"description": "最大生成 token 数（范围：[1, context_length)）。默认 4096。"
 							},
 							"max_completion_tokens": {
 								"type": "number",
 								"default": 4096,
 								"minimum": 1,
 								"maximum": 10000000,
-								"description": "Maximum number of tokens to generate (OpenAI new standard parameter)."
+								"description": "最大生成 token 数（OpenAI 新标准参数）。"
 							},
 							"reasoning_effort": {
 								"type": "string",
@@ -203,11 +496,26 @@
 									"low",
 									"minimal"
 								],
-								"description": "Default reasoning effort level for OpenAI-compatible requests. Leave empty to hide the Copilot picker."
+								"description": "OpenAI 兼容请求的默认推理强度。留空则隐藏 Copilot 推理强度选择器。"
+							},
+							"reasoning_efforts": {
+								"type": "array",
+								"items": {
+									"type": "string",
+									"enum": [
+										"max",
+										"xhigh",
+										"high",
+										"medium",
+										"low",
+										"minimal"
+									]
+								},
+								"description": "Copilot 模型配置菜单中展示的推理强度可选值。省略则展示全部值。"
 							},
 							"thinking": {
 								"type": "object",
-								"description": "Thinking configuration for Zai provider",
+								"description": "Zai 供应商的思维链配置",
 								"properties": {
 									"type": {
 										"type": "string",
@@ -215,69 +523,69 @@
 											"enabled",
 											"disabled"
 										],
-										"description": "Set to 'enabled' to enable thinking, 'disabled' to disable thinking"
+										"description": "设为 'enabled' 开启思维链，设为 'disabled' 关闭思维链"
 									}
 								}
 							},
 							"enable_thinking": {
 								"type": "boolean",
 								"default": false,
-								"description": "Switches between thinking and non-thinking modes. Not required."
+								"description": "在思维模式与非思维模式之间切换。非必填。"
 							},
 							"thinking_budget": {
 								"type": "number",
 								"default": 128,
 								"minimum": 128,
 								"maximum": 10000000,
-								"description": "Maximum number of tokens for chain-of-thought output. Not required."
+								"description": "思维链输出的最大 token 数。非必填。"
 							},
 							"temperature": {
 								"type": "number",
 								"default": 0,
 								"minimum": 0,
 								"maximum": 2,
-								"description": "Sampling temperature (range: [0, 2]). Lower values make output more deterministic, higher values make it more creative. Default is 0."
+								"description": "采样温度（范围：[0, 2]）。值越低输出越确定，越高越有创造性。默认 0。"
 							},
 							"top_p": {
 								"type": "number",
 								"default": 1,
 								"minimum": 0,
 								"maximum": 1,
-								"description": "Top-p sampling value (range: (0, 1]). Not required."
+								"description": "Top-p 采样值（范围：(0, 1]）。非必填。"
 							},
 							"top_k": {
 								"type": "number",
 								"default": 50,
 								"minimum": 1,
-								"description": "Top-k sampling value (range: [1, Infinity)). Not required."
+								"description": "Top-k 采样值（范围：[1, 正无穷)）。非必填。"
 							},
 							"min_p": {
 								"type": "number",
 								"default": 0,
 								"minimum": 0,
 								"maximum": 1,
-								"description": "Minimum probability threshold (range: [0, 1]). Not required."
+								"description": "最小概率阈值（范围：[0, 1]）。非必填。"
 							},
 							"frequency_penalty": {
 								"type": "number",
 								"default": 0,
 								"minimum": -2,
 								"maximum": 2,
-								"description": "Frequency penalty (range: [-2, 2]). Not required."
+								"description": "频率惩罚（范围：[-2, 2]）。非必填。"
 							},
 							"presence_penalty": {
 								"type": "number",
 								"default": 0,
 								"minimum": -2,
 								"maximum": 2,
-								"description": "Presence penalty (range: [-2, 2]). Not required."
+								"description": "存在惩罚（范围：[-2, 2]）。非必填。"
 							},
 							"repetition_penalty": {
 								"type": "number",
 								"default": 0,
 								"minimum": 0,
 								"maximum": 2,
-								"description": "Repetition penalty (range: (0, 2]). Not required."
+								"description": "重复惩罚（范围：(0, 2]）。非必填。"
 							},
 							"reasoning": {
 								"type": "object",
@@ -297,42 +605,42 @@
 											"minimal",
 											"auto"
 										],
-										"description": "Reasoning effort level for OpenRouter/xAI (high, medium, low, minimal, auto)"
+										"description": "OpenRouter/xAI 的推理强度级别（high、medium、low、minimal、auto）"
 									},
 									"exclude": {
 										"type": "boolean",
 										"default": false,
-										"description": "Exclude reasoning tokens from the final response"
+										"description": "从最终响应中排除推理 token"
 									},
 									"max_tokens": {
 										"type": "number",
 										"default": 2000,
 										"minimum": 1,
-										"description": "Specific token limit for reasoning (Anthropic-style, alternative to effort)"
+										"description": "推理部分的专用 token 上限（Anthropic 风格，可替代 effort）"
 									},
 									"enabled": {
 										"type": "boolean",
 										"default": true,
-										"description": "Enable reasoning (inferred from effort or max_tokens if not specified)"
+										"description": "启用推理（未指定时会根据 effort 或 max_tokens 自动推断）"
 									}
 								},
-								"description": "Reasoning configuration for OpenRouter-compatible providers"
+								"description": "OpenRouter 兼容供应商的推理配置"
 							},
 							"extra": {
 								"type": "object",
-								"description": "Extra request body parameters."
+								"description": "额外的请求体参数。"
 							},
 							"headers": {
 								"type": "object",
 								"additionalProperties": {
 									"type": "string"
 								},
-								"description": "Custom HTTP headers to be sent with every request to this model's provider. These headers will be merged with the default headers (Authorization, Content-Type, User-Agent)."
+								"description": "每次向该模型供应商发起请求时携带的自定义 HTTP 请求头。这些请求头会与默认请求头（Authorization、Content-Type、User-Agent）合并。"
 							},
 							"include_reasoning_in_request": {
 								"type": "boolean",
 								"default": false,
-								"description": "Whether to include reasoning_content in assistant messages sent to the API. Support deepseek-v3.2 or others."
+								"description": "发送给 API 的助手消息中是否包含 reasoning_content。支持 deepseek-v3.2 等模型。"
 							},
 							"apiMode": {
 								"type": "string",
@@ -344,23 +652,23 @@
 									"gemini"
 								],
 								"default": "openai",
-								"description": "API mode: 'openai' (Default) for OpenAI Chat Completions (/chat/completions), 'openai-responses' for OpenAI Responses (/responses), 'ollama' for Ollama (/api/chat), 'anthropic' for Anthropic (/v1/messages), 'gemini' for Gemini (*/v1beta/models/{model}:streamGenerateContent?alt=sse)."
+								"description": "API 模式：'openai'（默认）为 OpenAI Chat Completions（/chat/completions），'openai-responses' 为 OpenAI Responses（/responses），'ollama' 为 Ollama（/api/chat），'anthropic' 为 Anthropic（/v1/messages），'gemini' 为 Gemini（*/v1beta/models/{model}:streamGenerateContent?alt=sse）。"
 							},
 							"useForCommitGeneration": {
 								"type": "boolean",
 								"default": false,
-								"description": "Whether to be used for Git commit message generation. Not supports gemini apiMode."
+								"description": "是否用于 Git 提交信息生成。不支持 gemini apiMode。"
 							},
 							"delay": {
 								"type": "number",
 								"default": 0,
 								"minimum": 0,
-								"description": "Model-specific delay in milliseconds between consecutive requests. If not specified, falls back to global oaicopilot.delay configuration."
+								"description": "连续请求之间的延迟（毫秒）。未指定时回退到全局配置 libiaoCopilot.delay。"
 							},
 							"cache_control": {
 								"type": "boolean",
 								"default": true,
-								"description": "Enable Anthropic prompt-caching breakpoints (apiMode='anthropic' only). When true, attaches cache_control={type:'ephemeral'} to the system prompt and the last tool definition, and forwards any in-message cache_control markers emitted by Copilot. Set to false for upstream providers that reject the cache_control field."
+								"description": "启用 Anthropic 提示词缓存断点（仅 apiMode='anthropic' 生效）。设为 true 时会为系统提示词和最后一个工具定义附加 cache_control={type:'ephemeral'}，并转发 Copilot 消息中携带的 cache_control 标记。若上游供应商拒绝 cache_control 字段，请设为 false。"
 							}
 						},
 						"required": [
@@ -384,9 +692,9 @@
 							}
 						]
 					},
-					"description": "A list of preferred models to use. If provided, these models will be used directly instead of fetching from the API."
+					"description": "首选模型列表及其元数据（上下文长度、推理强度等）。模型仍会从 API 实时发现：每个已配置模型会与其自身端点的模型列表核对（供应商侧不存在的将被移除），API 中未配置的模型会以默认元数据自动展示。若端点无法查询（未配置地址或 API Key，或拉取失败），则不展示该端点的任何模型，绝不展示未核实条目；刷新失败但有缓存时以过期缓存兜底；全部端点都无法查询时以不可选占位条目说明原因。"
 				},
-				"oaicopilot.retry": {
+				"libiaoCopilot.retry": {
 					"type": "object",
 					"default": {
 						"enabled": true,
@@ -398,39 +706,62 @@
 						"enabled": {
 							"type": "boolean",
 							"default": true,
-							"description": "Enable retry mechanism for api errors. Default is true."
+							"description": "启用 API 错误重试机制。默认 true。"
 						},
 						"max_attempts": {
 							"type": "number",
 							"default": 3,
 							"minimum": 1,
-							"description": "Maximum number of retry attempts. Default is 3."
+							"description": "最大重试次数。默认 3。"
 						},
 						"interval_ms": {
 							"type": "number",
 							"default": 1000,
 							"minimum": 1,
-							"description": "Interval between retry attempts in milliseconds. Default is 1000 (1 seconds)."
+							"description": "重试间隔（毫秒）。默认 1000（1 秒）。"
 						},
 						"status_codes": {
 							"type": "array",
 							"items": {
 								"type": "number"
 							},
-							"description": "Additional HTTP status codes that will be merged. Default is [429, 500, 502, 503, 504]."
+							"description": "额外需要触发重试的 HTTP 状态码。默认为 [429, 500, 502, 503, 504]。"
 						}
 					},
-					"description": "Retry configuration for handling api errors like [429, 500, 502, 503, 504]."
+					"description": "针对 [429, 500, 502, 503, 504] 等 API 错误的重试配置。"
 				},
-				"oaicopilot.delay": {
+				"libiaoCopilot.delay": {
 					"type": "number",
 					"default": 0,
 					"minimum": 0,
-					"description": "Fixed delay in milliseconds between consecutive requests. Default is 0 (no delay)."
+					"description": "连续请求之间的固定延迟（毫秒）。默认 0（无延迟）。"
 				},
-				"oaicopilot.commitLanguage": {
+				"libiaoCopilot.modelCacheTtlMinutes": {
+					"type": "number",
+					"default": 10,
+					"minimum": 0,
+					"description": "供应商模型列表缓存的 TTL（分钟）。缓存有效期内直接返回缓存、不请求供应商；刷新失败时返回过期缓存。设为 0 可禁用缓存，每次请求都实时拉取。"
+				},
+				"libiaoCopilot.checkModelsOnStartup": {
+					"type": "boolean",
+					"default": true,
+					"description": "VS Code 启动后检查已配置的模型，仅在模型不可用时发出通知。"
+				},
+				"libiaoCopilot.startupCheckIntervalHours": {
+					"type": "number",
+					"default": 24,
+					"minimum": 1,
+					"description": "自动启动健康检查之间的最小间隔（小时）。"
+				},
+				"libiaoCopilot.healthCheckTimeout": {
+					"type": "number",
+					"default": 15000,
+					"minimum": 1000,
+					"description": "单次模型可用性检查的超时时间（毫秒）。"
+				},
+				"libiaoCopilot.commitLanguage": {
 					"type": "string",
-					"default": "English",
+					"default": "Chinese (Simplified)",
 					"enum": [
 						"English",
 						"French",
@@ -447,19 +778,19 @@
 						"Turkish",
 						"Polish"
 					],
-					"description": "Language for generated Git commit messages. Default is English."
+					"description": "生成 Git 提交信息所用的语言。默认为简体中文。"
 				},
-				"oaicopilot.commitMessagePrompt": {
+				"libiaoCopilot.commitMessagePrompt": {
 					"type": "string",
 					"default": "",
-					"description": "Custom system prompt for commit message generation. If not provided, uses the default prompt."
+					"description": "提交信息生成的自定义系统提示词。不提供时使用默认提示词。"
 				},
-				"oaicopilot.readFileLines": {
+				"libiaoCopilot.readFileLines": {
 					"type": "number",
 					"default": 0,
 					"minimum": 0,
 					"maximum": 10000,
-					"description": "Number of lines to read when using `read_file` tool. Large lines may cost more tokens. Default is 0, let model decide lines."
+					"description": "使用 `read_file` 工具时读取的行数。行数过多可能消耗更多 token。默认 0，由模型自行决定行数。"
 				}
 			}
 		}
@@ -473,7 +804,7 @@
 		"format": "prettier --write .",
 		"watch": "tsc -watch -p ./",
 		"test": "npm run compile && vscode-test",
-		"build": "npx @vscode/vsce package -o extension.vsix"
+		"build": "vsce package -o extension.vsix --allow-missing-repository --no-rewrite-relative-links"
 	},
 	"dependencies": {
 		"@microsoft/tiktokenizer": "^1.0.10"
@@ -481,13 +812,15 @@
 	"devDependencies": {
 		"@eslint/js": "^9.13.0",
 		"@stylistic/eslint-plugin": "^2.9.0",
-		"@types/node": "^22",
 		"@types/mocha": "^10.0.6",
-		"@vscode/dts": "^0.4.1",
+		"@types/node": "^22",
 		"@types/vscode": "^1.104.0",
+		"@vscode/dts": "^0.4.1",
 		"@vscode/test-cli": "^0.0.11",
 		"@vscode/test-electron": "^2.5.2",
+		"@vscode/vsce": "^3.9.2",
 		"eslint": "^9.13.0",
+		"mocha": "^11.8.0",
 		"prettier": "^3.1.0",
 		"typescript": "^5.9.2",
 		"typescript-eslint": "^8.39.0"

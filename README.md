@@ -1,171 +1,95 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="OAICopilot Logo" width="120" height="120">
+<img src="assets/logo.png" alt="Libiao Copilot Logo" width="120" height="120">
 
-# OAI Compatible Provider for Copilot
+# Libiao Copilot
 
-**A VSCode extension to use OpenAI/Ollama/Anthropic/Gemini API Providers in GitHub Copilot Chat** 🔥
-
-English | [简体中文](README.zh-CN.md)
+**立镖机器人的 OpenAI 兼容模型供应商扩展，为 GitHub Copilot Chat 提供模型支持**
 
 </div>
 
-[![CI](https://github.com/JohnnyZ93/oai-compatible-copilot/actions/workflows/release.yml/badge.svg)](https://github.com/JohnnyZ93/oai-compatible-copilot/actions)
-[![License](https://img.shields.io/github/license/JohnnyZ93/oai-compatible-copilot?color=orange&label=License)](https://github.com/JohnnyZ93/oai-compatible-copilot/blob/main/LICENSE)
+本扩展基于 [OAI Compatible Provider for Copilot](https://github.com/JohnnyZ93/oai-compatible-copilot) 构建，采用 MIT 许可分发，详见 [NOTICE.md](NOTICE.md)。
 
-## ✨ Features
-- **Multi-API support**: OpenAI/Ollama/Anthropic/Gemini APIs (ModelScope, SiliconFlow, DeepSeek...)
-- **Vision models**: Full support for image understanding capabilities
-- **Advanced configuration**: Flexible chat request options with thinking/reasoning control
-- **Multi-provider management**: Configure models from multiple providers simultaneously with automatic API key management
-- **Multi-config per model**: Define different settings for the same model (e.g., GLM-4.6 with/without thinking)
-- **Visual configuration UI**: Intuitive interface for managing providers and models
-- **Auto-retry**: Handles API errors (429, 500, 502, 503, 504) with exponential backoff
-- **Token usage**: Real-time token counting and provider API key management from status bar
-- **Git integration**: Generate commit messages directly from source control
-- **Import/export**: Easily share and backup configurations
-- **Tools optimization**: Optimize agent `read_file` tool handling, avoid to read small chunks for large file.
+## ✨ 功能特性
 
-## Requirements
-- VS Code 1.104.0 or higher.
-- OpenAI-compatible provider API key.
+- **模型实时发现**：配置模型不再跳过供应商列表。已配置模型与供应商端点实时核对，供应商新上线的模型自动出现，同事无需任何操作
+- **模型列表 TTL 缓存**：默认 10 分钟缓存（`libiaoCopilot.modelCacheTtlMinutes`），减少网关请求；刷新失败时自动使用过期缓存兜底
+- **原生上下文/思考强度选择**：在 Copilot 模型配置菜单直接选择上下文大小（256K / 512K / 1M）与思考强度，无需编辑 JSON
+- **模型健康检查**：启动时自动检查已配置模型可用性（每 24 小时限一次），也可随时手动检查
+- **多 API 支持**：OpenAI / OpenAI Responses / Ollama / Anthropic / Gemini 五种协议（ModelScope、SiliconFlow、DeepSeek 等）
+- **视觉模型**：完整支持图像理解能力
+- **多供应商管理**：同时配置多个供应商，独立管理各自 API 密钥
+- **同模型多配置**：通过 `configId` 为同一模型定义不同参数配置（如开启/关闭思维链）
+- **可视化配置界面**：直观管理供应商与模型，支持配置导入/导出
+- **自动重试**：处理 API 错误（429、500、502、503、504），支持指数退避
+- **Token 用量**：状态栏实时显示上下文 token 用量
+- **Git 集成**：源代码管理面板一键生成提交信息，默认简体中文
+- **思维链展示**：在对话界面查看模型推理过程
 
-## ⚡ Quick Start
-1. Install the OAI Compatible Provider for Copilot extension [here](https://marketplace.visualstudio.com/items?itemName=johnny-zhao.oai-compatible-copilot).
-2. Open VS Code Settings and configure `oaicopilot.baseUrl` and `oaicopilot.models`.
-3. Open GitHub Copilot Chat interface.
-4. Click the model picker and select "Manage Models...".
-5. Choose "OAI Compatible" provider.
-6. Enter your API key — it will be saved locally.
-7. Select the models you want to add to the model picker.
+## 环境要求
 
-### Settings Example
+- VS Code 1.120.0 或更高版本
+- OpenAI 兼容供应商的基础地址与 API 密钥
+
+## ⚡ 快速开始
+
+1. 安装内部分发的 `extension.vsix` 包（安装后需重新加载窗口）。
+2. 若已启用 `johnny-zhao.oai-compatible-copilot`，请先禁用，避免模型重复。
+3. 打开设置，配置 `libiaoCopilot.baseUrl`（公司网关地址，由管理员提供）。
+4. 运行命令面板中的 `Libiao Copilot: 设置 API Key`，输入个人密钥。
+5. 打开 GitHub Copilot Chat，选择 Libiao Copilot 提供的模型即可开始对话。
+6. 使用模型配置按钮选择上下文大小与思考强度。
+
+> 扩展默认不内置任何供应商地址。未配置 `baseUrl` 时不会拉取模型列表。
+
+### 配置示例
 
 ```json
-"oaicopilot.baseUrl": "https://api-inference.modelscope.cn/v1",
-"oaicopilot.models": [
+"libiaoCopilot.baseUrl": "https://your-gateway.com/v1",
+"libiaoCopilot.models": [
     {
-        "id": "Qwen/Qwen3-Coder-480B-A35B-Instruct",
-        "owned_by": "modelscope",
-        "context_length": 256000,
-        "max_tokens": 8192,
-        "temperature": 0,
-        "top_p": 1
+        "id": "deepseek-v4-pro",
+        "owned_by": "your-provider",
+        "context_length": 1000000,
+        "context_sizes": [262144, 524288, 1000000],
+        "default_context_size": 524288,
+        "max_tokens": 384000,
+        "reasoning_effort": "max",
+        "reasoning_efforts": ["low", "high", "xhigh", "max"]
     }
 ]
 ```
 
-## ✨ Configuration UI
+## ✨ 模型发现机制
 
-The extension provides a visual configuration interface that makes it easy to manage global settings, providers, and models without editing JSON files manually.
+- 已配置模型仅作为**元数据层**：每个模型与其自身端点（`baseUrl`/`apiMode`，未设置时回退全局配置）的模型列表核对，供应商侧已下线的配置模型会被移除。
+- 供应商新增但配置中没有的模型，会以默认元数据自动展示。
+- 端点无法查询（未配置地址或 API Key、地址错误、密钥错误、网络错误）时，不展示该端点的任何模型——列表只出现经过核实的模型。全部端点都无法查询时，选择器保留 Libiao Copilot 分区，并以一个不可选的占位条目说明原因。网关短暂故障时由 TTL 内的过期缓存兜底。
+- 结果带 TTL 缓存；修改模型配置、baseUrl、TTL 设置或 API Key 会自动清空缓存。
 
-### Opening the Configuration UI
+## ✨ 可视化配置界面
 
-There are two ways to open the configuration interface:
+命令面板运行 `Libiao Copilot: 打开配置界面`，或点击状态栏 token 计数项即可打开，可管理全局设置、供应商与模型，支持配置导入导出。
 
-1. **From the Command Palette**:
-   - Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS)
-   - Search for "OAICopilot: Open Configuration UI"
-   - Select the command to open the configuration panel
+## ✨ 多 API 模式
 
-2. **From the Status Bar**:
-   - Click on the "OAICopilot" status bar item in the bottom-right corner of VS Code
+通过模型配置的 `apiMode` 参数指定协议：
 
-<details>
-<summary>Click Here for Details</summary>
+| 模式 | 端点 | 适用场景 |
+|---|---|---|
+| `openai`（默认） | `/chat/completions` | 大多数 OpenAI 兼容供应商 |
+| `openai-responses` | `/responses` | OpenAI 官方 Responses API |
+| `ollama` | `/api/chat` | 本地 Ollama 实例 |
+| `anthropic` | `/v1/messages` | Anthropic Claude |
+| `gemini` | `/v1beta/models/{model}:streamGenerateContent?alt=sse` | Google Gemini |
 
-### Workflow Example
-
-1. **Add a Provider**:
-   - Click "Add Provider" in the Provider Management section
-   - Enter Provider ID: "modelscope"
-   - Enter Base URL: "https://api-inference.modelscope.cn/v1"
-   - Enter API Key: Your ModelScope API key
-   - Select API Mode: "openai"
-   - Click "Save"
-
-2. **Add a Model**:
-   - Click "Add Model" in the Model Management section
-   - Select Provider: "modelscope"
-   - Enter Model ID: "Qwen/Qwen3-Coder-480B-A35B-Instruct"
-   - Configure basic parameters (context length, max tokens, etc.)
-   - Click "Save Model"
-
-3. **Use the Model in VS Code**:
-   - Open GitHub Copilot Chat (`Ctrl+Shift+I` or `Cmd+Shift+I`)
-   - Click the model picker in the chat input
-   - Select "Manage Models..."
-   - Choose "OAI Compatible" provider
-   - Select your configured models
-   - Start chatting with the model!
-
-### Tips & Best Practices
-
-- **Important**: If you use the configuration UI, the global baseURL and API key become invalid.
-- **Provider IDs**: Use descriptive names that match the service (e.g., "modelscope", "iflow", "anthropic")
-- **Model IDs**: Use the exact model identifier from the provider's documentation
-- **Config IDs**: Use meaningful names like "thinking", "no-thinking", "fast", "accurate" for multiple configurations
-- **Base URL Overrides**: Set model-specific base URLs when using models from different endpoints of the same provider
-- **Save Frequently**: Changes are saved to VS Code settings immediately
-- **Refresh**: Use the "Refresh" buttons to reload current configuration from VS Code settings
-
-### Model family & System Prompts
-
-VS Code Copilot has optimized system prompts for specific models. [Detailed introduction](https://github.com/microsoft/vscode-copilot-chat/blob/main/docs/prompts.md)
-
-Below are the model family settings supported by Copilot:
-
-| Model Family | General `family` | Specific Model `family` | Notes |
-|---|---|---|---|
-| Anthropic | 'claude', 'Anthropic'  | 'claude-sonnet-4-5', 'claude-haiku-4-5' |  |
-| Gemini | 'gemini' | 'gemini-3-flash' | "github.copilot.chat.alternateGeminiModelFPrompt.enabled": true |
-| xAI | 'grok-code' |  |  |
-| OpenAI | 'gpt', 'o4-mini', 'o3-mini', 'OpenAI' | 'gpt-4.1', 'gpt-5-codex', 'gpt-5', 'gpt-5-mini', `!!family.startsWith('gpt-') && family.includes('-codex')`, `!!family.match(/^gpt-5\.\d+/i)` | "github.copilot.chat.alternateGptPrompt.enabled": true |
-
-</details>
-
-## ✨ Multi-API Mode
-
-The extension supports five different API protocols to work with various model providers. You can specify which API mode to use for each model via the `apiMode` parameter.
-
-### Supported API Modes
-
-1. **`openai`** (default) - OpenAI Chat Completions API
-   - Endpoint: `/chat/completions`
-   - Header: `Authorization: Bearer <apiKey>`
-   - Use for: Most OpenAI-compatible providers (ModelScope, SiliconFlow, etc.)
-
-2. **`openai-responses`** - OpenAI Responses API
-   - Endpoint: `/responses`
-   - Header: `Authorization: Bearer <apiKey>`
-   - Use for: OpenAI official Responses API (and compatible gateways like rsp4copilot)
-
-3. **`ollama`** - Ollama native API
-   - Endpoint: `/api/chat`
-   - Header: `Authorization: Bearer <apiKey>` (or no header for local Ollama)
-   - Use for: Local Ollama instances
-
-4. **`anthropic`** - Anthropic Claude API
-   - Endpoint: `/v1/messages`
-   - Header: `x-api-key: <apiKey>`
-   - Use for: Anthropic Claude models
-
-5. **`gemini`** - Gemini native API
-   - Endpoint: `/v1beta/models/{model}:streamGenerateContent?alt=sse`
-   - Header: `x-goog-api-key: <apiKey>`
-   - Use for: Google Gemini models (and compatible gateways like rsp4copilot)
-
-<details>
-<summary>Click Here for Details</summary>
-
-### Configuration Examples
-Mixed configuration with multiple API modes:
+### 混合配置示例
 
 ```json
-"oaicopilot.models": [
+"libiaoCopilot.models": [
     {
         "id": "GLM-4.6",
-        "owned_by": "modelscope",
+        "owned_by": "modelscope"
     },
     {
         "id": "llama3.2",
@@ -182,289 +106,53 @@ Mixed configuration with multiple API modes:
 ]
 ```
 
-### Important Notes
-- The `apiMode` parameter defaults to `"openai"` if not specified.
-- When using `ollama` mode, you can omit the API key (`ollama` by default) or set it to any string.
-- Each API mode uses different message conversion logic internally to match provider-specific formats (tools, images, thinking).
+## ✨ 多供应商与多配置
 
-</details>
+- `owned_by`（别名 `provider` / `provide`）用于分组供应商级 API 密钥，存储键为 `libiaoCopilot.apiKey.<供应商小写>`。命令面板 `Libiao Copilot: 设置供应商 API Key` 可分别配置。
+- 同一模型 ID 可用 `configId` 区分多份配置（如 `glm-4.6::thinking` 与 `glm-4.6::no-thinking`），在模型选择器中各自独立展示。
 
-## ✨ Multi-Provider Guide
+## 模型参数
 
-> `owned_by` (alias: `provider` / `provide`) in model config is used for grouping provider-specific API keys. The storage key is `oaicopilot.apiKey.<providerIdLowercase>`.
+每个模型支持的配置字段（详见 VS Code 设置界面）：
 
-1. Open VS Code Settings and configure `oaicopilot.models`.
-2. Open command center ( Ctrl+Shift+P ), and search "OAICopilot: Set OAI Compatible Multi-Provider API Key" to configure provider-specific API keys.
-3. Open GitHub Copilot Chat interface.
-4. Click the model picker and select "Manage Models...".
-5. Choose "OAI Compatible" provider.
-6. Select the models you want to add to the model picker.
+- `id`（必填）：模型标识
+- `owned_by`（必填）：模型供应商
+- `displayName`：Copilot 界面显示名称
+- `configId`：配置 ID，用于同模型多配置
+- `baseUrl`：模型级基础地址，未提供时用全局 `libiaoCopilot.baseUrl`
+- `apiMode`：API 协议模式
+- `family`：模型家族（如 'gpt-4'、'claude-3'），用于启用 Copilot 专属优化
+- `context_length`：模型上下文长度，默认 128000
+- `context_sizes` / `default_context_size`：Copilot 配置菜单中的上下文档位
+- `max_tokens` / `max_completion_tokens`：最大输出 token 数，默认 4096
+- `vision`：是否支持视觉，默认 false
+- `reasoning_effort` / `reasoning_efforts`：默认推理强度与可选档位
+- `enable_thinking` / `thinking_budget` / `thinking`：思维链开关与预算
+- `temperature` / `top_p` / `top_k` / `min_p` 等：采样参数
+- `frequency_penalty` / `presence_penalty` / `repetition_penalty`：惩罚参数
+- `headers`：自定义请求头
+- `extra`：额外请求体透传参数
+- `include_reasoning_in_request`：助手消息中是否回传 `reasoning_content`（deepseek-v3.2 等）
+- `delay`：模型级请求间隔（毫秒），未设置时回退全局 `libiaoCopilot.delay`
+- `useForCommitGeneration`：是否用于 Git 提交信息生成（不支持 gemini 模式）
+- `cache_control`：Anthropic 提示词缓存断点开关（仅 `anthropic` 模式）
 
-<details>
-<summary>Click Here for Details</summary>
+## 常见问题
 
-### Settings Example
+**Q：配置了模型后还能看到网关新模型吗？**
+A：能。配置只作为元数据层，供应商新模型会自动出现（默认元数据）；想要完整的上下文/思考强度选择，在 `libiaoCopilot.models` 里补一条配置即可。
 
-```json
-"oaicopilot.baseUrl": "https://api-inference.modelscope.cn/v1",
-"oaicopilot.models": [
-    {
-        "id": "Qwen/Qwen3-Coder-480B-A35B-Instruct",
-        "owned_by": "modelscope",
-        "context_length": 256000,
-        "max_tokens": 8192,
-        "temperature": 0,
-        "top_p": 1
-    },
-    {
-        "id": "qwen3-coder",
-        "owned_by": "iflow",
-        "baseUrl": "https://apis.iflow.cn/v1",
-        "context_length": 256000,
-        "max_tokens": 8192,
-        "temperature": 0,
-        "top_p": 1
-    }
-]
-```
+**Q：改了配置没生效？**
+A：修改设置会自动清空模型缓存；如仍无变化，重新加载 VS Code 窗口。
 
-</details>
+**Q：模型选择器是空的？**
+A：检查 `libiaoCopilot.baseUrl` 与 API Key 是否已配置。未配置时扩展静默不拉取模型。
 
-## ✨ Multi-config for the same model
+## 致谢
 
-You can define multiple configurations for the same model ID by using the `configId` field. This allows you to have the same base model with different settings for different use cases.
-
-<details>
-<summary>Click Here for Details</summary>
-
-To use this feature:
-
-1. Add the `configId` field to your model configuration
-2. Each configuration with the same `id` must have a unique `configId`
-3. The model will appear as separate entries in the VS Code model picker
-
-### Settings Example
-
-```json
-"oaicopilot.models": [
-    {
-        "id": "glm-4.6",
-        "configId": "thinking",
-        "owned_by": "zai",
-        "temperature": 0.7,
-        "top_p": 1,
-        "thinking": {
-            "type": "enabled"
-        }
-    },
-    {
-        "id": "glm-4.6",
-        "configId": "no-thinking",
-        "owned_by": "zai",
-        "temperature": 0,
-        "top_p": 1,
-        "thinking": {
-            "type": "disabled"
-        }
-    }
-]
-```
-
-In this example, you'll have three different configurations of the glm-4.6 model available in VS Code:
-- `glm-4.6::thinking` - use GLM-4.6 with thinking
-- `glm-4.6::no-thinking` - use GLM-4.6 without thinking
-
-</details>
-
-## ✨ Custom Headers
-
-You can specify custom HTTP headers that will be sent with every request to a specific model's provider. This is useful for:
-
-- API versioning headers
-- Custom authentication headers (in addition to the standard Authorization header)
-- Provider-specific headers required by certain APIs
-- Request tracking or debugging headers
-
-<details>
-<summary>Click Here for Details</summary>
-
-### Custom Headers Example
-
-```json
-"oaicopilot.models": [
-    {
-        "id": "custom-model",
-        "owned_by": "provider",
-        "baseUrl": "https://api.example.com/v1",
-        "headers": {
-            "X-API-Version": "2024-01",
-            "X-Request-Source": "vscode-copilot",
-            "Custom-Auth-Token": "additional-token-if-needed"
-        }
-    }
-]
-```
-
-**Important Notes:**
-- Custom headers are merged with default headers (Authorization, Content-Type, User-Agent)
-- If a custom header conflicts with a default header, the custom header takes precedence
-- Headers are applied on a per-model basis, allowing different headers for different providers
-- Header values must be strings
-
-</details>
-
-## ✨ Custom Request body parameters
-
-The `extra` field allows you to add arbitrary parameters to the API request body. This is useful for provider-specific features that aren't covered by the standard parameters.
-
-### How it works
-- Parameters in `extra` are merged directly into the request body
-- Works with all API modes (`openai`, `openai-responses`, `ollama`, `anthropic`, `gemini`)
-- Values can be any valid JSON type (string, number, boolean, object, array)
-
-<details>
-<summary>Click Here for Details</summary>
-
-### Common use cases
-- **OpenAI-specific parameters**: `seed`, `logprobs`, `top_logprobs`, `suffix`, `presence_penalty` (if not using standard parameter)
-- **Provider-specific features**: Custom sampling methods, debugging flags
-- **Experimental parameters**: Beta features from API providers
-
-### Configuration Example
-
-```json
-"oaicopilot.models": [
-    {
-        "id": "custom-model",
-        "owned_by": "openai",
-        "extra": {
-            "seed": 42,
-            "logprobs": true,
-            "top_logprobs": 5,
-            "suffix": "###",
-            "presence_penalty": 0.1
-        }
-    },
-    {
-        "id": "local-model",
-        "owned_by": "ollama",
-        "baseUrl": "http://localhost:11434",
-        "apiMode": "ollama",
-        "extra": {
-            "keep_alive": "5m",
-            "raw": true
-        }
-    },
-    {
-        "id": "claude-model",
-        "owned_by": "anthropic",
-        "baseUrl": "https://api.anthropic.com",
-        "apiMode": "anthropic",
-        "extra": {
-            "service_tier": "standard_only"
-        }
-    }
-]
-```
-
-### Show thinking in Copilot
-These are provider-specific parameters that can make Copilot show a **Thinking** block (if the provider/model supports it).
-
-#### OpenAI Responses
-Use `apiMode: "openai-responses"` and set the reasoning summary mode:
-
-```json
-{
-  "id": "gpt-4o-mini",
-  "owned_by": "openai",
-  "baseUrl": "https://api.openai.com/v1",
-  "apiMode": "openai-responses",
-  "reasoning_effort": "high",
-  "extra": {
-    "reasoning": {
-      "summary": "detailed"
-    }
-  }
-}
-```
-
-#### Gemini
-Use `apiMode: "gemini"` and enable thought summaries:
-
-```json
-{
-  "id": "gemini-3-flash-preview",
-  "owned_by": "gemini",
-  "baseUrl": "https://generativelanguage.googleapis.com",
-  "apiMode": "gemini",
-  "extra": {
-    "generationConfig": {
-      "thinkingConfig": {
-        "includeThoughts": true
-      }
-    }
-  }
-}
-```
-
-### Important Notes
-- Parameters in `extra` are added after standard parameters
-- If an `extra` parameter conflicts with a standard parameter, the `extra` value takes precedence
-- Use this for provider-specific features only
-- Standard parameters (temperature, top_p, etc.) should use their dedicated fields when possible
-- API provider must support the parameters you specify
-
-</details>
-
-## Model Parameters
-All parameters support individual configuration for different models, providing highly flexible model tuning capabilities.
-
-- `id` (required): Model identifier
-- `owned_by` (required): Model provider
-- `displayName`: Display name for the model that will be shown in the Copilot interface.
-- `configId`: Configuration ID for this model. Allows defining the same model with different settings (e.g. 'glm-4.6::thinking', 'glm-4.6::no-thinking')
-- `family`: Model family (e.g., 'gpt-4', 'claude-3', 'gemini'). Enables model-specific optimizations and behaviors. Defaults to 'oai-compatible' if not specified.
-- `baseUrl`: Model-specific base URL. If not provided, the global `oaicopilot.baseUrl` will be used
-- `context_length`: The context length supported by the model. Default value is 128000
-- `max_tokens`: Maximum number of tokens to generate (range: [1, context_length]). Default value is 4096
-- `max_completion_tokens`: Maximum number of tokens to generate (OpenAI new standard parameter)
-- `vision`: Whether the model supports vision capabilities. Defaults to false
-- `temperature`: Sampling temperature (range: [0, 2]). Controls the randomness of the model's output:
-  - **Lower values (0.0-0.3)**: More focused, consistent, and deterministic. Ideal for precise code generation, debugging, and tasks requiring accuracy.
-  - **Moderate values (0.4-0.7)**: Balanced creativity and structure. Good for architecture design and brainstorming.
-  - **Higher values (0.7-2.0)**: More creative and varied responses. Suitable for open-ended questions and explanations.
-  - **Best Practice**: Set to `0` to align with GitHub Copilot's default deterministic behavior for consistent code suggestions. Thinking-enabled models suggest `1.0` to ensure optimal performance of the thinking mechanism.
-- `top_p`: Top-p sampling value (range: (0, 1]). Optional parameter
-- `top_k`: Top-k sampling value (range: [1, ∞)). Optional parameter
-- `min_p`: Minimum probability threshold (range: [0, 1]). Optional parameter
-- `frequency_penalty`: Frequency penalty (range: [-2, 2]). Optional parameter
-- `presence_penalty`: Presence penalty (range: [-2, 2]). Optional parameter
-- `repetition_penalty`: Repetition penalty (range: (0, 2]). Optional parameter
-- `enable_thinking`: Enable model thinking and reasoning content display (for non-OpenRouter providers)
-- `thinking_budget`: Maximum token count for thinking chain output. Optional parameter
-- `reasoning`: OpenRouter reasoning configuration, includes the following options:
-  - `enabled`: Enable reasoning functionality (if not specified, will be inferred from effort or max_tokens)
-  - `effort`: Reasoning effort level (high, medium, low, minimal, auto)
-  - `exclude`: Exclude reasoning tokens from the final response
-  - `max_tokens`: Specific token limit for reasoning (Anthropic style, as an alternative to effort)
-- `thinking`: Thinking configuration for Zai provider
-  - `type`: Set to 'enabled' to enable thinking, 'disabled' to disable thinking
-- `reasoning_effort`: Reasoning effort level (OpenAI reasoning configuration)
-- `headers`: Custom HTTP headers to be sent with every request to this model's provider (e.g., `{"X-API-Version": "v1", "X-Custom-Header": "value"}`). These headers will be merged with the default headers (Authorization, Content-Type, User-Agent)
-- `extra`: Extra request body parameters.
-- `include_reasoning_in_request`: Whether to include reasoning_content in assistant messages sent to the API. Supports deepseek-v3.2 and similar models.
-- `apiMode`: API mode: 'openai' (Default) for API (/chat/completions), 'openai-responses' for API (/responses), 'ollama' for API (/api/chat), 'anthropic' for API (/v1/messages), 'gemini' for API (/v1beta/models/{model}:streamGenerateContent?alt=sse).
-- `delay`: Model-specific delay in milliseconds between consecutive requests. If not specified, falls back to global `oaicopilot.delay` configuration.
-- `useForCommitGeneration`: Whether to be used for Git commit message generation. Not supports gemini apiMode.
-
-## Thanks to
-
-Thanks to all the people who contribute.
-
-- [Contributors](https://github.com/JohnnyZ93/oai-compatible-copilot/graphs/contributors)
-- [Hugging Face Chat Extension](https://github.com/huggingface/huggingface-vscode-chat)
+- [OAI Compatible Provider for Copilot](https://github.com/JohnnyZ93/oai-compatible-copilot)（上游项目）
 - [VS Code Chat Provider API](https://code.visualstudio.com/api/extension-guides/ai/language-model-chat-provider)
 
-## Support & License
-- Open issues: https://github.com/JohnnyZ93/oai-compatible-copilot/issues
-- License: MIT License Copyright (c) 2025 Johnny Zhao
+## 许可
+
+MIT License，详见 [LICENSE](LICENSE) 与 [NOTICE.md](NOTICE.md)。
