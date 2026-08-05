@@ -1,7 +1,8 @@
 <div align="center">
 
-<!-- 使用绝对地址：VS Code 扩展页的 README 不解析相对路径图片，GitHub 两侧均可正常显示 -->
-<img src="https://raw.githubusercontent.com/LibiaoRobotics/LibiaoCopilotExtension/main/assets/logo.png" alt="Libiao Copilot Logo" width="120" height="120">
+<!-- 使用绝对地址：VS Code 扩展页的 README 不解析相对路径图片，GitHub 两侧均可正常显示。
+     只指定 width，高度按原图比例（925x363）自动缩放，避免变形 -->
+<img src="https://raw.githubusercontent.com/LibiaoRobotics/LibiaoCopilotExtension/main/assets/logo.png" alt="Libiao Copilot Logo" width="240">
 
 # Libiao Copilot
 
