@@ -1,5 +1,11 @@
 # 更新日志
 
+## 1.0.1
+
+### 移除
+
+- **移除模型健康检查功能**：删除「检查模型可用性」命令与启动自动检查，同步移除 `libiaoCopilot.checkModelsOnStartup`、`libiaoCopilot.startupCheckIntervalHours`、`libiaoCopilot.healthCheckTimeout` 三个配置项。模型可用性已由模型选择器的合并核实机制实时验证（按端点查询供应商 `/models`），聊天时遇到的错误由请求本身直接报出，定期探测不再提供增量价值，徒增通知打扰与网关请求。
+
 ## 1.0.0
 
 Libiao Copilot 首个正式版本。基于 [OAI Compatible Provider for Copilot](https://github.com/JohnnyZ93/oai-compatible-copilot) 构建的内部扩展，面向立镖机器人内部网关与 GitHub Copilot Chat 场景重新设计。

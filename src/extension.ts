@@ -7,7 +7,6 @@ import { logger } from "./logger";
 import { normalizeUserModels } from "./utils";
 import { abortCommitGeneration, generateCommitMsg } from "./gitCommit/commitMessageGenerator";
 import { TokenizerManager } from "./tokenizer/tokenizerManager";
-import { checkAllModels, runStartupHealthCheck } from "./healthCheck";
 import { clearModelListCache } from "./provideModel";
 
 export function activate(context: vscode.ExtensionContext) {
@@ -119,13 +118,6 @@ export function activate(context: vscode.ExtensionContext) {
 			ConfigViewPanel.openPanel(context.extensionUri, context.secrets);
 		})
 	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand("libiaoCopilot.checkModelHealth", async () => {
-			await checkAllModels(context.secrets, true);
-		})
-	);
-	void runStartupHealthCheck(context);
 
 	// Register the generateGitCommitMessage command handler
 	context.subscriptions.push(

@@ -33,7 +33,7 @@
 		"git-commit",
 		"thinking"
 	],
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -71,11 +71,6 @@
 				"command": "libiaoCopilot.openConfig",
 				"category": "Libiao Copilot",
 				"title": "打开配置界面"
-			},
-			{
-				"command": "libiaoCopilot.checkModelHealth",
-				"category": "Libiao Copilot",
-				"title": "检查模型可用性"
 			},
 			{
 				"command": "libiaoCopilot.generateGitCommitMessage",
@@ -750,23 +745,6 @@
 					"default": 10,
 					"minimum": 0,
 					"description": "供应商模型列表缓存的 TTL（分钟）。缓存有效期内直接返回缓存、不请求供应商；刷新失败时返回过期缓存。设为 0 可禁用缓存，每次请求都实时拉取。"
-				},
-				"libiaoCopilot.checkModelsOnStartup": {
-					"type": "boolean",
-					"default": true,
-					"description": "VS Code 启动后检查已配置的模型，仅在模型不可用时发出通知。"
-				},
-				"libiaoCopilot.startupCheckIntervalHours": {
-					"type": "number",
-					"default": 24,
-					"minimum": 1,
-					"description": "自动启动健康检查之间的最小间隔（小时）。"
-				},
-				"libiaoCopilot.healthCheckTimeout": {
-					"type": "number",
-					"default": 15000,
-					"minimum": 1000,
-					"description": "单次模型可用性检查的超时时间（毫秒）。"
 				},
 				"libiaoCopilot.commitLanguage": {
 					"type": "string",
