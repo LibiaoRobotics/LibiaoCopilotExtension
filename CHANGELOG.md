@@ -1,5 +1,26 @@
 # 更新日志
 
+## 未发布
+
+### 新增
+
+- **上下文管理：让 Context Size 旋钮真正生效**。此前 VS Code 原生配置菜单里的「Context Size」选中值只是展示用途（VS Code 本身从不裁剪历史，扩展也不消费它）。现在每次请求前按选中档位执行上下文管理：
+  - **摘要压缩**（默认）：当历史超过预算时，用同款模型把较早的对话轮次摘要成一条系统消息（五节结构：角色与目标 / 项目背景 / 对话上下文 / 完成的任务 / 进行中的任务，保留文件名、代码片段、错误消息等细节，输出语言跟随对话），最近轮次与系统消息原样保留。摘要在请求主链路之外发起，不带工具、90 秒超时，失败自动降级。
+  - **硬截断兜底**：摘要失败或摘要后仍超预算时，按「轮次原子」从旧到新丢弃：助手工具调用与其工具结果视为一个原子整体保留/丢弃，绝不留下孤儿工具调用；系统消息与最后一轮永不丢弃。
+  - **off 总闸**：`libiaoCopilot.contextManagement` 可设为 `off` 完全关闭（账单不可预测或排障时拉闸用），聊天与之前行为完全一致。
+  - **预算规则**：预算 = 选中档位 × 0.9（安全系数消化 token 估算误差）；摘要预留 = min(max(256, 预算×30%), `summarizeMaxTokens`)。
+  - **配置项**：`libiaoCopilot.contextManagement`（`off` / `summarize`，默认 `summarize`）、`libiaoCopilot.summarizationInstructions`（附加摘要指令，默认空）、`libiaoCopilot.summarizeMaxTokens`（默认 4000，范围 256–32768）。可视化配置面板同步支持三项，配置导出/导入同步携带。
+  - **可观测性**：压缩发生时输出日志 `context.compacted`（含原因 `budget_exceeded` / `summarize_failed` / `still_over_budget` 与前后 token 量）并弹出一次性通知。
+
+### 验证清单（装机后按序执行）
+
+1. 把 Context Size 调到最小档（256K），连续对话到超过预算 → 观察输出面板 `context.compacted` 日志出现、聊天不中断。
+2. 摘要发生后追问最早话题的细节 → 应能答出（证明摘要保留了内容）。
+3. 摘要发生前最后一轮的细节（文件名、最近代码）→ 应无损。
+4. `libiaoCopilot.contextManagement` 设为 `off` → 行为与旧版完全一致（拉闸验证）。
+5. 错误网关/网络故障时 → 日志出现 `context.summarize.failed`，请求自动降级为硬截断继续。
+6. 连续使用三天观察 token 账单与聊天质量。
+
 ## 1.0.1
 
 ### 修复

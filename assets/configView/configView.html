@@ -99,6 +99,34 @@
 					</div>
 				</div>
 			</div>
+			<div class="retry-config">
+				<h3>Context Management</h3>
+				<div class="row">
+					<div class="field">
+						<label for="contextManagement">Mode</label>
+						<div class="field-description">
+							How to handle conversation history when it exceeds the context size selected in the model's
+							Configure menu.
+						</div>
+						<select id="contextManagement" class="model-input">
+							<option value="summarize">Summarize old history (recommended)</option>
+							<option value="off">Off — send history unchanged</option>
+						</select>
+					</div>
+					<div class="field">
+						<label for="summarizationInstructions">Summarization Instructions</label>
+						<div class="field-description">
+							Optional extra instructions appended to the summarization prompt.
+						</div>
+						<input id="summarizationInstructions" type="text" placeholder="e.g. Always preserve error messages verbatim" />
+					</div>
+					<div class="field">
+						<label for="summarizeMaxTokens">Summary Max Tokens</label>
+						<div class="field-description">Maximum output tokens for the summary itself. Default 4000.</div>
+						<input id="summarizeMaxTokens" type="number" min="256" max="32768" placeholder="4000" />
+					</div>
+				</div>
+			</div>
 			<div class="block-gap">
 				<button id="saveBase">Save Global Configuration</button>
 			</div>

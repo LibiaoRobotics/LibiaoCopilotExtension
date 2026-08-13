@@ -8,7 +8,7 @@
 ## 通用说明
 
 - 配置格式对齐现有 `qwen3.8-max` 等条目结构。
-- `context_sizes` / `default_context_size`：沿用现有三档 `[262144, 524288, 1000000]`、默认 `524288`。注意 handoff 已验证 `contextSize` 是 **display-only**（不实际限制请求），请求实际影响的是 `max_tokens`。
+- `context_sizes` / `default_context_size`：沿用现有三档 `[262144, 524288, 1000000]`、默认 `524288`。注意：VS Code 本身从不按 `contextSize` 裁剪历史，但自 2026-08-13 起扩展把它作为**输入侧预算**用于上下文管理（超预算先摘要、失败降级硬截断，可经 `libiaoCopilot.contextManagement` 关闭）；请求的输出上限仍由 `max_tokens` 决定。
 - `owned_by`：默认 `libiaorobot`（全部走公司网关，地址见管理员下发的配置）。如需直连厂商官方 API，把 `owned_by` 设为厂商标识并补 `baseUrl`。
 - `reasoning_efforts`：只对官方支持 effort 档位的模型（Gemini thinking level、GPT reasoning effort、Claude output_config effort）填写；仅支持 thinking 开关的模型（MiniMax/GLM/Qwen）不填。
 

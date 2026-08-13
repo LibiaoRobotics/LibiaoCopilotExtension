@@ -778,6 +778,31 @@
 					"minimum": 0,
 					"maximum": 10000,
 					"description": "使用 `read_file` 工具时读取的行数。行数过多可能消耗更多 token。默认 0，由模型自行决定行数。"
+				},
+				"libiaoCopilot.contextManagement": {
+					"type": "string",
+					"enum": [
+						"off",
+						"summarize"
+					],
+					"enumDescriptions": [
+						"不管理上下文：历史原样发送（超限时可能被网关拒绝）。",
+						"历史超过所选上下文窗口时，自动把较早的对话压缩成摘要；摘要失败时自动降级为硬截断。"
+					],
+					"default": "summarize",
+					"description": "对话历史超过所选上下文窗口时的处理方式。默认 summarize：压缩旧历史保留前文大意。仅当模型在 Configure 菜单里有可选上下文档位时生效。"
+				},
+				"libiaoCopilot.summarizationInstructions": {
+					"type": "string",
+					"default": "",
+					"description": "附加到上下文摘要提示词的自定义指令（可选）。例如：\"摘要必须保留所有报错信息\"。"
+				},
+				"libiaoCopilot.summarizeMaxTokens": {
+					"type": "number",
+					"default": 4000,
+					"minimum": 256,
+					"maximum": 32768,
+					"description": "上下文摘要的最大输出 token 数。默认 4000。"
 				}
 			}
 		}

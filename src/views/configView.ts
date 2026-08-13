@@ -18,6 +18,9 @@ interface InitPayload {
 	};
 	commitModel: string;
 	commitLanguage: string;
+	contextManagement: string;
+	summarizationInstructions: string;
+	summarizeMaxTokens: number;
 	models: HFModelItem[];
 	providerKeys: Record<string, string>;
 }
@@ -36,6 +39,9 @@ interface ExportConfig {
 	};
 	commitLanguage: string;
 	commitModel: string;
+	contextManagement: string;
+	summarizationInstructions: string;
+	summarizeMaxTokens: number;
 	models: HFModelItem[];
 	providerKeys: Record<string, string>;
 	readFileLines: number;
@@ -52,6 +58,9 @@ type IncomingMessage =
 			retry: { enabled?: boolean; max_attempts?: number; interval_ms?: number; status_codes?: number[] };
 			commitModel: string;
 			commitLanguage: string;
+			contextManagement: string;
+			summarizationInstructions: string;
+			summarizeMaxTokens: number;
 	  }
 	| {
 			type: "fetchModels";
@@ -177,7 +186,10 @@ export class ConfigViewPanel {
 					message.readFileLines,
 					message.retry,
 					message.commitModel,
-					message.commitLanguage
+					message.commitLanguage,
+					message.contextManagement,
+					message.summarizationInstructions,
+					message.summarizeMaxTokens
 				);
 				break;
 			case "fetchModels": {
@@ -284,6 +296,9 @@ export class ConfigViewPanel {
 		const commitModel = foundModel ? `${foundModel.id}${foundModel.configId ? "::" + foundModel.configId : ""}` : "";
 		const commitLanguage = config.get<string>("libiaoCopilot.commitLanguage", "Chinese (Simplified)");
 		const readFileLines = config.get<number>("libiaoCopilot.readFileLines", 0);
+		const contextManagement = config.get<string>("libiaoCopilot.contextManagement", "summarize");
+		const summarizationInstructions = config.get<string>("libiaoCopilot.summarizationInstructions", "");
+		const summarizeMaxTokens = config.get<number>("libiaoCopilot.summarizeMaxTokens", 4000);
 		const payload: InitPayload = {
 			baseUrl,
 			apiKey,
@@ -292,6 +307,9 @@ export class ConfigViewPanel {
 			retry,
 			commitModel,
 			commitLanguage,
+			contextManagement,
+			summarizationInstructions,
+			summarizeMaxTokens,
 			models,
 			providerKeys,
 		};
@@ -305,7 +323,10 @@ export class ConfigViewPanel {
 		readFileLines: number,
 		retry: { enabled?: boolean; max_attempts?: number; interval_ms?: number; status_codes?: number[] },
 		commitModel: string,
-		commitLanguage: string
+		commitLanguage: string,
+		contextManagement: string,
+		summarizationInstructions: string,
+		summarizeMaxTokens: number
 	) {
 		const baseUrl = rawBaseUrl.trim();
 		const apiKey = rawApiKey.trim();
@@ -315,6 +336,17 @@ export class ConfigViewPanel {
 		await config.update("libiaoCopilot.readFileLines", readFileLines, vscode.ConfigurationTarget.Global);
 		await config.update("libiaoCopilot.retry", retry, vscode.ConfigurationTarget.Global);
 		await config.update("libiaoCopilot.commitLanguage", commitLanguage, vscode.ConfigurationTarget.Global);
+		await config.update(
+			"libiaoCopilot.contextManagement",
+			contextManagement === "off" ? "off" : "summarize",
+			vscode.ConfigurationTarget.Global
+		);
+		await config.update(
+			"libiaoCopilot.summarizationInstructions",
+			summarizationInstructions,
+			vscode.ConfigurationTarget.Global
+		);
+		await config.update("libiaoCopilot.summarizeMaxTokens", summarizeMaxTokens, vscode.ConfigurationTarget.Global);
 		if (apiKey) {
 			await this.secrets.store("libiaoCopilot.apiKey", apiKey);
 		} else {
@@ -575,6 +607,9 @@ export class ConfigViewPanel {
 			});
 			const commitLanguage = config.get<string>("libiaoCopilot.commitLanguage", "Chinese (Simplified)");
 			const readFileLines = config.get<number>("libiaoCopilot.readFileLines", 0);
+			const contextManagement = config.get<string>("libiaoCopilot.contextManagement", "summarize");
+			const summarizationInstructions = config.get<string>("libiaoCopilot.summarizationInstructions", "");
+			const summarizeMaxTokens = config.get<number>("libiaoCopilot.summarizeMaxTokens", 4000);
 			const models = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
 
 			const foundModel = models.find((model) => model.useForCommitGeneration === true);
@@ -599,6 +634,9 @@ export class ConfigViewPanel {
 				retry,
 				commitLanguage,
 				commitModel,
+				contextManagement,
+				summarizationInstructions,
+				summarizeMaxTokens,
 				models,
 				readFileLines,
 				providerKeys,
@@ -656,6 +694,27 @@ export class ConfigViewPanel {
 			await config.update("libiaoCopilot.retry", importData.retry, vscode.ConfigurationTarget.Global);
 			await config.update("libiaoCopilot.readFileLines", importData.readFileLines, vscode.ConfigurationTarget.Global);
 			await config.update("libiaoCopilot.commitLanguage", importData.commitLanguage, vscode.ConfigurationTarget.Global);
+			if (importData.contextManagement) {
+				await config.update(
+					"libiaoCopilot.contextManagement",
+					importData.contextManagement === "off" ? "off" : "summarize",
+					vscode.ConfigurationTarget.Global
+				);
+			}
+			if (importData.summarizationInstructions !== undefined) {
+				await config.update(
+					"libiaoCopilot.summarizationInstructions",
+					importData.summarizationInstructions,
+					vscode.ConfigurationTarget.Global
+				);
+			}
+			if (typeof importData.summarizeMaxTokens === "number") {
+				await config.update(
+					"libiaoCopilot.summarizeMaxTokens",
+					importData.summarizeMaxTokens,
+					vscode.ConfigurationTarget.Global
+				);
+			}
 
 			if (importData.apiKey) {
 				await this.secrets.store("libiaoCopilot.apiKey", importData.apiKey);

@@ -168,3 +168,27 @@ export function getConfiguredReasoningEffort(
 export function isReasoningEffortValue(value: unknown): value is ReasoningEffortPickerValue {
 	return typeof value === "string" && REASONING_EFFORT_VALUES.includes(value as ReasoningEffortPickerValue);
 }
+
+/**
+ * Returns the context size (input token budget) selected by the user in the
+ * VS Code Configure menu for this model, if any.
+ *
+ * VS Code merges the per-model configuration into
+ * `options.modelConfiguration` on every chat request (it does NOT trim the
+ * history itself). The stored value is the input-side budget already
+ * (context size minus max output tokens, see `createModelConfigurationSchema`),
+ * so callers can use it directly as a trimming budget.
+ *
+ * Returns `undefined` when the user never picked a context size or the value
+ * is invalid — callers should then send the history unchanged.
+ */
+export function getConfiguredContextSize(
+	options: vscode.ProvideLanguageModelChatResponseOptions | undefined
+): number | undefined {
+	const modelOptions = options as ModelConfigurationOptions | undefined;
+	const configured = modelOptions?.modelConfiguration?.contextSize ?? modelOptions?.configuration?.contextSize;
+	if (typeof configured === "number" && Number.isFinite(configured) && configured > 0) {
+		return Math.floor(configured);
+	}
+	return undefined;
+}

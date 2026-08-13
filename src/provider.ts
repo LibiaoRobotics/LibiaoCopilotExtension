@@ -27,6 +27,7 @@ import { GeminiApi, buildGeminiGenerateContentUrl, type GeminiToolCallMeta } fro
 import type { GeminiGenerateContentRequest } from "./gemini/geminiTypes";
 import { CommonApi } from "./commonApi";
 import { logger } from "./logger";
+import { manageContext, type ContextManagementMode } from "./contextManager";
 
 /**
  * VS Code Chat provider backed by Hugging Face Inference Providers.
@@ -204,10 +205,38 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			logger.debug("request.messages.origin", {
 				messages: messages,
 			});
+
+			// Context management: honor the context size selected in the VS Code
+			// Configure menu. VS Code only reports the selection via
+			// `options.modelConfiguration.contextSize` — it never trims history,
+			// so we compact here when the history exceeds the budget.
+			const contextManagement = config.get<string>("libiaoCopilot.contextManagement", "summarize");
+			const contextManagementMode: ContextManagementMode =
+				contextManagement === "off" ? "off" : "summarize";
+			const { messages: effectiveMessages } = await manageContext(messages, options, {
+				apiMode,
+				baseUrl: BASE_URL,
+				modelId: parsedModelId.baseId,
+				apiKey: modelApiKey,
+				headers: requestHeaders as Record<string, string>,
+				retryConfig,
+				modelConfig,
+				mode: contextManagementMode,
+				summarizationInstructions: config.get<string>("libiaoCopilot.summarizationInstructions", ""),
+				summarizeMaxTokens: config.get<number>("libiaoCopilot.summarizeMaxTokens", 4000),
+				token,
+			});
+			if (effectiveMessages.length !== messages.length) {
+				logger.debug("request.messages.managed", {
+					modelId: model.id,
+					beforeCount: messages.length,
+					afterCount: effectiveMessages.length,
+				});
+			}
 			if (apiMode === "ollama") {
 				// Ollama native API mode
 				const ollamaApi = new OllamaApi(model.id);
-				const ollamaMessages = ollamaApi.convertMessages(messages, modelConfig);
+				const ollamaMessages = ollamaApi.convertMessages(effectiveMessages, modelConfig);
 
 				let ollamaRequestBody: OllamaRequestBody = {
 					model: parsedModelId.baseId,
@@ -247,7 +276,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			} else if (apiMode === "anthropic") {
 				// Anthropic API mode
 				const anthropicApi = new AnthropicApi(model.id, um?.cache_control !== false);
-				const anthropicMessages = anthropicApi.convertMessages(messages, modelConfig);
+				const anthropicMessages = anthropicApi.convertMessages(effectiveMessages, modelConfig);
 
 				// requestBody
 				let requestBody: AnthropicRequestBody = {
@@ -294,12 +323,12 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				const statefulModelId = parsedModelId.baseId;
 
 				// Convert full history once (also extracts system `instructions`).
-				const fullInput = openaiResponsesApi.convertMessages(messages, modelConfig);
+				const fullInput = openaiResponsesApi.convertMessages(effectiveMessages, modelConfig);
 
-				const marker = findLastOpenAIResponsesStatefulMarker(statefulModelId, messages);
+				const marker = findLastOpenAIResponsesStatefulMarker(statefulModelId, effectiveMessages);
 				let deltaInput: unknown[] | null = null;
-				if (marker && marker.index >= 0 && marker.index < messages.length - 1) {
-					const deltaMessages = messages.slice(marker.index + 1);
+				if (marker && marker.index >= 0 && marker.index < effectiveMessages.length - 1) {
+					const deltaMessages = effectiveMessages.slice(marker.index + 1);
 					const converted = openaiResponsesApi.convertMessages(deltaMessages, modelConfig);
 					if (converted.length > 0) {
 						deltaInput = converted;
@@ -400,7 +429,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			} else if (apiMode === "gemini") {
 				// Gemini native API mode
 				const geminiApi = new GeminiApi(model.id, this._geminiToolCallMetaByCallId);
-				const geminiMessages = geminiApi.convertMessages(messages, modelConfig);
+				const geminiMessages = geminiApi.convertMessages(effectiveMessages, modelConfig);
 
 				const systemParts: string[] = [];
 				const contents: GeminiGenerateContentRequest["contents"] = [];
@@ -461,7 +490,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			} else {
 				// OpenAI compatible API mode (default)
 				const openaiApi = new OpenaiApi(model.id);
-				const openaiMessages = openaiApi.convertMessages(messages, modelConfig);
+				const openaiMessages = openaiApi.convertMessages(effectiveMessages, modelConfig);
 
 				// requestBody
 				let requestBody: Record<string, unknown> = {

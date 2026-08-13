@@ -5,6 +5,7 @@ import { GeminiApi } from "../gemini/geminiApi";
 import {
 	createModelConfigurationSchema,
 	ensureModelContextDefaults,
+	getConfiguredContextSize,
 	getConfiguredReasoningEffort,
 	isReasoningEffortPickerEnabled,
 	type ModelPickerChatInformation,
@@ -299,5 +300,28 @@ suite("modelConfiguration", () => {
 		assert.strictEqual(ollamaBody.think, undefined);
 		assert.strictEqual(geminiBody.reasoning_effort, undefined);
 		assert.strictEqual(geminiBody.thinkingConfig, undefined);
+	});
+
+	test("reads the context size selected in the Configure menu", () => {
+		// The Configure picker's contextSize value never triggers truncation in
+		// VS Code; we read it as an input-side budget for context management.
+		assert.strictEqual(
+			getConfiguredContextSize({ modelConfiguration: { contextSize: 256000 } } as never),
+			256000
+		);
+		assert.strictEqual(
+			getConfiguredContextSize({ configuration: { contextSize: 128000 } } as never),
+			128000
+		);
+		assert.strictEqual(getConfiguredContextSize({} as never), undefined);
+		assert.strictEqual(getConfiguredContextSize({ modelConfiguration: { contextSize: 0 } } as never), undefined);
+		assert.strictEqual(
+			getConfiguredContextSize({ modelConfiguration: { contextSize: -1 } } as never),
+			undefined
+		);
+		assert.strictEqual(
+			getConfiguredContextSize({ modelConfiguration: { contextSize: "not-a-number" } } as never),
+			undefined
+		);
 	});
 });

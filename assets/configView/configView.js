@@ -4,6 +4,9 @@ const state = {
 	apiKey: "",
 	delay: 0,
 	retry: { enabled: true, max_attempts: 3, interval_ms: 1000, status_codes: [429, 500, 502, 503, 504] },
+	contextManagement: "summarize",
+	summarizationInstructions: "",
+	summarizeMaxTokens: 4000,
 	commitModel: "",
 	models: [],
 	providerKeys: {},
@@ -22,6 +25,9 @@ const retryEnabledInput = document.getElementById("retryEnabled");
 const maxAttemptsInput = document.getElementById("maxAttempts");
 const intervalMsInput = document.getElementById("intervalMs");
 const statusCodesInput = document.getElementById("statusCodes");
+const contextManagementInput = document.getElementById("contextManagement");
+const summarizationInstructionsInput = document.getElementById("summarizationInstructions");
+const summarizeMaxTokensInput = document.getElementById("summarizeMaxTokens");
 
 // Provider management elements
 const providerTableBody = document.getElementById("providerTableBody");
@@ -98,6 +104,9 @@ document.getElementById("saveBase").addEventListener("click", () => {
 		delay: parseInt(delayInput.value) || 0,
 		readFileLines: parseInt(readFileLinesInput.value) || 0,
 		retry: retry,
+		contextManagement: contextManagementInput.value,
+		summarizationInstructions: summarizationInstructionsInput.value,
+		summarizeMaxTokens: parseInt(summarizeMaxTokensInput.value) || 4000,
 		commitModel: commitModelInput.value,
 		commitLanguage: commitLanguageInput.value,
 	});
@@ -288,8 +297,20 @@ window.addEventListener("message", (event) => {
 
 	switch (message.type) {
 		case "init":
-			const { baseUrl, apiKey, delay, readFileLines, retry, commitModel, models, providerKeys, commitLanguage } =
-				message.payload;
+			const {
+				baseUrl,
+				apiKey,
+				delay,
+				readFileLines,
+				retry,
+				contextManagement,
+				summarizationInstructions,
+				summarizeMaxTokens,
+				commitModel,
+				models,
+				providerKeys,
+				commitLanguage,
+			} = message.payload;
 			state.baseUrl = baseUrl;
 			state.apiKey = apiKey;
 			state.delay = delay || 0;
@@ -300,6 +321,9 @@ window.addEventListener("message", (event) => {
 				interval_ms: 1000,
 				status_codes: [],
 			};
+			state.contextManagement = contextManagement || "summarize";
+			state.summarizationInstructions = summarizationInstructions || "";
+			state.summarizeMaxTokens = summarizeMaxTokens || 4000;
 			state.models = models || [];
 			state.commitModel = commitModel || "";
 			state.providerKeys = providerKeys || {};
@@ -313,6 +337,9 @@ window.addEventListener("message", (event) => {
 			maxAttemptsInput.value = state.retry.max_attempts || 3;
 			intervalMsInput.value = state.retry.interval_ms || 1000;
 			statusCodesInput.value = state.retry.status_codes ? state.retry.status_codes.join(",") : "";
+			contextManagementInput.value = state.contextManagement;
+			summarizationInstructionsInput.value = state.summarizationInstructions;
+			summarizeMaxTokensInput.value = state.summarizeMaxTokens;
 
 			// Populate commit model dropdown and select current commit model
 			populateCommitModelDropdown();
