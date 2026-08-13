@@ -1,6 +1,6 @@
 # 更新日志
 
-## 未发布
+## 1.0.2
 
 ### 新增
 
@@ -11,6 +11,10 @@
   - **预算规则**：预算 = 选中档位 × 0.9（安全系数消化 token 估算误差）；摘要预留 = min(max(256, 预算×30%), `summarizeMaxTokens`)。
   - **配置项**：`libiaoCopilot.contextManagement`（`off` / `summarize`，默认 `summarize`）、`libiaoCopilot.summarizationInstructions`（附加摘要指令，默认空）、`libiaoCopilot.summarizeMaxTokens`（默认 4000，范围 256–32768）。可视化配置面板同步支持三项，配置导出/导入同步携带。
   - **可观测性**：压缩发生时输出日志 `context.compacted`（含原因 `budget_exceeded` / `summarize_failed` / `still_over_budget` 与前后 token 量）并弹出一次性通知。
+
+### 修复
+
+- **VSIX 缺失运行时依赖导致激活崩溃**：1.0.1 的打包产物未包含 `node_modules`，安装后扩展激活时报 `Cannot find module '@microsoft/tiktokenizer'`，连带 GitHub Copilot Chat 视图异常消失。本版本重新打包，确保运行时依赖完整进包。
 
 ### 验证清单（装机后按序执行）
 
