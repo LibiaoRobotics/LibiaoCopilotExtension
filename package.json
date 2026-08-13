@@ -33,7 +33,7 @@
 		"git-commit",
 		"thinking"
 	],
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -122,7 +122,7 @@
 						"warn",
 						"error"
 					],
-					"description": "调试日志级别。日志以 JSON Lines 格式写入 ~/.copilot/libiaoCopilot/logs/。默认 'off'（不记录日志）。"
+					"description": "调试日志级别。日志以 JSON Lines 格式写入 ~/.copilot/libiao-copilot/logs/。默认 'off'（不记录日志）。"
 				},
 				"libiaoCopilot.baseUrl": {
 					"type": "string",

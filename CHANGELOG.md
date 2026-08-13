@@ -1,5 +1,17 @@
 # 更新日志
 
+## 1.0.3
+
+### 修复
+
+- **修复 Responses API 路径回复内容重复一倍的问题**（影响 `openai-responses` 模式的所有模型，如 qwen3.8-max、deepseek-v4-flash）。根因：部分网关（如 new-api）在正文最后一个增量之后会额外发送一个**空内容的 `response.output_text.delta`**，旧逻辑对每个 delta 先重置"已输出"标志再处理内容，空增量导致标志停留在"未输出"，随后的 `response.output_text.done` 事件（为兼容无增量网关而设的全文兜底）误判为尚未输出文本，将**整段正文再完整输出一遍**——界面上回复恰好显示 2 倍。现改为：空增量直接跳过（不触碰状态标志），全文兜底仅在确实没有任何增量输出时触发。思考内容（reasoning）增量路径做了同样防护，防止同类双发。
+- 修正 `logLevel` 配置项描述中的日志目录路径（`~/.copilot/libiaoCopilot/logs/` → `~/.copilot/libiao-copilot/logs/`，与实际写入路径一致）。
+
+### 验证清单
+
+1. 用 `openai-responses` 模式模型（如 qwen3.8-max）连续对话多轮 → 回复内容不再出现整段重复。
+2. 单元测试 `src/test/responsesDedup.test.ts` 三场景全过：空尾增量+全文兜底不重发 / 纯兜底（无增量）网关仍可正常输出 / 正常流式无重复。
+
 ## 1.0.2
 
 ### 新增

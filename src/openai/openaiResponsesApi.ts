@@ -446,8 +446,14 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			// Output text delta events
 			case "response.output_text.delta":
 			case "response.refusal.delta": {
-				this._hasEmittedText = false;
 				const delta = this.coerceText(event.delta);
+				// Skip empty deltas entirely: the gateway may send an empty delta right
+				// before output_text.done, and resetting _hasEmittedText for it would
+				// break the done-event dedup below and cause the full text to be emitted twice.
+				if (!delta) {
+					return;
+				}
+				this._hasEmittedText = false;
 				this.processOutputTextChunk(delta, progress);
 				return;
 			}
@@ -455,6 +461,8 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			// Output text done events
 			case "response.output_text.done": {
 				// Some gateways only emit a final "done" payload (no deltas).
+				// Only emit in that case; if deltas already streamed the content,
+				// emitting done.text (the full text) would duplicate the whole message.
 				if (this._hasEmittedText) {
 					this._hasEmittedText = false;
 					return;
@@ -476,8 +484,13 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			case "response.thinking_summary.delta":
 			case "response.thought.delta":
 			case "response.thought_summary.delta": {
-				this._hasEmittedThinking = false;
-				this.processReasoningText(event, progress);
+				// Skip empty deltas entirely: the gateway may send an empty delta right
+				// before the reasoning done event, and resetting _hasEmittedThinking for it
+				// would break the done-event dedup and re-emit the full reasoning text.
+				if (this.coerceText(event.delta)) {
+					this._hasEmittedThinking = false;
+					this.processReasoningText(event, progress);
+				}
 				return;
 			}
 
