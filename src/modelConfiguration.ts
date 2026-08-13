@@ -63,6 +63,37 @@ function formatTokenCount(value: number): string {
 	return `${Math.round(value / 1024)}K`;
 }
 
+/**
+ * Returns the model's valid selectable context sizes: unique, positive
+ * integers within the model's context length, sorted ascending.
+ */
+export function getValidContextSizes(model: HFModelItem): number[] {
+	return [...new Set(model.context_sizes ?? [])]
+		.filter((value) => Number.isInteger(value) && value > 0 && value <= (model.context_length ?? value))
+		.sort((left, right) => left - right);
+}
+
+/**
+ * Normalizes a model before it is persisted: when the model declares
+ * selectable context sizes but no (or an invalid) default, the largest
+ * selectable size is used as the default. This mirrors the fallback
+ * applied by `createModelConfigurationSchema` so the VS Code Configure
+ * menu has a pre-selected "Default" entry right after the model is added.
+ * Models without context sizes are returned unchanged.
+ */
+export function ensureModelContextDefaults<T extends HFModelItem>(
+	model: T
+): T & { default_context_size?: number } {
+	const validSizes = getValidContextSizes(model);
+	if (validSizes.length === 0) {
+		return model;
+	}
+	if (model.default_context_size !== undefined && validSizes.includes(model.default_context_size)) {
+		return model;
+	}
+	return { ...model, default_context_size: validSizes[validSizes.length - 1] };
+}
+
 export function createModelConfigurationSchema(model: HFModelItem) {
 	const properties: Record<string, unknown> = {};
 	if (isReasoningEffortValue(model.reasoning_effort)) {
@@ -79,9 +110,7 @@ export function createModelConfigurationSchema(model: HFModelItem) {
 		};
 	}
 
-	const contextSizes = [...new Set(model.context_sizes ?? [])]
-		.filter((value) => Number.isInteger(value) && value > 0 && value <= (model.context_length ?? value))
-		.sort((left, right) => left - right);
+	const contextSizes = getValidContextSizes(model);
 	if (contextSizes.length > 0) {
 		const configuredDefault = model.default_context_size;
 		const defaultContextSize = configuredDefault && contextSizes.includes(configuredDefault)

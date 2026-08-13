@@ -4,6 +4,7 @@ import { AnthropicApi } from "../anthropic/anthropicApi";
 import { GeminiApi } from "../gemini/geminiApi";
 import {
 	createModelConfigurationSchema,
+	ensureModelContextDefaults,
 	getConfiguredReasoningEffort,
 	isReasoningEffortPickerEnabled,
 	type ModelPickerChatInformation,
@@ -114,6 +115,62 @@ suite("modelConfiguration", () => {
 
 		assert.deepStrictEqual(contextSize.enumItemLabels, ["256K", "512K", "1M"]);
 		assert.deepStrictEqual(contextSize.enum, [1, 140_288, 616_000]);
+	});
+
+	test("fills the missing default context size with the largest selectable size", () => {
+		const normalized = ensureModelContextDefaults({
+			id: "m",
+			owned_by: "p",
+			context_length: 524_288,
+			context_sizes: [131_072, 262_144, 524_288],
+		});
+
+		assert.deepStrictEqual(normalized, {
+			id: "m",
+			owned_by: "p",
+			context_length: 524_288,
+			context_sizes: [131_072, 262_144, 524_288],
+			default_context_size: 524_288,
+		});
+	});
+
+	test("keeps an explicit default context size that is selectable", () => {
+		const model = {
+			id: "m",
+			owned_by: "p",
+			context_sizes: [131_072, 524_288],
+			default_context_size: 131_072,
+		};
+
+		assert.strictEqual(ensureModelContextDefaults(model), model);
+	});
+
+	test("replaces a default context size that is not selectable", () => {
+		const normalized = ensureModelContextDefaults({
+			id: "m",
+			owned_by: "p",
+			context_sizes: [131_072, 524_288],
+			default_context_size: 262_144,
+		});
+
+		assert.strictEqual(normalized.default_context_size, 524_288);
+	});
+
+	test("does not invent context defaults when no context sizes are configured", () => {
+		const model = { id: "m", owned_by: "p", context_length: 128_000 };
+
+		assert.strictEqual(ensureModelContextDefaults(model), model);
+	});
+
+	test("ignores invalid context sizes when computing the default", () => {
+		const normalized = ensureModelContextDefaults({
+			id: "m",
+			owned_by: "p",
+			context_length: 524_288,
+			context_sizes: [131_072, 999_999_999, 262_144],
+		});
+
+		assert.strictEqual(normalized.default_context_size, 262_144);
 	});
 
 	test("reads the selected reasoning effort from VS Code model configuration", () => {

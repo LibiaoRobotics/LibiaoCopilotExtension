@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import type { HFApiMode, HFModelItem } from "../types";
 import { normalizeUserModels, parseModelId } from "../utils";
 import { fetchModels } from "../provideModel";
+import { ensureModelContextDefaults } from "../modelConfiguration";
 import { VersionManager } from "../versionManager";
 
 interface InitPayload {
@@ -500,7 +501,7 @@ export class ConfigViewPanel {
 			return;
 		}
 
-		models.push(model);
+		models.push(ensureModelContextDefaults(model));
 		await config.update("libiaoCopilot.models", models, vscode.ConfigurationTarget.Global);
 		vscode.window.showInformationMessage(
 			`Model ${model.id}${model.configId ? "::" + model.configId : ""} has been added.`
@@ -524,7 +525,7 @@ export class ConfigViewPanel {
 
 			if (isTargetModel) {
 				// Update with new values
-				return model;
+				return ensureModelContextDefaults(model);
 			}
 			return m;
 		});
@@ -662,7 +663,11 @@ export class ConfigViewPanel {
 				await this.secrets.delete("libiaoCopilot.apiKey");
 			}
 
-			await config.update("libiaoCopilot.models", importData.models, vscode.ConfigurationTarget.Global);
+			await config.update(
+				"libiaoCopilot.models",
+				importData.models.map((model) => ensureModelContextDefaults(model)),
+				vscode.ConfigurationTarget.Global
+			);
 
 			for (const [provider, key] of Object.entries(importData.providerKeys)) {
 				const normalized = provider.toLowerCase();

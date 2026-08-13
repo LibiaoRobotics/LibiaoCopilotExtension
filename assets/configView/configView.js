@@ -221,6 +221,20 @@ modelProviderInput.addEventListener("change", () => {
 	}
 });
 
+// Auto-fill Default Context Size with the largest selectable size while it is empty
+modelContextSizesInput.addEventListener("input", () => {
+	if (modelDefaultContextSizeInput.value) {
+		return;
+	}
+	const sizes = modelContextSizesInput.value
+		.split(",")
+		.map((value) => parseInt(value.trim()))
+		.filter((value) => !isNaN(value) && value > 0);
+	if (sizes.length > 0) {
+		modelDefaultContextSizeInput.value = Math.max(...sizes);
+	}
+});
+
 // Toggle advanced settings
 toggleAdvancedSettingsBtn.addEventListener("click", () => {
 	const isCurrentlyVisible = advancedSettingsContent.style.display !== "none";
@@ -583,6 +597,13 @@ function resetModelForm() {
 // Collect model form data
 function collectModelFormData() {
 	const isEditing = modelIdInput.hasAttribute("data-editing");
+	const contextSizes = modelContextSizesInput.value
+		? modelContextSizesInput.value.split(",").map((value) => parseInt(value.trim()))
+		: undefined;
+	const validContextSizes = (contextSizes ?? []).filter((value) => !isNaN(value) && value > 0);
+	const defaultContextSize = modelDefaultContextSizeInput.value
+		? parseInt(modelDefaultContextSizeInput.value)
+		: undefined;
 
 	return {
 		id: modelIdInput.value.trim(),
@@ -592,12 +613,12 @@ function collectModelFormData() {
 		baseUrl: modelBaseUrlInput.value.trim() || undefined,
 		family: modelFamilyInput.value.trim() || undefined,
 		context_length: modelContextLengthInput.value ? parseInt(modelContextLengthInput.value) : undefined,
-		context_sizes: modelContextSizesInput.value
-			? modelContextSizesInput.value.split(",").map((value) => parseInt(value.trim()))
-			: undefined,
-		default_context_size: modelDefaultContextSizeInput.value
-			? parseInt(modelDefaultContextSizeInput.value)
-			: undefined,
+		context_sizes: contextSizes,
+		// Fall back to the largest selectable size so a model added without an
+		// explicit default still gets a pre-selected entry in the Configure menu.
+		default_context_size:
+			defaultContextSize ??
+			(validContextSizes.length > 0 ? Math.max(...validContextSizes) : undefined),
 		max_tokens: modelMaxTokensInput.value ? parseInt(modelMaxTokensInput.value) : undefined,
 		vision: modelVisionInput.value ? modelVisionInput.value === "true" : undefined,
 		apiMode: modelApiModeInput.value || undefined,

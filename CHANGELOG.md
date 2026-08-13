@@ -2,6 +2,10 @@
 
 ## 1.0.1
 
+### 修复
+
+- **添加模型时自动选中默认上下文大小**：修复新增模型未保存 `default_context_size` 导致 VS Code 原生配置菜单里「Context Size」没有任何选中项的问题。现在三层兜底保证默认值存在：表单里填写「Context Sizes」时自动填充默认档（可手动改）；提交表单时未填则取最大可选档；最终在模型保存/更新/导入时统一归一化（与配置菜单 schema 的回退逻辑同源），保证新增模型开箱即有默认选中项。
+
 ### 移除
 
 - **移除模型健康检查功能**：删除「检查模型可用性」命令与启动自动检查，同步移除 `libiaoCopilot.checkModelsOnStartup`、`libiaoCopilot.startupCheckIntervalHours`、`libiaoCopilot.healthCheckTimeout` 三个配置项。模型可用性已由模型选择器的合并核实机制实时验证（按端点查询供应商 `/models`），聊天时遇到的错误由请求本身直接报出，定期探测不再提供增量价值，徒增通知打扰与网关请求。
