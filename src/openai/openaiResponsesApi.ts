@@ -193,7 +193,9 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 
 			// system message (used to build `instructions` in request body)
 			if (role === "system" && joinedText) {
-				this._systemContent = joinedText;
+				this._systemContent = this._systemContent
+					? `${this._systemContent}\n\n${joinedText}`
+					: joinedText;
 			}
 		}
 

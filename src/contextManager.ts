@@ -78,8 +78,11 @@ async function trySummarize(
 	}
 
 	// Reserve room for the summary text itself (plus counting drift): recent
-	// turns may use at most `budget - summaryReserve` tokens.
-	const summaryReserve = Math.max(256, Math.min(ctx.summarizeMaxTokens, Math.floor(budget * 0.3)));
+	// turns may use at most `budget - summaryReserve` tokens. The configured
+	// value is clamped to the settings schema bounds — a hand-edited
+	// settings.json may hold out-of-range values that gateways would reject.
+	const maxSummaryTokens = Math.max(256, Math.min(ctx.summarizeMaxTokens, 32768));
+	const summaryReserve = Math.max(256, Math.min(maxSummaryTokens, Math.floor(budget * 0.3)));
 	const keep = new Array<boolean>(nonSystemAtoms.length).fill(false);
 	let keptTokens = 0;
 	for (let i = nonSystemAtoms.length - 1; i >= 0; i--) {
@@ -111,7 +114,7 @@ async function trySummarize(
 		headers: ctx.headers,
 		retryConfig: ctx.retryConfig,
 		summarizationInstructions: ctx.summarizationInstructions,
-		maxOutputTokens: ctx.summarizeMaxTokens,
+		maxOutputTokens: maxSummaryTokens,
 		token: ctx.token,
 	};
 
@@ -250,11 +253,15 @@ export async function manageContext(
 		durationMs: info.durationMs,
 	});
 
-	void vscode.window.showInformationMessage(
-		info.mode === "summarize"
-			? `Context compacted: summarized ${info.beforeCount} messages into ${info.afterCount}.`
-			: `Context compacted: trimmed ${info.beforeCount} messages to ${info.afterCount}.`
-	);
+	// Only announce successful summarization — hard trimming is a silent
+	// fallback that repeats on every request until the history shrinks, so
+	// notifying for it would spam the user. Both paths stay visible in the
+	// `context.compacted` log event.
+	if (info.mode === "summarize") {
+		void vscode.window.showInformationMessage(
+			`Context compacted: summarized ${info.beforeCount} messages into ${info.afterCount}.`
+		);
+	}
 
 	return { messages: result, compaction: info };
 }

@@ -136,7 +136,9 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			// Handle system messages separately (Anthropic uses top-level system field)
 			if (role === "system") {
 				if (joinedText) {
-					this._systemContent = joinedText;
+					this._systemContent = this._systemContent
+						? `${this._systemContent}\n\n${joinedText}`
+						: joinedText;
 				}
 				continue;
 			}

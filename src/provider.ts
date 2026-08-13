@@ -213,19 +213,42 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			const contextManagement = config.get<string>("libiaoCopilot.contextManagement", "summarize");
 			const contextManagementMode: ContextManagementMode =
 				contextManagement === "off" ? "off" : "summarize";
-			const { messages: effectiveMessages } = await manageContext(messages, options, {
-				apiMode,
-				baseUrl: BASE_URL,
-				modelId: parsedModelId.baseId,
-				apiKey: modelApiKey,
-				headers: requestHeaders as Record<string, string>,
-				retryConfig,
-				modelConfig,
-				mode: contextManagementMode,
-				summarizationInstructions: config.get<string>("libiaoCopilot.summarizationInstructions", ""),
-				summarizeMaxTokens: config.get<number>("libiaoCopilot.summarizeMaxTokens", 4000),
-				token,
-			});
+
+			// Stateful Responses requests resume server-side state, so the gateway
+			// keeps the full history and any client-side compaction would be
+			// discarded (Copilot Chat likewise relies on server-side truncation
+			// there). Skip compaction when the `previous_response_id` path will be
+			// used. If the gateway rejects the stateful request, the fallback
+			// sends the full history once — and from the next request on,
+			// compaction applies again because the base URL is marked unsupported.
+			const normalizedBaseUrl = BASE_URL.replace(/\/+$/, "");
+			const statefulMarker =
+				apiMode === "openai-responses"
+					? findLastOpenAIResponsesStatefulMarker(parsedModelId.baseId, messages)
+					: null;
+			const willUsePreviousResponseId =
+				statefulMarker !== null &&
+				statefulMarker.index >= 0 &&
+				statefulMarker.index < messages.length - 1 &&
+				!this._openaiResponsesPreviousResponseIdUnsupportedBaseUrls.has(normalizedBaseUrl);
+
+			let effectiveMessages = messages;
+			if (!willUsePreviousResponseId) {
+				const managed = await manageContext(messages, options, {
+					apiMode,
+					baseUrl: BASE_URL,
+					modelId: parsedModelId.baseId,
+					apiKey: modelApiKey,
+					headers: requestHeaders as Record<string, string>,
+					retryConfig,
+					modelConfig,
+					mode: contextManagementMode,
+					summarizationInstructions: config.get<string>("libiaoCopilot.summarizationInstructions", ""),
+					summarizeMaxTokens: config.get<number>("libiaoCopilot.summarizeMaxTokens", 4000),
+					token,
+				});
+				effectiveMessages = managed.messages;
+			}
 			if (effectiveMessages.length !== messages.length) {
 				logger.debug("request.messages.managed", {
 					modelId: model.id,
@@ -596,7 +619,10 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 	}
 }
 
-type OpenAIResponsesStatefulMarkerLocation = { marker: string; index: number };
+interface OpenAIResponsesStatefulMarkerLocation {
+	marker: string;
+	index: number;
+}
 
 function createOpenAIResponsesStatefulMarkerPart(modelId: string, marker: string): vscode.LanguageModelDataPart {
 	const payload = `${modelId}\\${marker}`;

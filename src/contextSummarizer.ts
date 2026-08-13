@@ -213,7 +213,6 @@ async function sendSummaryRequest(
 					{ role: "user", content: user },
 				],
 				stream: false,
-				temperature: 0.2,
 				max_tokens: ctx.maxOutputTokens,
 			};
 			break;
@@ -236,7 +235,6 @@ async function sendSummaryRequest(
 				system,
 				messages: [{ role: "user", content: user }],
 				max_tokens: ctx.maxOutputTokens,
-				temperature: 0.2,
 				stream: false,
 			};
 			break;
@@ -249,7 +247,7 @@ async function sendSummaryRequest(
 			body = {
 				systemInstruction: { parts: [{ text: system }] },
 				contents: [{ role: "user", parts: [{ text: user }] }],
-				generationConfig: { temperature: 0.2, maxOutputTokens: ctx.maxOutputTokens },
+				generationConfig: { maxOutputTokens: ctx.maxOutputTokens },
 			};
 			break;
 		}
@@ -260,7 +258,6 @@ async function sendSummaryRequest(
 				instructions: system,
 				input: user,
 				stream: false,
-				temperature: 0.2,
 				max_output_tokens: ctx.maxOutputTokens,
 			};
 			break;
