@@ -277,10 +277,14 @@
 {
   "id": "glm-5.2",
   "owned_by": "libiaorobot",
+  "apiMode": "openai",
   "context_length": 1048576,
   "context_sizes": [262144, 524288, 1000000],
   "default_context_size": 524288,
   "max_tokens": 131072,
+  "thinking": {
+    "type": "enabled"
+  },
   "include_reasoning_in_request": true,
   "vision": false
 }
@@ -376,3 +380,53 @@
 5. **qwen3.7-max 的视觉**：标准版纯文本，2026-06-08 起快照支持视觉，按网关挂载版本决定 `vision`。
 6. **价格仅供参考**：OpenAI 2026-07 以来两次调价，官方页现价为最新基准；网关成本以实际为准。
 7. **`context_sizes` 三档为显示用途**（handoff 已验证 display-only），如需真实限制上下文需另行改请求逻辑。
+
+---
+
+## 四、apiMode 官网核实（2026-08-13）
+
+> 对 `package.json` 中 `libiaoCopilot.models.default` 全部 19 个内置模型的 `apiMode` 逐一核对官方口径（厂商官方文档直抓）。
+> **重要前提：官网口径 ≠ 网关实际能力。** 所有模型实际走公司 new-api 网关（`owned_by: libiaorobot`），本表只回答「官方支持什么」，最终以网关路由为准。
+
+| 模型 ID | package.json 当前 apiMode | 官网核实口径 | 官方 Responses API | 建议 |
+|---|---|---|---|---|
+| qwen3.8-max-preview | openai-responses | Chat Completions | ✅（百炼 compatible-mode，仅 Token Plan） | 已改 openai-responses（2026-08-13） |
+| qwen3.8-max | openai-responses | Chat Completions | ✅ | 已改 openai-responses（2026-08-13） |
+| deepseek-v4-pro | openai-responses | Chat Completions + Anthropic 格式 | ❌ 官方无此 API（responses 页 404） | **保持 openai-responses**：网关已确认支持（2026-08-13） |
+| deepseek-v4-flash | openai-responses | 同上 | ❌ 同上 | 同上 |
+| gemini-3.1-pro-preview | openai | OpenAI 兼容仅 Chat Completions | ❌ | 保持 |
+| gemini-3.1-flash-image | openai | 同上 | ❌ | 保持 |
+| gemini-3.5-flash | openai | 同上 | ❌ | 保持 |
+| gemini-3.6-flash | openai | 同上 | ❌ | 保持 |
+| gpt-5.6-luna | openai-responses | Chat Completions | ✅ 官方双支持（Endpoints 表） | 已改 openai-responses（2026-08-13） |
+| gpt-5.6-sol | openai-responses | Chat Completions | ✅ 官方双支持 | 已改 openai-responses（2026-08-13） |
+| gpt-5.6-terra | openai-responses | Chat Completions | ✅ 官方双支持 | 已改 openai-responses（2026-08-13） |
+| gpt-5.5 | openai-responses | Chat Completions | ✅ 官方双支持 | 已改 openai-responses（2026-08-13） |
+| claude-opus-4-8 | openai | 原生 Messages + Chat Completions 兼容 | ⚠️ 官方无据（第三方 OpenRouter 有 responses 中继） | 保持 openai |
+| claude-opus-5 | openai | 同上 | ⚠️ 同上 | 保持 openai |
+| claude-sonnet-5 | openai | 同上 | ⚠️ 同上 | 保持 openai |
+| MiniMax-M3 | openai | Anthropic Messages（推荐）+ Chat Completions | ❌ | 保持 |
+| glm-5.2 | openai | Chat Completions + Claude 兼容 | ❌ | 保持（同日试 anthropic 后回退，见关键发现 8） |
+| qwen3.7-plus | openai-responses | Chat Completions | ✅ | 已改 openai-responses（2026-08-13） |
+| qwen3.7-max | openai-responses | Chat Completions | ✅ | 已改 openai-responses（2026-08-13） |
+
+### 关键发现
+
+1. **deepseek-v4-pro / flash 的 `openai-responses` 非官方能力，但网关已确认可用**：DeepSeek 官方仅开放 `/chat/completions`（OpenAI 格式）与 `/anthropic`（Claude 格式），responses 文档页 404。当前两条目标 `openai-responses` 依赖公司 new-api 网关的中继，**2026-08-13 管理员确认支持 + 同日 curl 实测通过，保持现状**：`/v1/responses` 对 deepseek-v4-pro 返回 HTTP 200，标准 Responses 语义（`object: response`、`output` 数组含 `reasoning` + `message` 两段），`reasoning.effort: max` 被接受并回显，思考正常输出（reasoning_tokens 可见）；唯一痕迹是响应 `id` 为裸 uuid（无 `resp_` 前缀），说明是中继实现而非原生 Responses。若未来改走官方直连，需改回 `openai`（或 `anthropic`）。
+2. **qwen 系四条官方支持 Responses**（阿里云百炼 `compatible-mode/v1/responses`，支持模型清单明确含 qwen3.8-max、qwen3.8-max-preview、qwen3.7-max、qwen3.7-plus；文档 2026-08-03 更新）。**已于 2026-08-13 切换为 `openai-responses`**。**同日 curl 实测通过**：`/v1/responses` 对 qwen3.8-max 返回 HTTP 200，响应 `id` 为 `resp_` 前缀、带 `x_details`（`x_billing_type: response_api`），为百炼兼容端点原生格式；内置默认档 `reasoning.effort: xhigh` 被接受并回显，思考正常（原担心百炼文档档位表无 xhigh，实测网关认）。注意：旧路径 `/api/v2/apps/protocols/compatible-mode/v1/responses` 将弃用，用新路径；官方提示 `reasoning.effort` 优先于 `enable_thinking`，后者将弃用。
+3. **gpt-5.6 全系 + gpt-5.5 官方双支持**（OpenAI 官方模型页 Endpoints 表：Chat Completions 与 Responses 均 Supported）。**已于 2026-08-13 切换为 `openai-responses`**。
+4. ⚠️ **qwen3.7-plus / qwen3.7-max 的 `enable_thinking` 在 responses 路径下不生效**：扩展 `openaiResponsesApi` 只发送 `reasoning.effort`，不发送 `enable_thinking`。**已于 2026-08-13 处理**：两条内置条目移除 `enable_thinking: true`，改配 `reasoning_effort` + `reasoning_efforts: ["minimal", "low", "medium", "high"]`（默认 effort 当天随“默认思考等级全部调至最高档”一并设为 `high`，见第 7 条）。取值依据：百炼官方 Responses 文档 effort 档位为 none/minimal/low/medium(默认)/high（2026-08-03 更新，官方示例即 medium），与扩展枚举（minimal/low/medium/high/xhigh/max，无 none）取交集得 minimal/low/medium/high，最高档为 high。
+5. **Claude 三兄弟官方无 Responses 证据**：Anthropic 官网（platform.claude.com / docs.claude.com）本地网络不可直连，Anthropic 官方 GitHub 与 Azure 官方文档亦无官方 Responses 兼容记录；原生为 Messages API，OpenAI SDK 兼容层覆盖 Chat Completions。权威第三方 OpenRouter 为 Claude 提供了 `/v1/responses` 中继，但那是 OpenRouter 的能力，非 Anthropic 官方。标 `openai` 正确。
+6. **Gemini / MiniMax / GLM 官方无 Responses**，`openai` 模式正确。
+7. **2026-08-13：内置条目默认思考等级调整**：先统一调至官方最高档，后因成本与首字延迟考量，经确认将以下 6 条回调为 medium：gpt-5.6-luna / gpt-5.6-sol / gpt-5.6-terra（max → medium）、claude-opus-4-8 / claude-opus-5 / claude-sonnet-5（max → medium，注：Claude 三条调最高前原始默认是 high，本次回调后比原始默认还低一档）。保持最高档未动的：gpt-5.5 xhigh（官方无 max 档）、gemini-3.5-flash / gemini-3.6-flash high、qwen3.7-plus / qwen3.7-max high、qwen3.8-max(-preview) xhigh、deepseek-v4-pro/flash max、gemini-3.1-pro-preview high。开关式思考无等级档位未动：gemini-3.1-flash-image、MiniMax-M3、glm-5.2（thinking 已 enabled）。⚠️ 提醒：Claude 官方限制关闭 thinking 时 effort 最高只能到 high（disabled + xhigh/max 会报 400）；如需更高质量输出，可在设置 UI 中逐模型上调档位。本文档上方 JSON 示例块中的 `reasoning_effort` 仍为旧默认值，仅作结构参考。
+8. **glm-5.2 的 anthropic 试验最终回退 openai（2026-08-13）**：切 anthropic 后经 curl 实测网关链路：`/v1/messages` 端点 + `x-api-key` 鉴权 HTTP 200，`thinking`（含 `budget_tokens`）与 `cache_control` 字段均被网关接受，但响应 `id` 前缀为 `chatcmpl-`、`billing_usage.source` 为 `oai_chat`，证明网关内部是把 Anthropic 请求翻译成 OpenAI 格式发给 GLM（`semantic: openai`），并非智谱官方 `/api/anthropic` 原生端点。既然只是网关的 Anthropic 翻译层而非 GLM 原生 Anthropic 能力，经确认回退 `openai`（少一层协议翻译）。备忘：①openai 风格 `thinking: {type: "enabled"}` 在 anthropic 模式下不被扩展读取，若再切需改用 `extra.thinking`（Anthropic 原生格式，enabled 必带 `budget_tokens`）透传；②anthropic 模式默认开 `cache_control` 断点，本次实测网关接受但内部不生效（`cache_creation_input_tokens: 0`）；③anthropic 模式不读 `reasoning_effort`；④直连智谱官方 Claude 端点需另配智谱平台 API key + `baseUrl: https://open.bigmodel.cn/api/anthropic`，绕开网关。
+
+### 核实来源（2026-08-13）
+
+- **OpenAI**：developers.openai.com 各模型页 Endpoints 表（gpt-5.6-luna / sol / terra、gpt-5.5）
+- **DeepSeek**：api-docs.deepseek.com（chat/completions、anthropic；responses 页 404）
+- **Google**：ai.google.dev/gemini-api/docs/openai（2026-06-22 更新）
+- **阿里云**：alibabacloud.com/help/en/model-studio/compatibility-with-openai-responses-api（2026-08-03 更新）
+- **MiniMax**：platform.minimaxi.com/docs/guides/text-generation
+- **智谱**：docs.bigmodel.cn（GLM-5 页 + llms.txt 索引）
+- **Anthropic**：官网不可直连；以官方发布稿 + Microsoft Foundry 官方模型表交叉验证 + OpenRouter 模型页（第三方权威源）为准

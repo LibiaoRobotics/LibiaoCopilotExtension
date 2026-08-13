@@ -135,7 +135,7 @@
 						{
 							"id": "qwen3.8-max-preview",
 							"owned_by": "libiaorobot",
-							"apiMode": "openai",
+							"apiMode": "openai-responses",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,
@@ -151,7 +151,7 @@
 						{
 							"id": "qwen3.8-max",
 							"owned_by": "libiaorobot",
-							"apiMode": "openai",
+							"apiMode": "openai-responses",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,
@@ -237,7 +237,7 @@
 							],
 							"default_context_size": 524288,
 							"max_tokens": 65536,
-							"reasoning_effort": "medium",
+							"reasoning_effort": "high",
 							"reasoning_efforts": ["low", "medium", "high"],
 							"vision": true
 						},
@@ -253,14 +253,14 @@
 							],
 							"default_context_size": 524288,
 							"max_tokens": 65536,
-							"reasoning_effort": "medium",
+							"reasoning_effort": "high",
 							"reasoning_efforts": ["low", "medium", "high"],
 							"vision": true
 						},
 						{
 							"id": "gpt-5.6-luna",
 							"owned_by": "libiaorobot",
-							"apiMode": "openai",
+							"apiMode": "openai-responses",
 							"context_length": 1050000,
 							"context_sizes": [
 								262144,
@@ -276,7 +276,7 @@
 						{
 							"id": "gpt-5.6-sol",
 							"owned_by": "libiaorobot",
-							"apiMode": "openai",
+							"apiMode": "openai-responses",
 							"context_length": 1050000,
 							"context_sizes": [
 								262144,
@@ -292,7 +292,7 @@
 						{
 							"id": "gpt-5.6-terra",
 							"owned_by": "libiaorobot",
-							"apiMode": "openai",
+							"apiMode": "openai-responses",
 							"context_length": 1050000,
 							"context_sizes": [
 								262144,
@@ -308,7 +308,7 @@
 						{
 							"id": "gpt-5.5",
 							"owned_by": "libiaorobot",
-							"apiMode": "openai",
+							"apiMode": "openai-responses",
 							"context_length": 1050000,
 							"context_sizes": [
 								262144,
@@ -317,7 +317,7 @@
 							],
 							"default_context_size": 524288,
 							"max_tokens": 128000,
-							"reasoning_effort": "medium",
+							"reasoning_effort": "xhigh",
 							"reasoning_efforts": ["low", "medium", "high", "xhigh"],
 							"vision": true
 						},
@@ -333,7 +333,7 @@
 							],
 							"default_context_size": 524288,
 							"max_tokens": 128000,
-							"reasoning_effort": "high",
+							"reasoning_effort": "medium",
 							"reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
 							"vision": true
 						},
@@ -349,7 +349,7 @@
 							],
 							"default_context_size": 524288,
 							"max_tokens": 128000,
-							"reasoning_effort": "high",
+							"reasoning_effort": "medium",
 							"reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
 							"vision": true
 						},
@@ -365,7 +365,7 @@
 							],
 							"default_context_size": 524288,
 							"max_tokens": 128000,
-							"reasoning_effort": "high",
+							"reasoning_effort": "medium",
 							"reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
 							"vision": true
 						},
@@ -404,7 +404,7 @@
 						{
 							"id": "qwen3.7-plus",
 							"owned_by": "libiaorobot",
-							"apiMode": "openai",
+							"apiMode": "openai-responses",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,
@@ -413,14 +413,15 @@
 							],
 							"default_context_size": 524288,
 							"max_tokens": 131072,
-							"enable_thinking": true,
+							"reasoning_effort": "high",
+							"reasoning_efforts": ["minimal", "low", "medium", "high"],
 							"include_reasoning_in_request": true,
 							"vision": true
 						},
 						{
 							"id": "qwen3.7-max",
 							"owned_by": "libiaorobot",
-							"apiMode": "openai",
+							"apiMode": "openai-responses",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,
@@ -429,7 +430,8 @@
 							],
 							"default_context_size": 524288,
 							"max_tokens": 65536,
-							"enable_thinking": true,
+							"reasoning_effort": "high",
+							"reasoning_efforts": ["minimal", "low", "medium", "high"],
 							"include_reasoning_in_request": true,
 							"vision": false
 						}

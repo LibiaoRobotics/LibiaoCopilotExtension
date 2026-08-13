@@ -359,6 +359,14 @@ async function mergeConfiguredModelWithProviders(options: {
 		group.models.push(m);
 	}
 
+	// Global id sets shared across all endpoint groups so every model is
+	// exposed exactly once. Without this, two groups (e.g. "openai" and
+	// "openai-responses" against the same gateway) each treat the other
+	// group's configured models as "newly published" and expose the full
+	// gateway listing again, duplicating every entry in the picker.
+	const configuredIds = new Set(configuredModels.map((m) => m.id));
+	const exposedIds = new Set<string>();
+
 	const merged: HFModelItem[] = [];
 	let queryableGroups = 0;
 	let groupsMissingKey = 0;
@@ -385,23 +393,25 @@ async function mergeConfiguredModelWithProviders(options: {
 
 		const providerModels = outcome.models;
 		const availableIds = new Set(providerModels.map((m) => m.id));
-		const configuredIds = new Set<string>();
 		for (const m of group.models) {
-			configuredIds.add(m.id);
 			if (availableIds.has(m.id)) {
 				merged.push(m);
+				exposedIds.add(m.id);
 			} else {
 				logger.warn("models.merge.configuredMissing", { modelId: m.id, baseUrl: group.baseUrl });
 			}
 		}
 
 		// Expose provider models that have no configuration entry
-		// (e.g. newly published models), with default metadata.
+		// (e.g. newly published models), with default metadata. Models
+		// configured for any group (or already exposed by an earlier group)
+		// are skipped so the listing never contains duplicates.
 		const discovered = providerModels
-			.filter((m) => !configuredIds.has(m.id))
+			.filter((m) => !configuredIds.has(m.id) && !exposedIds.has(m.id))
 			.sort((a, b) => a.id.localeCompare(b.id));
 		for (const m of discovered) {
 			merged.push(toDiscoveredModelItem(m));
+			exposedIds.add(m.id);
 		}
 	}
 
@@ -501,19 +511,28 @@ async function resolveGroupApiKey(group: EndpointGroup, secrets: vscode.SecretSt
 /**
  * Build a picker entry for a provider model that has no configuration,
  * deriving vision/context hints from the API response where available.
+ *
+ * When a built-in entry exists for the model id, it is the authoritative
+ * metadata source: the gateway listing often under-reports the context
+ * window and max tokens (e.g. reporting a model as 128K when the factory
+ * entry declares 1M), so the built-in entry is merged over the live
+ * listing while live-only fields are kept.
  */
 function toDiscoveredModelItem(m: HFModelItem): HFModelItem {
 	const builtIn = getBuiltInModel(m.id);
 	const modalities = m.architecture?.input_modalities ?? [];
-	const vision = m.vision ?? (Array.isArray(modalities) && modalities.includes("image"));
+	const vision = m.vision ?? builtIn?.vision ?? (Array.isArray(modalities) && modalities.includes("image"));
+	if (!builtIn) {
+		return {
+			...m,
+			context_length: m.context_length ?? m.providers?.[0]?.context_length,
+			vision,
+		};
+	}
 	return {
 		...m,
-		context_length: m.context_length ?? m.providers?.[0]?.context_length,
+		...builtIn,
 		vision,
-		// Carry the factory apiMode from the built-in entry so automatically
-		// exposed gateway models talk the protocol their built-in entry
-		// declares (absent entries keep the request-time default "openai").
-		apiMode: builtIn?.apiMode,
 	};
 }
 
