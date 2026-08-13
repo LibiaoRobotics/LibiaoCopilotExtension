@@ -15,6 +15,12 @@ import type { HFModelItem } from "../types";
 
 let commitGenerationAbortController: AbortController | undefined;
 
+/** Minimal structural type for a repository from the vscode.git extension API. */
+interface GitRepository {
+	rootUri: vscode.Uri;
+	inputBox: { value: string };
+}
+
 const DEFAULT_PROMPT = {
 	system:
 		"You are a helpful assistant that generates informative git commit messages based on git diffs output. Skip preamble and remove all backticks surrounding the commit message.\nBased on the provided git diff, generate a conventional format commit message.",
@@ -52,7 +58,7 @@ export async function generateCommitMsg(secrets: vscode.SecretStorage, scm?: vsc
 	}
 }
 
-async function orchestrateWorkspaceCommitMsgGeneration(secrets: vscode.SecretStorage, repos: any[]) {
+async function orchestrateWorkspaceCommitMsgGeneration(secrets: vscode.SecretStorage, repos: GitRepository[]) {
 	const reposWithChanges = await filterForReposWithChanges(repos);
 
 	if (reposWithChanges.length === 0) {
@@ -89,8 +95,8 @@ async function orchestrateWorkspaceCommitMsgGeneration(secrets: vscode.SecretSto
 	}
 }
 
-async function filterForReposWithChanges(repos: any[]) {
-	const reposWithChanges = [];
+async function filterForReposWithChanges(repos: GitRepository[]) {
+	const reposWithChanges: GitRepository[] = [];
 
 	// Check which repositories have changes
 	for (const repo of repos) {
@@ -99,16 +105,16 @@ async function filterForReposWithChanges(repos: any[]) {
 			if (gitDiff) {
 				reposWithChanges.push(repo);
 			}
-		} catch (error) {
+		} catch {
 			// Skip repositories with errors (no changes, etc.)
 		}
 	}
 	return reposWithChanges;
 }
 
-async function promptRepoSelection(repos: any[]) {
+async function promptRepoSelection(repos: GitRepository[]) {
 	// Multiple repos with changes - ask user to choose
-	const repoItems = repos.map((repo) => ({
+	const repoItems: (vscode.QuickPickItem & { repo: GitRepository | null })[] = repos.map((repo) => ({
 		label: repo.rootUri.fsPath.split(path.sep).pop() || repo.rootUri.fsPath,
 		description: repo.rootUri.fsPath,
 		repo: repo,
@@ -117,7 +123,7 @@ async function promptRepoSelection(repos: any[]) {
 	repoItems.unshift({
 		label: "$(git-commit) Generate for all repositories with changes",
 		description: `Generate commit messages for ${repos.length} repositories`,
-		repo: null as any,
+		repo: null,
 	});
 
 	return await vscode.window.showQuickPick(repoItems, {
@@ -125,7 +131,7 @@ async function promptRepoSelection(repos: any[]) {
 	});
 }
 
-async function generateCommitMsgForRepository(secrets: vscode.SecretStorage, repository: any) {
+async function generateCommitMsgForRepository(secrets: vscode.SecretStorage, repository: GitRepository) {
 	const inputBox = repository.inputBox;
 	const repoPath = repository.rootUri.fsPath;
 	const gitDiff = await getGitDiff(repoPath);
@@ -144,7 +150,11 @@ async function generateCommitMsgForRepository(secrets: vscode.SecretStorage, rep
 	);
 }
 
-async function performCommitMsgGeneration(secrets: vscode.SecretStorage, gitDiff: string, inputBox: any) {
+async function performCommitMsgGeneration(
+	secrets: vscode.SecretStorage,
+	gitDiff: string,
+	inputBox: { value: string }
+) {
 	const startTime = Date.now();
 	let modelId: string | undefined;
 	try {

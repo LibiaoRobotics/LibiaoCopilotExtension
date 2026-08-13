@@ -25,7 +25,6 @@ suite("openaiResponsesApi output text dedup", () => {
 			.join("");
 	}
 
-	const progress = { report: (_p: vscode.LanguageModelResponsePart2) => undefined } as vscode.Progress<vscode.LanguageModelResponsePart2>;
 	function recordingProgress(): { progress: vscode.Progress<vscode.LanguageModelResponsePart2>; parts: vscode.LanguageModelResponsePart2[] } {
 		const parts: vscode.LanguageModelResponsePart2[] = [];
 		return { progress: { report: (p) => parts.push(p) }, parts };

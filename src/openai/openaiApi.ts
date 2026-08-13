@@ -537,7 +537,9 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 		try {
 			while (true) {
 				const { done, value } = await reader.read();
-				if (done) break;
+				if (done) {
+					break;
+				}
 
 				buffer += decoder.decode(value, { stream: true });
 				const lines = buffer.split("\n");
@@ -548,14 +550,18 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 						continue;
 					}
 					const data = line.slice(5).trim();
-					if (data === "[DONE]") continue;
+					if (data === "[DONE]") {
+						continue;
+					}
 
 					try {
 						const parsed = JSON.parse(data);
 
 						// OpenAI-compatible streaming response
 						const choice = (parsed.choices as Record<string, unknown>[] | undefined)?.[0];
-						if (!choice) continue;
+						if (!choice) {
+							continue;
+						}
 
 						const deltaObj = choice.delta as Record<string, unknown> | undefined;
 						if (deltaObj?.content) {
@@ -563,7 +569,9 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 							yield { type: "text", text: content };
 						}
 						// Handle finish reason
-						if (choice.finish_reason) break;
+						if (choice.finish_reason) {
+							break;
+						}
 					} catch (e) {
 						console.error("[OpenAI Provider] Failed to parse SSE chunk:", e, "data:", data);
 					}

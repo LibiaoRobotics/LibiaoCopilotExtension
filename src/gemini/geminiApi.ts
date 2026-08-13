@@ -1027,12 +1027,13 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 		}
 	}
 
+	// eslint-disable-next-line require-yield
 	async *createMessage(
-		model: HFModelItem,
-		systemPrompt: string,
-		messages: { role: string; content: string }[],
-		baseUrl: string,
-		apiKey: string
+		_model: HFModelItem,
+		_systemPrompt: string,
+		_messages: { role: string; content: string }[],
+		_baseUrl: string,
+		_apiKey: string
 	): AsyncGenerator<{ type: "text"; text: string }> {
 		throw new Error("Method not implemented.");
 	}
