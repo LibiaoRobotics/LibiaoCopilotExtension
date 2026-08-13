@@ -167,7 +167,7 @@
 						{
 							"id": "deepseek-v4-pro",
 							"owned_by": "libiaorobot",
-							"apiMode": "openai",
+							"apiMode": "openai-responses",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,
@@ -183,7 +183,7 @@
 						{
 							"id": "deepseek-v4-flash",
 							"owned_by": "libiaorobot",
-							"apiMode": "openai",
+							"apiMode": "openai-responses",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,
