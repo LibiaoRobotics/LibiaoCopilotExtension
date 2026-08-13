@@ -6,7 +6,7 @@ import {
 	createModelConfigurationSchema,
 	type ModelPickerChatInformation,
 } from "./modelConfiguration";
-import { normalizeUserModels } from "./utils";
+import { getBuiltInModel, normalizeUserModels } from "./utils";
 import { VersionManager } from "./versionManager";
 import { fetchGeminiModels } from "./gemini/geminiApi";
 import { fetchOllamaModels } from "./ollama/ollamaApi";
@@ -503,12 +503,17 @@ async function resolveGroupApiKey(group: EndpointGroup, secrets: vscode.SecretSt
  * deriving vision/context hints from the API response where available.
  */
 function toDiscoveredModelItem(m: HFModelItem): HFModelItem {
+	const builtIn = getBuiltInModel(m.id);
 	const modalities = m.architecture?.input_modalities ?? [];
 	const vision = m.vision ?? (Array.isArray(modalities) && modalities.includes("image"));
 	return {
 		...m,
 		context_length: m.context_length ?? m.providers?.[0]?.context_length,
 		vision,
+		// Carry the factory apiMode from the built-in entry so automatically
+		// exposed gateway models talk the protocol their built-in entry
+		// declares (absent entries keep the request-time default "openai").
+		apiMode: builtIn?.apiMode,
 	};
 }
 

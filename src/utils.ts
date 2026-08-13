@@ -61,6 +61,40 @@ export function normalizeUserModels(models: unknown): HFModelItem[] {
 }
 
 /**
+ * Factory model metadata shipped in package.json as the `libiaoCopilot.models`
+ * default array. VS Code does not inject schema defaults into the effective
+ * configuration, so the runtime reads the declared default directly and
+ * normalizes it. Entries are keyed by model id; the map is cached for the
+ * lifetime of the extension since the extension manifest never changes.
+ */
+let builtInModelsCache: Map<string, HFModelItem> | null = null;
+
+export function getBuiltInModels(): Map<string, HFModelItem> {
+	if (builtInModelsCache) {
+		return builtInModelsCache;
+	}
+	const defaultValue = vscode.workspace
+		.getConfiguration()
+		.inspect<unknown>("libiaoCopilot.models")?.defaultValue;
+	const map = new Map<string, HFModelItem>();
+	for (const m of normalizeUserModels(defaultValue)) {
+		if (m.id && !map.has(m.id)) {
+			map.set(m.id, m);
+		}
+	}
+	builtInModelsCache = map;
+	return map;
+}
+
+export function getBuiltInModel(id: string): HFModelItem | undefined {
+	return getBuiltInModels().get(id);
+}
+
+export function clearBuiltInModelsCache(): void {
+	builtInModelsCache = null;
+}
+
+/**
  * Parse a model ID that may contain a configuration ID separator.
  * Format: "baseId::configId" or just "baseId"
  */

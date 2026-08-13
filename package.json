@@ -135,6 +135,7 @@
 						{
 							"id": "qwen3.8-max-preview",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,
@@ -150,6 +151,7 @@
 						{
 							"id": "qwen3.8-max",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,
@@ -165,6 +167,7 @@
 						{
 							"id": "deepseek-v4-pro",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,
@@ -180,6 +183,7 @@
 						{
 							"id": "deepseek-v4-flash",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,
@@ -195,6 +199,7 @@
 						{
 							"id": "gemini-3.1-pro-preview",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1048576,
 							"context_sizes": [
 								262144,
@@ -210,6 +215,7 @@
 						{
 							"id": "gemini-3.1-flash-image",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 131072,
 							"context_sizes": [
 								65536,
@@ -222,6 +228,7 @@
 						{
 							"id": "gemini-3.5-flash",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1048576,
 							"context_sizes": [
 								262144,
@@ -237,6 +244,7 @@
 						{
 							"id": "gemini-3.6-flash",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1048576,
 							"context_sizes": [
 								262144,
@@ -252,6 +260,7 @@
 						{
 							"id": "gpt-5.6-luna",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1050000,
 							"context_sizes": [
 								262144,
@@ -267,6 +276,7 @@
 						{
 							"id": "gpt-5.6-sol",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1050000,
 							"context_sizes": [
 								262144,
@@ -282,6 +292,7 @@
 						{
 							"id": "gpt-5.6-terra",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1050000,
 							"context_sizes": [
 								262144,
@@ -297,6 +308,7 @@
 						{
 							"id": "gpt-5.5",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1050000,
 							"context_sizes": [
 								262144,
@@ -312,6 +324,7 @@
 						{
 							"id": "claude-opus-4-8",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,
@@ -327,6 +340,7 @@
 						{
 							"id": "claude-opus-5",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,
@@ -342,6 +356,7 @@
 						{
 							"id": "claude-sonnet-5",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,
@@ -357,6 +372,7 @@
 						{
 							"id": "MiniMax-M3",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,
@@ -370,6 +386,7 @@
 						{
 							"id": "glm-5.2",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1048576,
 							"context_sizes": [
 								262144,
@@ -387,6 +404,7 @@
 						{
 							"id": "qwen3.7-plus",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,
@@ -402,6 +420,7 @@
 						{
 							"id": "qwen3.7-max",
 							"owned_by": "libiaorobot",
+							"apiMode": "openai",
 							"context_length": 1000000,
 							"context_sizes": [
 								262144,

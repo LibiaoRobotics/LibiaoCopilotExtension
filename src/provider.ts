@@ -13,7 +13,7 @@ import type { HFModelItem } from "./types";
 
 import type { OllamaRequestBody } from "./ollama/ollamaTypes";
 
-import { parseModelId, createRetryConfig, executeWithRetry, normalizeUserModels } from "./utils";
+import { parseModelId, createRetryConfig, executeWithRetry, normalizeUserModels, getBuiltInModel } from "./utils";
 
 import { prepareLanguageModelChatInformation, NO_MODELS_PLACEHOLDER_ID } from "./provideModel";
 import { countMessageTokens } from "./provideToken";
@@ -132,6 +132,14 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			// If still no model found, try to find any model matching the base ID (most lenient match, for backward compatibility)
 			if (!um) {
 				um = userModels.find((um) => um.id === parsedModelId.baseId);
+			}
+
+			// Auto-discovered models (exposed from the gateway listing without a
+			// user configuration entry) have no `um` above; fall back to the
+			// built-in factory entry so its apiMode and metadata apply to the
+			// request instead of being silently lost to the "openai" default.
+			if (!um) {
+				um = getBuiltInModel(parsedModelId.baseId);
 			}
 
 			// Check if using Ollama native API mode
