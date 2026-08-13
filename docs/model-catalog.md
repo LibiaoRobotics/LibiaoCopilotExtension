@@ -33,7 +33,7 @@
 | glm-5.2 | 1,048,576 | 131,072 | 思考模式（开关） | ❌（Text 输入） | ¥8/¥28 |
 | qwen3.7-plus | 1,000,000（输入上限 991,808） | 131,072（中国区官方确认） | 思考模式（开关） | ✅（Text/Image/Video） | ¥2/¥8（≤256K），¥6/¥24（>256K） |
 | qwen3.7-max | 1,000,000（输入上限 991,808） | 65,536 | 思考模式（开关） | ❌（标准版；6/8 快照支持视觉） | ¥12/¥36 |
-| qwen3.8-max（-preview 为网关别名，参数同） | 1,000,000 | 65,536 | effort：xhigh(默认)，档位 low/medium/xhigh | ✅ | 未公布 |
+| qwen3.8-max（-preview 为网关别名，参数同） | 1,000,000 | 128,000 | effort：xhigh(默认)，档位 low/medium/xhigh | ✅ | 未公布 |
 
 ---
 
@@ -328,7 +328,7 @@
 ### 16. qwen3.8-max（阿里云千问，-preview 为网关内部别名）
 
 - 来源：阿里云百炼/Qwen 官方博客（2026-08 查证）
-- 规格：上下文 1,000,000 / 最大输出 65,536；`reasoning_effort` 默认 xhigh，官方档位 low/medium/xhigh；官方支持图像输入（input_modalities 含 image）；`qwen3.8-max-preview` 为网关内部别名，参数与 `qwen3.8-max` 相同（package.json 两条并存）
+- 规格：上下文 1,000,000 / 最大输出 128,000（官方文档口径 65,536，2026-08-13 实测确认 128,000，配置按 128,000）；`reasoning_effort` 默认 xhigh，官方档位 low/medium/xhigh；官方支持图像输入（input_modalities 含 image）；`qwen3.8-max-preview` 为网关内部别名，参数与 `qwen3.8-max` 相同（package.json 两条并存）
 
 ```json
 {
@@ -338,7 +338,7 @@
   "context_length": 1000000,
   "context_sizes": [262144, 524288, 1000000],
   "default_context_size": 524288,
-  "max_tokens": 65536,
+  "max_tokens": 128000,
   "reasoning_effort": "xhigh",
   "reasoning_efforts": ["low", "medium", "xhigh"],
   "vision": true
