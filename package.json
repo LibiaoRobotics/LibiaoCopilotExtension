@@ -656,7 +656,7 @@
 									"gemini"
 								],
 								"default": "openai",
-								"description": "API 模式：'openai'（默认）为 OpenAI Chat Completions（/chat/completions），'openai-responses' 为 OpenAI Responses（/responses），'ollama' 为 Ollama（/api/chat），'anthropic' 为 Anthropic（/v1/messages），'gemini' 为 Gemini（*/v1beta/models/{model}:streamGenerateContent?alt=sse）。"
+								"description": "API 模式：'openai'（默认）为 OpenAI Chat Completions（/chat/completions），'openai-responses' 为 OpenAI Responses（/responses），'ollama' 为 Ollama（/api/chat），'anthropic' 为 Anthropic（/messages，baseUrl 需包含版本前缀 /v1），'gemini' 为 Gemini（*/v1beta/models/{model}:streamGenerateContent?alt=sse）。"
 							},
 							"useForCommitGeneration": {
 								"type": "boolean",

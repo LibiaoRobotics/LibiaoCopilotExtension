@@ -82,7 +82,7 @@
 | `openai`（默认） | `/chat/completions` | 大多数 OpenAI 兼容供应商 |
 | `openai-responses` | `/responses` | OpenAI 官方 Responses API |
 | `ollama` | `/api/chat` | 本地 Ollama 实例 |
-| `anthropic` | `/v1/messages` | Anthropic Claude |
+| `anthropic` | `/messages`（baseUrl 需包含版本前缀 `/v1`） | Anthropic Claude |
 | `gemini` | `/v1beta/models/{model}:streamGenerateContent?alt=sse` | Google Gemini |
 
 ### 混合配置示例
@@ -102,7 +102,7 @@
     {
         "id": "claude-3-5-sonnet-20241022",
         "owned_by": "anthropic",
-        "baseUrl": "https://api.anthropic.com",
+        "baseUrl": "https://api.anthropic.com/v1",
         "apiMode": "anthropic"
     }
 ]

@@ -25,6 +25,8 @@
 
 ### 修复
 
+- **Anthropic 端点简化**：`anthropic` 模式的请求路径改为直接拼接 `/messages`，版本前缀 `/v1` 由 `baseUrl` 携带（与 `openai` 模式惯例一致）。README 示例已同步更新为 `https://api.anthropic.com/v1`。已配置不带 `/v1` 的 baseUrl 的用户需自行补上，否则会 404。
+
 - **添加模型时自动选中默认上下文大小**：修复新增模型未保存 `default_context_size` 导致 VS Code 原生配置菜单里「Context Size」没有任何选中项的问题。现在三层兜底保证默认值存在：表单里填写「Context Sizes」时自动填充默认档（可手动改）；提交表单时未填则取最大可选档；最终在模型保存/更新/导入时统一归一化（与配置菜单 schema 的回退逻辑同源），保证新增模型开箱即有默认选中项。
 
 ### 移除

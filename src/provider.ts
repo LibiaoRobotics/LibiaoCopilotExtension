@@ -311,11 +311,9 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 
 				// send Anthropic chat request with retry
 				const normalizedBaseUrl = BASE_URL.replace(/\/+$/, "");
-				// Some providers require configuring the baseUrl with a version suffix (e.g. .../v1).
-				// Avoid double-appending (e.g. .../v1/v1/messages).
-				const url = normalizedBaseUrl.endsWith("/v1")
-					? `${normalizedBaseUrl}/messages`
-					: `${normalizedBaseUrl}/v1/messages`;
+				// The base URL carries the API version prefix (e.g.
+				// https://api.anthropic.com/v1); we append the Messages endpoint.
+				const url = `${normalizedBaseUrl}/messages`;
 				logger.debug("request.body", { url, requestBody });
 				const response = await executeWithRetry(async () => {
 					const res = await fetch(url, {

@@ -229,7 +229,7 @@ async function sendSummaryRequest(
 			};
 			break;
 		case "anthropic":
-			url = base.endsWith("/v1") ? `${base}/messages` : `${base}/v1/messages`;
+			url = `${base}/messages`;
 			body = {
 				model: ctx.modelId,
 				system,
