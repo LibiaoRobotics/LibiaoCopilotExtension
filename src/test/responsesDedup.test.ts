@@ -25,6 +25,13 @@ suite("openaiResponsesApi output text dedup", () => {
 			.join("");
 	}
 
+	function collectThinking(parts: vscode.LanguageModelResponsePart2[]): string {
+		return parts
+			.filter((p): p is vscode.LanguageModelThinkingPart => p instanceof vscode.LanguageModelThinkingPart)
+			.map((p) => (Array.isArray(p.value) ? p.value.join("") : p.value))
+			.join("");
+	}
+
 	function recordingProgress(): { progress: vscode.Progress<vscode.LanguageModelResponsePart2>; parts: vscode.LanguageModelResponsePart2[] } {
 		const parts: vscode.LanguageModelResponsePart2[] = [];
 		return { progress: { report: (p) => parts.push(p) }, parts };
@@ -76,5 +83,71 @@ suite("openaiResponsesApi output text dedup", () => {
 			token
 		);
 		assert.strictEqual(collectText(parts), "one two");
+	});
+
+	// 2026-08-15 fuse fix: deltas routed into XML think blocks never set the old
+	// _hasEmittedText flag, so a replaying done event re-ran the full text
+	// through think-block processing and duplicated the thinking content.
+	test("does not duplicate thinking when deltas carry XML think blocks and done replays the full text", async () => {
+		const api = new OpenaiResponsesApi("test-model");
+		const { progress, parts } = recordingProgress();
+		const token = new vscode.CancellationTokenSource().token;
+		const full = "<think>internal reasoning</think>visible answer";
+		await api.processStreamingResponse(
+			sseStream([
+				{ type: "response.output_text.delta", delta: "<think>internal" },
+				{ type: "response.output_text.delta", delta: " reasoning</think>" },
+				{ type: "response.output_text.delta", delta: "visible answer" },
+				{ type: "response.output_text.delta", delta: "" },
+				{ type: "response.output_text.done", text: full },
+				{ type: "response.completed" },
+			]),
+			progress,
+			token
+		);
+		assert.strictEqual(collectText(parts), "visible answer");
+		assert.strictEqual(collectThinking(parts), "internal reasoning");
+	});
+
+	// Fuse is monotonic per stream: once blown by any text delta, reasoning done
+	// events must not replay full reasoning text either.
+	test("does not duplicate reasoning when reasoning deltas streamed and done replays them", async () => {
+		const api = new OpenaiResponsesApi("test-model");
+		const { progress, parts } = recordingProgress();
+		const token = new vscode.CancellationTokenSource().token;
+		await api.processStreamingResponse(
+			sseStream([
+				{ type: "response.reasoning_summary_text.delta", delta: "step one, " },
+				{ type: "response.reasoning_summary_text.delta", delta: "step two" },
+				{ type: "response.reasoning_summary_text.delta", delta: "" },
+				{ type: "response.reasoning_summary_text.done", text: "step one, step two" },
+				{ type: "response.output_text.delta", delta: "Answer." },
+				{ type: "response.output_text.done", text: "Answer." },
+				{ type: "response.completed" },
+			]),
+			progress,
+			token
+		);
+		assert.strictEqual(collectThinking(parts), "step one, step two");
+		assert.strictEqual(collectText(parts), "Answer.");
+	});
+
+	// Pure-done gateways (no deltas at all) must keep working — the fuse only
+	// blows after a delta is actually seen.
+	test("still emits reasoning and text from done events when no deltas were sent", async () => {
+		const api = new OpenaiResponsesApi("test-model");
+		const { progress, parts } = recordingProgress();
+		const token = new vscode.CancellationTokenSource().token;
+		await api.processStreamingResponse(
+			sseStream([
+				{ type: "response.reasoning_summary_text.done", text: "lone reasoning" },
+				{ type: "response.output_text.done", text: "lone answer" },
+				{ type: "response.completed" },
+			]),
+			progress,
+			token
+		);
+		assert.strictEqual(collectThinking(parts), "lone reasoning");
+		assert.strictEqual(collectText(parts), "lone answer");
 	});
 });

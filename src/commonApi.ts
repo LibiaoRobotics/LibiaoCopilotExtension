@@ -26,12 +26,6 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 	/** Track if we emitted any assistant text before seeing tool calls (SSE-like begin-tool-calls hint). */
 	protected _hasEmittedAssistantText = false;
 
-	/** Track if we emitted any text. */
-	protected _hasEmittedText = false;
-
-	/** Track if we emitted any thinking text. */
-	protected _hasEmittedThinking = false;
-
 	/** Track if we emitted the begin-tool-calls whitespace flush. */
 	protected _emittedBeginToolCallsHint = false;
 
@@ -240,7 +234,6 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 	 * @param progress Progress reporter for parts
 	 */
 	protected bufferThinkingContent(text: string, progress: Progress<LanguageModelResponsePart2>): void {
-		this._hasEmittedThinking = true;
 		// Generate thinking ID if not provided by the model
 		if (!this._currentThinkingId) {
 			this._currentThinkingId = this.generateThinkingId();

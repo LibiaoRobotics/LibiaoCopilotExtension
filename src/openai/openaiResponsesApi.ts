@@ -74,6 +74,15 @@ export type ResponsesInputItem =
 
 export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<string, unknown>> {
 	private _responseId: string | null = null;
+	/**
+	 * Fuse semantics (monotonic, never reset): once any non-empty output text
+	 * delta has been seen, the output_text.done fallback is permanently
+	 * disabled. This decouples the done-event dedup from WHERE the delta
+	 * content ended up (plain text vs XML think blocks) — see 2026-08-15 fix.
+	 */
+	private _sawTextDelta = false;
+	/** Same fuse for reasoning/thinking deltas vs their done events. */
+	private _sawReasoningDelta = false;
 
 	constructor(modelId: string) {
 		super(modelId);
@@ -420,7 +429,6 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			const res = this.processTextContent(text, progress);
 			if (res.emittedAny) {
 				this._hasEmittedAssistantText = true;
-				this._hasEmittedText = true;
 			}
 		}
 	}
@@ -448,23 +456,25 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			case "response.refusal.delta": {
 				const delta = this.coerceText(event.delta);
 				// Skip empty deltas entirely: the gateway may send an empty delta right
-				// before output_text.done, and resetting _hasEmittedText for it would
-				// break the done-event dedup below and cause the full text to be emitted twice.
+				// before output_text.done (observed on new-api→qwen). They carry no
+				// content and must not affect the fuse below.
 				if (!delta) {
 					return;
 				}
-				this._hasEmittedText = false;
+				// Fuse: seeing any non-empty delta permanently disables the
+				// done-event fallback, regardless of whether the content was emitted
+				// as plain text or routed into XML think-block processing.
+				this._sawTextDelta = true;
 				this.processOutputTextChunk(delta, progress);
 				return;
 			}
 
 			// Output text done events
 			case "response.output_text.done": {
-				// Some gateways only emit a final "done" payload (no deltas).
-				// Only emit in that case; if deltas already streamed the content,
-				// emitting done.text (the full text) would duplicate the whole message.
-				if (this._hasEmittedText) {
-					this._hasEmittedText = false;
+				// Fallback for gateways that only emit a final "done" payload (no deltas).
+				// Once any delta was streamed the fuse is blown and the full text is
+				// dropped — emitting it would duplicate the whole message.
+				if (this._sawTextDelta) {
 					return;
 				}
 				const text = this.coerceText(event.text);
@@ -484,11 +494,11 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			case "response.thinking_summary.delta":
 			case "response.thought.delta":
 			case "response.thought_summary.delta": {
-				// Skip empty deltas entirely: the gateway may send an empty delta right
-				// before the reasoning done event, and resetting _hasEmittedThinking for it
-				// would break the done-event dedup and re-emit the full reasoning text.
+				// Skip empty deltas (same gateway quirk as text deltas). A non-empty
+				// reasoning delta blows the fuse so the done event cannot replay the
+				// full reasoning text on top of the streamed deltas.
 				if (this.coerceText(event.delta)) {
-					this._hasEmittedThinking = false;
+					this._sawReasoningDelta = true;
 					this.processReasoningText(event, progress);
 				}
 				return;
@@ -503,9 +513,10 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			case "response.thinking_summary.done":
 			case "response.thought.done":
 			case "response.thought_summary.done": {
-				if (this._hasEmittedThinking) {
+				// Fuse: if any reasoning delta was streamed, drop the done payload —
+				// it only replays content that was already emitted.
+				if (this._sawReasoningDelta) {
 					this.reportEndThinking(progress);
-					this._hasEmittedThinking = false;
 					return;
 				}
 
