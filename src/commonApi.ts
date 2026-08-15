@@ -29,6 +29,14 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 	/** Track if we emitted the begin-tool-calls whitespace flush. */
 	protected _emittedBeginToolCallsHint = false;
 
+	/**
+	 * Monotonic fuse: set once ANY thinking content has been buffered, via
+	 * reasoning deltas OR XML think blocks in text. Consumers use it to drop
+	 * later "done"-style replay events. Never reset (2026-08-15, replaces the
+	 * old reset-prone _hasEmittedThinking).
+	 */
+	protected _everBufferedThinking = false;
+
 	// XML think block parsing state
 	protected _xmlThinkActive = false;
 	protected _xmlThinkDetectionAttempted = false;
@@ -234,6 +242,7 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 	 * @param progress Progress reporter for parts
 	 */
 	protected bufferThinkingContent(text: string, progress: Progress<LanguageModelResponsePart2>): void {
+		this._everBufferedThinking = true;
 		// Generate thinking ID if not provided by the model
 		if (!this._currentThinkingId) {
 			this._currentThinkingId = this.generateThinkingId();

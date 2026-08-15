@@ -169,6 +169,28 @@ suite("openaiResponsesApi output text dedup", () => {
 		assert.strictEqual(collectText(parts), "Answer.");
 	});
 
+	// Regression (2026-08-15 audit): thinking buffered via XML think blocks in
+	// TEXT deltas must also blow the reasoning-done fuse — the old code dropped
+	// the replay via _hasEmittedThinking set in bufferThinkingContent; the fuse
+	// rewrite initially lost that protection and double-emitted the thinking.
+	test("does not duplicate thinking when XML think blocks are followed by a reasoning done replay", async () => {
+		const api = new OpenaiResponsesApi("test-model");
+		const { progress, parts } = recordingProgress();
+		const token = new vscode.CancellationTokenSource().token;
+		await api.processStreamingResponse(
+			sseStream([
+				{ type: "response.output_text.delta", delta: "<think>via xml</think>answer body" },
+				{ type: "response.reasoning_summary_text.done", text: "via xml" },
+				{ type: "response.output_text.done", text: "<think>via xml</think>answer body" },
+				{ type: "response.completed" },
+			]),
+			progress,
+			token
+		);
+		assert.strictEqual(collectThinking(parts), "via xml");
+		assert.strictEqual(collectText(parts), "answer body");
+	});
+
 	// Pure-done gateways (no deltas at all) must keep working — the fuse only
 	// blows after a delta is actually seen.
 	test("still emits reasoning and text from done events when no deltas were sent", async () => {

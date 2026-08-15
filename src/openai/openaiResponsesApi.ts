@@ -513,9 +513,10 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			case "response.thinking_summary.done":
 			case "response.thought.done":
 			case "response.thought_summary.done": {
-				// Fuse: if any reasoning delta was streamed, drop the done payload —
+				// Fuse: if any reasoning delta was streamed, or thinking was buffered
+				// through XML think blocks in text deltas, drop the done payload —
 				// it only replays content that was already emitted.
-				if (this._sawReasoningDelta) {
+				if (this._sawReasoningDelta || this._everBufferedThinking) {
 					this.reportEndThinking(progress);
 					return;
 				}
