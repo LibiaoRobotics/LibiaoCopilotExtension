@@ -1,5 +1,4 @@
 import * as assert from "assert";
-import * as vscode from "vscode";
 import { AnthropicApi } from "../anthropic/anthropicApi";
 import { GeminiApi } from "../gemini/geminiApi";
 import {
@@ -14,19 +13,10 @@ import {
 import { OllamaApi } from "../ollama/ollamaApi";
 import { OpenaiApi } from "../openai/openaiApi";
 import { OpenaiResponsesApi } from "../openai/openaiResponsesApi";
-import { prepareLanguageModelChatInformation } from "../provideModel";
+import { toModelPickerInfo } from "../provideModel";
 import type { HFModelItem } from "../types";
 
 suite("modelConfiguration", () => {
-	// Stub secret storage with no keys: merge mode falls back to the
-	// configured entries per endpoint group without hitting the network.
-	const emptySecrets = {
-		get: async () => undefined,
-		store: async () => {},
-		delete: async () => {},
-		onDidChange: new vscode.EventEmitter<vscode.SecretStorageChangeEvent>().event,
-	} satisfies vscode.SecretStorage;
-
 	const deepSeekModel: HFModelItem = {
 		id: "deepseek-v4-pro",
 		displayName: "DeepSeek V4 Pro",
@@ -188,33 +178,29 @@ suite("modelConfiguration", () => {
 		);
 	});
 
-	test("registers deepseek-v4-flash with reasoning effort metadata", async () => {
-		const config = vscode.workspace.getConfiguration();
-		const previousModels = config.get<unknown>("libiaoCopilot.models", []);
-		const cts = new vscode.CancellationTokenSource();
+	// These two tests used to go through prepareLanguageModelChatInformation with
+	// a real (empty) config, which worked before the 2026-08-05 merge-mode change:
+	// configured models are now dropped unless the endpoint can be verified, so
+	// the test environment (no baseUrl/secrets) only ever got the placeholder.
+	// They now assert the picker-info assembly directly — the thing they always
+	// meant to check — without touching the verification chain.
+	test("registers deepseek-v4-flash with reasoning effort metadata", () => {
 		const model: HFModelItem = { ...deepSeekModel, id: "deepseek-v4-flash", displayName: undefined };
 
-		try {
-			await config.update("libiaoCopilot.models", [model], vscode.ConfigurationTarget.Global);
+		const info = toModelPickerInfo(model) as ModelPickerChatInformation;
 
-			const infos = await prepareLanguageModelChatInformation({ silent: true }, cts.token, emptySecrets);
-			const info = infos.find((item) => item.id === "deepseek-v4-flash") as ModelPickerChatInformation | undefined;
-
-			assert.ok(info, "deepseek-v4-flash should be registered");
-			assert.strictEqual(info.name, "deepseek-v4-flash");
-			assert.strictEqual(info.detail, "deepseek (Libiao Copilot)");
-			assert.strictEqual(info.isUserSelectable, true);
-			assert.deepStrictEqual(info.configurationSchema, createModelConfigurationSchema(model));
-		} finally {
-			cts.dispose();
-			await config.update("libiaoCopilot.models", previousModels, vscode.ConfigurationTarget.Global);
-		}
+		assert.strictEqual(info.id, "deepseek-v4-flash");
+		assert.strictEqual(info.name, "deepseek-v4-flash");
+		assert.strictEqual(info.detail, "deepseek (Libiao Copilot)");
+		assert.strictEqual(info.isUserSelectable, true);
+		assert.deepStrictEqual(info.configurationSchema, createModelConfigurationSchema(model));
+		assert.deepStrictEqual(
+			(info.configurationSchema?.properties.reasoningEffort as { default: string }).default,
+			"medium"
+		);
 	});
 
-	test("does not register reasoning effort metadata when the default is empty", async () => {
-		const config = vscode.workspace.getConfiguration();
-		const previousModels = config.get<unknown>("libiaoCopilot.models", []);
-		const cts = new vscode.CancellationTokenSource();
+	test("does not register reasoning effort metadata when the default is empty", () => {
 		const model: HFModelItem = {
 			...deepSeekModel,
 			id: "deepseek-v4-flash",
@@ -222,18 +208,10 @@ suite("modelConfiguration", () => {
 			reasoning_effort: undefined,
 		};
 
-		try {
-			await config.update("libiaoCopilot.models", [model], vscode.ConfigurationTarget.Global);
+		const info = toModelPickerInfo(model) as ModelPickerChatInformation;
 
-			const infos = await prepareLanguageModelChatInformation({ silent: true }, cts.token, emptySecrets);
-			const info = infos.find((item) => item.id === "deepseek-v4-flash") as ModelPickerChatInformation | undefined;
-
-			assert.ok(info, "deepseek-v4-flash should be registered");
-			assert.strictEqual(info.configurationSchema, undefined);
-		} finally {
-			cts.dispose();
-			await config.update("libiaoCopilot.models", previousModels, vscode.ConfigurationTarget.Global);
-		}
+		assert.strictEqual(info.id, "deepseek-v4-flash");
+		assert.strictEqual(info.configurationSchema, undefined);
 	});
 
 	test("applies selected reasoning effort to OpenAI-compatible chat requests", () => {

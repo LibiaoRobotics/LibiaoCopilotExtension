@@ -220,8 +220,10 @@ export async function prepareLanguageModelChatInformation(
 
 /**
  * Convert a merged/discovered model item into a model picker entry.
+ * Exported for direct unit testing (the merge path requires a verifiable
+ * endpoint, which the test environment cannot provide).
  */
-function toModelPickerInfo(m: HFModelItem): ModelPickerChatInformation {
+export function toModelPickerInfo(m: HFModelItem): ModelPickerChatInformation {
 	const contextLen = m?.context_length ?? DEFAULT_CONTEXT_LENGTH;
 	const maxOutput = m?.max_completion_tokens ?? m?.max_tokens ?? DEFAULT_MAX_TOKENS;
 	const maxInput = Math.max(1, contextLen - maxOutput);
