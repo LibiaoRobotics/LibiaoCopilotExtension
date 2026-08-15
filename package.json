@@ -405,6 +405,27 @@
 							"vision": false
 						},
 						{
+							"id": "glm-5.3",
+							"owned_by": "libiaorobot",
+							"apiMode": "anthropic",
+							"context_length": 1048576,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 131072,
+							"extra": {
+								"thinking": {
+									"type": "enabled",
+									"budget_tokens": 32000
+								}
+							},
+							"include_reasoning_in_request": true,
+							"vision": false
+						},
+						{
 							"id": "qwen3.7-plus",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
