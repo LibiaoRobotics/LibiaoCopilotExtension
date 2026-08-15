@@ -350,8 +350,29 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 				if (startIdx === -1) {
 					// No think start found, mark detection as attempted and skip future processing
 					this._xmlThinkDetectionAttempted = true;
+					if (emittedAny && data.length > 0) {
+						// A think block closed earlier in this same chunk and the rest is
+						// plain text. The caller only re-emits the input when we return
+						// emittedAny=false for the WHOLE input, so emit the tail here —
+						// closing the thinking sequence first, mirroring the caller's
+						// text path. (2026-08-15 fix: the tail used to be dropped.)
+						this.reportEndThinking(progress);
+						if (this.processTextContent(data, progress).emittedAny) {
+							this._hasEmittedAssistantText = true;
+						}
+					}
 					data = "";
 					break;
+				}
+
+				// Emit any plain text preceding the think start tag: once a tag is
+				// processed in this chunk (emittedAny=true) the caller will not
+				// re-emit the input, so the prefix must be emitted here.
+				if (startIdx > 0) {
+					this.reportEndThinking(progress);
+					if (this.processTextContent(data.slice(0, startIdx), progress).emittedAny) {
+						this._hasEmittedAssistantText = true;
+					}
 				}
 
 				// Found think start tag - mark that we processed XML tags

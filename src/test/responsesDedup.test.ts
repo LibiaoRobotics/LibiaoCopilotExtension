@@ -96,8 +96,7 @@ suite("openaiResponsesApi output text dedup", () => {
 		await api.processStreamingResponse(
 			sseStream([
 				{ type: "response.output_text.delta", delta: "<think>internal" },
-				{ type: "response.output_text.delta", delta: " reasoning</think>" },
-				{ type: "response.output_text.delta", delta: "visible answer" },
+				{ type: "response.output_text.delta", delta: " reasoning</think>visible answer" },
 				{ type: "response.output_text.delta", delta: "" },
 				{ type: "response.output_text.done", text: full },
 				{ type: "response.completed" },
@@ -107,6 +106,44 @@ suite("openaiResponsesApi output text dedup", () => {
 		);
 		assert.strictEqual(collectText(parts), "visible answer");
 		assert.strictEqual(collectThinking(parts), "internal reasoning");
+	});
+
+	// 2026-08-15 processXmlThinkBlocks fix: text following </think> in the SAME
+	// delta used to be dropped (the no-start-tag branch discarded the tail once
+	// any XML had been processed in that chunk). Same across chunks.
+	test("keeps text following a closing think tag, in one delta or across deltas", async () => {
+		const api = new OpenaiResponsesApi("test-model");
+		const { progress, parts } = recordingProgress();
+		const token = new vscode.CancellationTokenSource().token;
+		// same-delta tail
+		await api.processStreamingResponse(
+			sseStream([
+				{ type: "response.output_text.delta", delta: "<think>step" },
+				{ type: "response.output_text.delta", delta: " one</think>tail text" },
+				{ type: "response.completed" },
+			]),
+			progress,
+			token
+		);
+		assert.strictEqual(collectThinking(parts), "step one");
+		assert.strictEqual(collectText(parts), "tail text");
+	});
+
+	// Plain text BEFORE <think> in the same delta must not be dropped either.
+	test("keeps plain text preceding a think start tag in the same delta", async () => {
+		const api = new OpenaiResponsesApi("test-model");
+		const { progress, parts } = recordingProgress();
+		const token = new vscode.CancellationTokenSource().token;
+		await api.processStreamingResponse(
+			sseStream([
+				{ type: "response.output_text.delta", delta: "before <think>inner</think>after" },
+				{ type: "response.completed" },
+			]),
+			progress,
+			token
+		);
+		assert.strictEqual(collectText(parts), "before after");
+		assert.strictEqual(collectThinking(parts), "inner");
 	});
 
 	// Fuse is monotonic per stream: once blown by any text delta, reasoning done
