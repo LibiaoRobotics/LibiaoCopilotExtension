@@ -23,6 +23,7 @@ npm run download-api   # Download VS Code proposed API types (required after vsc
 - API keys stored via `vscode.SecretStorage` with keys `oaicopilot.apiKey` or `oaicopilot.apiKey.{provider}`
 - Model config via `oaicopilot.models` setting (see `src/types.ts` for `HFModelItem`)
 - Supports multi-provider: same model can have different `configId` for different settings
+- **Adding a built-in model entry**: follow `docs/add-builtin-model.md` (SOP with decision trees, curl test templates, and pitfall log); model specs live in `docs/model-catalog.md`
 
 ## Code Style (from eslint.config.mjs)
 - Semicolons required (`@stylistic/semi`)

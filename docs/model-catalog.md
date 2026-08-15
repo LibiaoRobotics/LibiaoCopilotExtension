@@ -277,13 +277,16 @@
 {
   "id": "glm-5.2",
   "owned_by": "libiaorobot",
-  "apiMode": "openai",
+  "apiMode": "anthropic",
   "context_length": 1048576,
   "context_sizes": [262144, 524288, 1000000],
   "default_context_size": 524288,
   "max_tokens": 131072,
-  "thinking": {
-    "type": "enabled"
+  "extra": {
+    "thinking": {
+      "type": "enabled",
+      "budget_tokens": 32000
+    }
   },
   "include_reasoning_in_request": true,
   "vision": false
@@ -406,7 +409,7 @@
 | claude-opus-5 | openai | 同上 | ⚠️ 同上 | 保持 openai |
 | claude-sonnet-5 | openai | 同上 | ⚠️ 同上 | 保持 openai |
 | MiniMax-M3 | openai | Anthropic Messages（推荐）+ Chat Completions | ❌ | 保持 |
-| glm-5.2 | openai | Chat Completions + Claude 兼容 | ❌ | 保持（同日试 anthropic 后回退，见关键发现 8） |
+| glm-5.2 | anthropic | Chat Completions + Claude 兼容 | ❌ | 已改 anthropic（2026-08-15 打通原生链路，见关键发现 8） |
 | qwen3.7-plus | openai-responses | Chat Completions | ✅ | 已改 openai-responses（2026-08-13） |
 | qwen3.7-max | openai-responses | Chat Completions | ✅ | 已改 openai-responses（2026-08-13） |
 
@@ -417,9 +420,9 @@
 3. **gpt-5.6 全系 + gpt-5.5 官方双支持**（OpenAI 官方模型页 Endpoints 表：Chat Completions 与 Responses 均 Supported）。**已于 2026-08-13 切换为 `openai-responses`**。
 4. ⚠️ **qwen3.7-plus / qwen3.7-max 的 `enable_thinking` 在 responses 路径下不生效**：扩展 `openaiResponsesApi` 只发送 `reasoning.effort`，不发送 `enable_thinking`。**已于 2026-08-13 处理**：两条内置条目移除 `enable_thinking: true`，改配 `reasoning_effort` + `reasoning_efforts: ["minimal", "low", "medium", "high"]`（默认 effort 当天随“默认思考等级全部调至最高档”一并设为 `high`，见第 7 条）。取值依据：百炼官方 Responses 文档 effort 档位为 none/minimal/low/medium(默认)/high（2026-08-03 更新，官方示例即 medium），与扩展枚举（minimal/low/medium/high/xhigh/max，无 none）取交集得 minimal/low/medium/high，最高档为 high。
 5. **Claude 三兄弟官方无 Responses 证据**：Anthropic 官网（platform.claude.com / docs.claude.com）本地网络不可直连，Anthropic 官方 GitHub 与 Azure 官方文档亦无官方 Responses 兼容记录；原生为 Messages API，OpenAI SDK 兼容层覆盖 Chat Completions。权威第三方 OpenRouter 为 Claude 提供了 `/v1/responses` 中继，但那是 OpenRouter 的能力，非 Anthropic 官方。标 `openai` 正确。
-6. **Gemini / MiniMax / GLM 官方无 Responses**，`openai` 模式正确。
+6. **Gemini / MiniMax 官方无 Responses**，`openai` 模式正确；GLM 亦无 Responses，glm-5.2 走 `anthropic` 见关键发现第 8 条。
 7. **2026-08-13：内置条目默认思考等级调整**：先统一调至官方最高档，后因成本与首字延迟考量，经确认将以下 6 条回调为 medium：gpt-5.6-luna / gpt-5.6-sol / gpt-5.6-terra（max → medium）、claude-opus-4-8 / claude-opus-5 / claude-sonnet-5（max → medium，注：Claude 三条调最高前原始默认是 high，本次回调后比原始默认还低一档）。保持最高档未动的：gpt-5.5 xhigh（官方无 max 档）、gemini-3.5-flash / gemini-3.6-flash high、qwen3.7-plus / qwen3.7-max high、qwen3.8-max(-preview) xhigh、deepseek-v4-pro/flash max、gemini-3.1-pro-preview high。开关式思考无等级档位未动：gemini-3.1-flash-image、MiniMax-M3、glm-5.2（thinking 已 enabled）。⚠️ 提醒：Claude 官方限制关闭 thinking 时 effort 最高只能到 high（disabled + xhigh/max 会报 400）；如需更高质量输出，可在设置 UI 中逐模型上调档位。本文档上方 JSON 示例块中的 `reasoning_effort` 仍为旧默认值，仅作结构参考。
-8. **glm-5.2 的 anthropic 试验最终回退 openai（2026-08-13）**：切 anthropic 后经 curl 实测网关链路：`/v1/messages` 端点 + `x-api-key` 鉴权 HTTP 200，`thinking`（含 `budget_tokens`）与 `cache_control` 字段均被网关接受，但响应 `id` 前缀为 `chatcmpl-`、`billing_usage.source` 为 `oai_chat`，证明网关内部是把 Anthropic 请求翻译成 OpenAI 格式发给 GLM（`semantic: openai`），并非智谱官方 `/api/anthropic` 原生端点。既然只是网关的 Anthropic 翻译层而非 GLM 原生 Anthropic 能力，经确认回退 `openai`（少一层协议翻译）。备忘：①openai 风格 `thinking: {type: "enabled"}` 在 anthropic 模式下不被扩展读取，若再切需改用 `extra.thinking`（Anthropic 原生格式，enabled 必带 `budget_tokens`）透传；②anthropic 模式默认开 `cache_control` 断点，本次实测网关接受但内部不生效（`cache_creation_input_tokens: 0`）；③anthropic 模式不读 `reasoning_effort`；④直连智谱官方 Claude 端点需另配智谱平台 API key + `baseUrl: https://open.bigmodel.cn/api/anthropic`，绕开网关。
+8. **glm-5.2 的 anthropic 链路（2026-08-13 回退 → 2026-08-15 二次切换 → 当日打通原生）**：历程：①2026-08-13 初切 anthropic 实测网关为翻译层（响应 `id` 前缀 `chatcmpl-`、`billing_usage.source: oai_chat`、`semantic: openai`，网关内部把 Anthropic 请求翻成 OpenAI 发给 GLM），遂回退 `openai`；②2026-08-15 二次切回 `anthropic`，初测仍是翻译层；③同日特哥调整网关渠道配置（渠道类型 Anthropic + 官方 base_url + 智谱 key）后复测，**翻译层消失，链路打通原生**：响应 `id` 前缀变为 `msg_`、`billing_usage` 痕迹全部消失、思考以原生 `thinking` block（带 `signature` 字段）输出、usage 为 Anthropic 原生结构。配置采用 `extra.thinking` 透传 Anthropic 原生格式。备忘：①openai 风格 `thinking: {type: "enabled"}` 在 anthropic 模式下不被扩展读取，必须用 `extra.thinking`（Anthropic 原生格式，enabled 必带 `budget_tokens`）透传；②cache_control 测试中 `cache_creation_input_tokens` 仍为 0，但测试提示词仅 61 tokens，低于 Anthropic 缓存最小阈值（约 1024 tokens），不能据此断定原生端不支持缓存，长提示词场景待复测；③anthropic 模式不读 `reasoning_effort`；④直连验证：智谱官方 key 对 `https://open.bigmodel.cn/api/anthropic/v1/messages` 初测 429（code 1113 余额不足，错误结构为原生 Anthropic 格式），网关 key 直连 401，确认两套 key 体系互不通用；打通原生后网关渠道使用的是智谱平台 key。
 
 ### 核实来源（2026-08-13）
 

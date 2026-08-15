@@ -386,7 +386,7 @@
 						{
 							"id": "glm-5.2",
 							"owned_by": "libiaorobot",
-							"apiMode": "openai",
+							"apiMode": "anthropic",
 							"context_length": 1048576,
 							"context_sizes": [
 								262144,
@@ -395,8 +395,11 @@
 							],
 							"default_context_size": 524288,
 							"max_tokens": 131072,
-							"thinking": {
-								"type": "enabled"
+							"extra": {
+								"thinking": {
+									"type": "enabled",
+									"budget_tokens": 32000
+								}
 							},
 							"include_reasoning_in_request": true,
 							"vision": false
