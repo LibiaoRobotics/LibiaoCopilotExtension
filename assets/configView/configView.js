@@ -84,7 +84,7 @@ const dropdownContent = modelIdDropdown.querySelector(".dropdown-content");
 const dropdownHeader = modelIdDropdown.querySelector(".dropdown-header");
 
 // Global Configuration save button event listener
-document.getElementById("saveBase").addEventListener("click", () => {
+const saveGlobalConfig = () => {
 	const retry = {
 		enabled: retryEnabledInput.checked,
 		max_attempts: parseInt(maxAttemptsInput.value) || 3,
@@ -110,7 +110,11 @@ document.getElementById("saveBase").addEventListener("click", () => {
 		commitModel: commitModelInput.value,
 		commitLanguage: commitLanguageInput.value,
 	});
-});
+};
+
+// Top and bottom save buttons both trigger the same save logic
+document.getElementById("saveBaseTop").addEventListener("click", saveGlobalConfig);
+document.getElementById("saveBase").addEventListener("click", saveGlobalConfig);
 
 const handleRefresh = () => {
 	// Hide the model form if it's visible
