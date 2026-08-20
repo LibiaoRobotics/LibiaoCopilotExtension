@@ -16,6 +16,14 @@ section {
 	background: var(--vscode-sideBar-background);
 	box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
 }
+/* 模型管理整块隐藏（模型由内置默认列表 + API 实时核实管理，不开放编辑） */
+#modelManagementSection {
+	display: none;
+}
+/* 供应商管理只读：隐藏添加按钮 */
+.add-provider-hidden {
+	display: none !important;
+}
 label {
 	display: block;
 	font-weight: 600;

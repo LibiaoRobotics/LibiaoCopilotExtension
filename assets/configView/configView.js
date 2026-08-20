@@ -140,7 +140,7 @@ document.getElementById("addProvider").addEventListener("click", () => {
 	// Add new provider row to the table
 	const newRow = document.createElement("tr");
 	newRow.innerHTML = `
-		<td><input type="text" class="provider-input" data-field="provider" placeholder="Provider ID" /></td>
+		<td><input type="text" class="provider-input" data-field="provider" placeholder="供应商 ID" /></td>
 		<td><input type="text" class="provider-input" data-field="baseUrl" placeholder="Base URL" /></td>
 		<td><input type="password" class="provider-input" data-field="apiKey" placeholder="API Key" /></td>
 		<td>
@@ -154,8 +154,8 @@ document.getElementById("addProvider").addEventListener("click", () => {
 		</td>
 		<td><textarea class="provider-input" data-field="headers" rows="2" placeholder='{"X-API-Version": "v1"}' style="width: 100%; font-family: monospace; font-size: 12px;"></textarea></td>
 		<td>
-			<button class="save-provider-btn secondary">Save</button>
-			<button class="cancel-provider-btn secondary">Cancel</button>
+			<button class="save-provider-btn secondary">保存</button>
+			<button class="cancel-provider-btn secondary">取消</button>
 		</td>
 	`;
 	providerTableBody.appendChild(newRow);
@@ -202,7 +202,7 @@ document.getElementById("addProvider").addEventListener("click", () => {
 document.getElementById("addModel").addEventListener("click", () => {
 	// Show the model form
 	modelFormSection.style.display = "block";
-	modelFormTitle.textContent = "Add New Model";
+	modelFormTitle.textContent = "新增模型";
 	// Reset form
 	resetModelForm();
 });
@@ -248,7 +248,7 @@ modelContextSizesInput.addEventListener("input", () => {
 toggleAdvancedSettingsBtn.addEventListener("click", () => {
 	const isCurrentlyVisible = advancedSettingsContent.style.display !== "none";
 	advancedSettingsContent.style.display = isCurrentlyVisible ? "none" : "block";
-	toggleAdvancedSettingsBtn.textContent = isCurrentlyVisible ? "Show Advanced Settings" : "Hide Advanced Settings";
+	toggleAdvancedSettingsBtn.textContent = isCurrentlyVisible ? "显示高级设置" : "隐藏高级设置";
 });
 
 // Save Model button event listener
@@ -356,8 +356,8 @@ window.addEventListener("message", (event) => {
 			break;
 		case "modelsFetchError":
 			// Handle error from fetchModels
-			dropdownHeader.textContent = "Error fetching models";
-			dropdownContent.innerHTML = `<div class="dropdown-option error">Failed to fetch models. Check the Developer Console for details.</div>`;
+			dropdownHeader.textContent = "拉取模型失败";
+			dropdownContent.innerHTML = `<div class="dropdown-option error">拉取模型失败，请查看开发者控制台获取详细信息。</div>`;
 			console.error("[oaicopilot] Failed to fetch models:", message.error);
 			break;
 		case "confirmResponse":
@@ -384,9 +384,9 @@ function renderProviders() {
 	);
 
 	if (!providers.length) {
-		providerTableBody.innerHTML = '<tr><td colspan="6" class="no-data">No providers</td></tr>';
+		providerTableBody.innerHTML = '<tr><td colspan="5" class="no-data">无供应商</td></tr>';
 		// Clear the provider dropdown as well
-		modelProviderInput.innerHTML = '<option value="">Select Provider</option>';
+		modelProviderInput.innerHTML = '<option value="">选择供应商</option>';
 		return;
 	}
 
@@ -400,10 +400,10 @@ function renderProviders() {
 			return `
 			<tr data-provider="${provider}">
 				<td>${provider}</td>
-				<td><input type="text" class="provider-input" data-field="baseUrl" value="${firstModel.baseUrl || ""}" placeholder="Base URL" /></td>
-				<td><input type="password" class="provider-input" data-field="apiKey" value="${state.providerKeys[provider] || ""}" placeholder="API Key" /></td>
+				<td><input type="text" class="provider-input" data-field="baseUrl" value="${firstModel.baseUrl || ""}" placeholder="Base URL" readonly /></td>
+				<td><input type="password" class="provider-input" data-field="apiKey" value="${state.providerKeys[provider] || ""}" placeholder="API Key" readonly /></td>
 				<td>
-					<select class="provider-input" data-field="apiMode">
+					<select class="provider-input" data-field="apiMode" disabled>
 						<option value="openai" ${firstModel.apiMode === "openai" ? "selected" : ""}>OpenAI</option>
 						<option value="openai-responses" ${firstModel.apiMode === "openai-responses" ? "selected" : ""}>OpenAI Responses</option>
 						<option value="ollama" ${firstModel.apiMode === "ollama" ? "selected" : ""}>Ollama</option>
@@ -411,11 +411,7 @@ function renderProviders() {
 						<option value="gemini" ${firstModel.apiMode === "gemini" ? "selected" : ""}>Gemini</option>
 					</select>
 				</td>
-				<td><textarea class="provider-input" data-field="headers" rows="2" placeholder='{"X-API-Version": "v1"}' style="width: 100%; font-family: monospace; font-size: 12px;">${headersJson}</textarea></td>
-				<td class="action-buttons">
-					<button class="update-provider-btn" data-provider="${provider}">Save</button>
-					<button class="delete-provider-btn danger" data-provider="${provider}">Delete</button>
-				</td>
+				<td><textarea class="provider-input" data-field="headers" rows="2" placeholder='{"X-API-Version": "v1"}' readonly style="width: 100%; font-family: monospace; font-size: 12px;">${headersJson}</textarea></td>
 			</tr>`;
 		})
 		.join("");
@@ -441,64 +437,13 @@ function renderProviders() {
 			return `<option value="${provider}">${provider}</option>`;
 		})
 		.join("");
-	modelProviderInput.innerHTML = '<option value="">Select Provider</option>' + providerOptions;
-
-	// Add event listeners for provider rows
-	document.querySelectorAll(".update-provider-btn").forEach((btn) => {
-		btn.addEventListener("click", (event) => {
-			const provider = event.target.getAttribute("data-provider");
-			const row = event.target.closest("tr");
-			const inputs = row.querySelectorAll(".provider-input");
-			const providerData = {};
-			inputs.forEach((input) => {
-				const field = input.getAttribute("data-field");
-				providerData[field] = input.value;
-			});
-
-			let headers = undefined;
-			if (providerData.headers && providerData.headers.trim()) {
-				try {
-					headers = JSON.parse(providerData.headers);
-				} catch (e) {
-					// ignore invalid JSON
-				}
-			}
-
-			vscode.postMessage({
-				type: "updateProvider",
-				provider: provider,
-				baseUrl: providerData.baseUrl || undefined,
-				apiKey: providerData.apiKey || undefined,
-				apiMode: providerData.apiMode || undefined,
-				headers: headers,
-			});
-		});
-	});
-
-	document.querySelectorAll(".delete-provider-btn").forEach((btn) => {
-		btn.addEventListener("click", (event) => {
-			const provider = event.target.getAttribute("data-provider");
-			const confirmId = "deleteProvider_" + Date.now();
-
-			// Store the action to be performed after confirmation
-			pendingConfirmations.set(confirmId, {
-				action: () => vscode.postMessage({ type: "deleteProvider", provider: provider }),
-			});
-
-			vscode.postMessage({
-				type: "requestConfirm",
-				id: confirmId,
-				message: `Are you sure you want to delete provider ${provider} and all its models?`,
-				action: "deleteProvider",
-			});
-		});
-	});
+	modelProviderInput.innerHTML = '<option value="">选择供应商</option>' + providerOptions;
 }
 
 function renderModels() {
 	const models = state.models.filter((m) => !m.id.startsWith("__provider__")).sort((a, b) => a.id.localeCompare(b.id));
 	if (!models.length) {
-		modelTableBody.innerHTML = '<tr><td colspan="11" class="no-data">No models</td></tr>';
+		modelTableBody.innerHTML = '<tr><td colspan="11" class="no-data">无模型</td></tr>';
 		return;
 	}
 
@@ -512,13 +457,13 @@ function renderModels() {
 				<td>${model.configId || ""}</td>
 				<td>${model.context_length || ""}</td>
 				<td>${model.max_tokens || model.max_completion_tokens || ""}</td>
-				<td>${model.vision ? "True" : ""}</td>
+				<td>${model.vision ? "是" : ""}</td>
 				<td>${model.temperature !== undefined && model.temperature !== null ? model.temperature : ""}</td>
 				<td>${model.top_p !== undefined && model.top_p !== null ? model.top_p : ""}</td>
 				<td>${model.delay || ""}</td>
 				<td class="action-buttons">
-					<button class="update-model-btn" data-model-id="${model.id}${model.configId ? "::" + model.configId : ""}">Edit</button>
-					<button class="delete-model-btn danger" data-model-id="${model.id}${model.configId ? "::" + model.configId : ""}">Delete</button>
+					<button class="update-model-btn" data-model-id="${model.id}${model.configId ? "::" + model.configId : ""}">编辑</button>
+					<button class="delete-model-btn danger" data-model-id="${model.id}${model.configId ? "::" + model.configId : ""}">删除</button>
 				</td>
 			</tr>`;
 		})
@@ -545,7 +490,7 @@ function renderModels() {
 			if (model) {
 				// Show the model form in edit mode
 				modelFormSection.style.display = "block";
-				modelFormTitle.textContent = `Edit Model: ${modelId}`;
+				modelFormTitle.textContent = `编辑模型：${modelId}`;
 				populateModelForm(model);
 			}
 		});
@@ -564,7 +509,7 @@ function renderModels() {
 			vscode.postMessage({
 				type: "requestConfirm",
 				id: confirmId,
-				message: `Are you sure you want to delete model ${modelId}?`,
+				message: `确定要删除模型 ${modelId} 吗？`,
 				action: "deleteModel",
 			});
 		});
@@ -609,7 +554,7 @@ function resetModelForm() {
 	modelHeadersInput.value = "";
 	modelExtraInput.value = "";
 	advancedSettingsContent.style.display = "none";
-	toggleAdvancedSettingsBtn.textContent = "Show Advanced Settings";
+	toggleAdvancedSettingsBtn.textContent = "显示高级设置";
 	// Remove editing attribute
 	modelIdInput.removeAttribute("data-editing");
 	modelIdInput.removeAttribute("data-original-id");
@@ -742,11 +687,11 @@ function validateModelData(modelData) {
 	showModelError("");
 
 	if (!modelData.id) {
-		showModelError("Model ID is required.");
+		showModelError("模型 ID 为必填项。");
 		return false;
 	}
 	if (!modelData.owned_by) {
-		showModelError("Provider ID is required.");
+		showModelError("供应商 ID 为必填项。");
 		return false;
 	}
 
@@ -772,72 +717,70 @@ function validateModelData(modelData) {
 
 	if (hasDuplicate) {
 		showModelError(
-			`A model with ID="${modelData.id}"${
-				modelData.configId ? ` and Config ID="${modelData.configId}"` : ""
-			} already exists. Model ID and Config ID combination must be unique.`
+			`模型 ID="${modelData.id}"${modelData.configId ? ` 且配置 ID="${modelData.configId}"` : ""} 已存在。模型 ID 与配置 ID 的组合必须唯一。`
 		);
 		return false;
 	}
 
 	// Validate numeric fields if provided
 	if (modelData.context_length !== undefined && (isNaN(modelData.context_length) || modelData.context_length <= 0)) {
-		showModelError("Context Length must be a positive number.");
+		showModelError("上下文长度必须为正数。");
 		return false;
 	}
 	if (modelData.context_sizes?.some((value) => isNaN(value) || value <= 0)) {
-		showModelError("Context Sizes must contain only positive integers.");
+		showModelError("上下文档位只能包含正整数。");
 		return false;
 	}
 	if (modelData.context_sizes?.some((value) => value > modelData.context_length)) {
-		showModelError("Context Sizes cannot exceed Context Length.");
+		showModelError("上下文档位不能超过上下文长度。");
 		return false;
 	}
 	if (
 		modelData.default_context_size !== undefined &&
 		!modelData.context_sizes?.includes(modelData.default_context_size)
 	) {
-		showModelError("Default Context Size must be included in Context Sizes.");
+		showModelError("默认上下文大小必须包含在上下文档位中。");
 		return false;
 	}
 	if (modelData.max_tokens !== undefined && (isNaN(modelData.max_tokens) || modelData.max_tokens <= 0)) {
-		showModelError("Max Tokens must be a positive number.");
+		showModelError("最大 Token 数必须为正数。");
 		return false;
 	}
 	if (
 		modelData.max_completion_tokens !== undefined &&
 		(isNaN(modelData.max_completion_tokens) || modelData.max_completion_tokens <= 0)
 	) {
-		showModelError("Max Completion Tokens must be a positive number.");
+		showModelError("最大完成 Token 数必须为正数。");
 		return false;
 	}
 	// Prevent both max_tokens and max_completion_tokens from being set simultaneously
 	if (modelData.max_tokens !== undefined && modelData.max_completion_tokens !== undefined) {
-		showModelError("Cannot set both 'max_tokens' and 'max_completion_tokens'. Use 'max_completion_tokens' only.");
+		showModelError("不能同时设置 'max_tokens' 和 'max_completion_tokens'，请只使用 'max_completion_tokens'。");
 		return false;
 	}
 	if (
 		modelData.temperature !== undefined &&
 		(isNaN(modelData.temperature) || modelData.temperature < 0 || modelData.temperature > 2)
 	) {
-		showModelError("Temperature must be between 0 and 2.");
+		showModelError("Temperature 必须介于 0 和 2 之间。");
 		return false;
 	}
 	if (modelData.top_p !== undefined && (isNaN(modelData.top_p) || modelData.top_p < 0 || modelData.top_p > 1)) {
-		showModelError("Top P must be between 0 and 1.");
+		showModelError("Top P 必须介于 0 和 1 之间。");
 		return false;
 	}
 	if (modelData.delay !== undefined && (isNaN(modelData.delay) || modelData.delay < 0)) {
-		showModelError("Delay must be a non-negative number.");
+		showModelError("延迟必须为非负数。");
 		return false;
 	}
 
 	// Validate JSON fields
 	if (modelData.headers && typeof modelData.headers !== "object") {
-		showModelError("Custom Headers must be a valid JSON object.");
+		showModelError("自定义请求头必须是合法的 JSON 对象。");
 		return false;
 	}
 	if (modelData.extra && typeof modelData.extra !== "object") {
-		showModelError("Extra Parameters must be a valid JSON object.");
+		showModelError("附加参数必须是合法的 JSON 对象。");
 		return false;
 	}
 
@@ -852,11 +795,11 @@ function populateModelIdDropdown(models) {
 	dropdownContent.innerHTML = "";
 
 	if (!modelsArray.length) {
-		dropdownHeader.textContent = "No models available";
+		dropdownHeader.textContent = "无可用模型";
 		return;
 	}
 
-	dropdownHeader.textContent = `Select Model (${modelsArray.length} available)`;
+	dropdownHeader.textContent = `选择模型（${modelsArray.length} 个可用）`;
 
 	// Create option elements
 	modelsArray.forEach((model) => {

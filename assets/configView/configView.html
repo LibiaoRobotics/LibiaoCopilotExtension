@@ -4,82 +4,81 @@
 		<meta charset="UTF-8" />
 		<meta http-equiv="Content-Security-Policy" content="%CSP_SOURCE%" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>OAI Copilot Configuration</title>
+		<title>Libiao Copilot 配置</title>
 		<link rel="stylesheet" href="%CSS_URI%" />
 	</head>
 	<body>
 		<section id="globalConfigSection">
 			<div class="section-header">
-				<h2>Global Configuration</h2>
+				<h2>全局配置</h2>
 				<div class="section-actions">
-					<button id="exportConfig" class="secondary">Export</button>
-					<button id="importConfig" class="secondary">Import</button>
-					<button id="refreshGlobalConfig" class="secondary">Refresh</button>
+					<button id="exportConfig" class="secondary">导出</button>
+					<button id="importConfig" class="secondary">导入</button>
+					<button id="refreshGlobalConfig" class="secondary">刷新</button>
 				</div>
 			</div>
 			<div class="row">
 				<div class="field">
-					<label for="baseUrl">Global Base URL</label>
-					<div class="field-description">The base URL for the Openai Compatible Inference API.</div>
+					<label for="baseUrl">全局 Base URL</label>
+					<div class="field-description">OpenAI 兼容推理 API 的基础地址。</div>
 					<input id="baseUrl" type="text" placeholder="https://api.openai.com/v1" />
 				</div>
 				<div class="field">
-					<label for="apiKey">Global API Key</label>
-					<div class="field-description">The API Key for Authentication.</div>
+					<label for="apiKey">全局 API Key</label>
+					<div class="field-description">用于身份认证的 API 密钥。</div>
 					<input id="apiKey" type="password" placeholder="sk-..." />
 				</div>
 				<div class="field">
-					<label for="delay">Delay (ms)</label>
-					<div class="field-description">Fixed delay in milliseconds between consecutive requests.</div>
+					<label for="delay">请求延迟（毫秒）</label>
+					<div class="field-description">连续请求之间的固定延迟（毫秒）。</div>
 					<input id="delay" type="number" min="0" placeholder="0" />
 				</div>
 				<div class="field">
-					<label for="readFileLines">Read File Lines</label>
+					<label for="readFileLines">read_file 读取行数</label>
 					<div class="field-description">
-						Number of lines to read when using `read_file` tool. Large lines may cost more tokens. Default is 0, let
-						model decide lines.
+						使用 `read_file` 工具时读取的行数。行数过多可能消耗更多 token。默认 0，由模型自行决定。
 					</div>
 					<input id="readFileLines" type="number" min="0" placeholder="0" />
 				</div>
 			</div>
 			<div class="retry-config">
-				<h3>Retry Configuration</h3>
+				<h3>重试配置</h3>
 				<div class="row">
 					<div class="field">
-						<label for="retryEnabled">Enable Retry</label>
-						<div class="field-description">Enable retry mechanism for api errors.</div>
+						<label for="retryEnabled">启用重试</label>
+						<div class="field-description">针对 API 错误启用重试机制。</div>
 						<input id="retryEnabled" type="checkbox" />
 					</div>
 					<div class="field">
-						<label for="maxAttempts">Max Attempts</label>
-						<div class="field-description">Maximum number of retry attempts.</div>
+						<label for="maxAttempts">最大重试次数</label>
+						<div class="field-description">最大重试次数。</div>
 						<input id="maxAttempts" type="number" min="1" placeholder="3" />
 					</div>
 					<div class="field">
-						<label for="intervalMs">Retry Interval (ms)</label>
-						<div class="field-description">Interval between retry attempts in milliseconds.</div>
+						<label for="intervalMs">重试间隔（毫秒）</label>
+						<div class="field-description">各次重试之间的间隔（毫秒）。</div>
 						<input id="intervalMs" type="number" min="1" placeholder="1000" />
 					</div>
 					<div class="field">
-						<label for="statusCodes">Retry Status Codes (comma separated)</label>
-						<div class="field-description">Additional HTTP status codes that will be merged.</div>
+						<label for="statusCodes">重试状态码（逗号分隔）</label>
+						<div class="field-description">需要额外触发重试的 HTTP 状态码。</div>
 						<input id="statusCodes" type="text" placeholder="429,500,502,503,504" />
 					</div>
 				</div>
 			</div>
 			<div class="retry-config">
-				<h3>Git Commit Message</h3>
+				<h3>Git 提交信息</h3>
 				<div class="row">
 					<div class="field">
-						<label for="commitModel">Git Commit Model</label>
-						<div class="field-description">Select the model to be used for Git commit message generation.</div>
+						<label for="commitModel">提交信息生成模型</label>
+						<div class="field-description">选择用于生成 Git 提交信息的模型。</div>
 						<select id="commitModel" class="model-input">
-							<option value="">None</option>
+							<option value="">无</option>
 						</select>
 					</div>
 					<div class="field">
-						<label for="commitLanguage">Commit Language</label>
-						<div class="field-description">Language for generated Git commit messages.</div>
+						<label for="commitLanguage">提交信息语言</label>
+						<div class="field-description">生成的 Git 提交信息所用语言。</div>
 						<select id="commitLanguage" class="model-input">
 							<option value="English">English</option>
 							<option value="French">French</option>
@@ -100,56 +99,54 @@
 				</div>
 			</div>
 			<div class="retry-config">
-				<h3>Context Management</h3>
+				<h3>上下文管理</h3>
 				<div class="row">
 					<div class="field">
-						<label for="contextManagement">Mode</label>
+						<label for="contextManagement">模式</label>
 						<div class="field-description">
-							How to handle conversation history when it exceeds the context size selected in the model's
-							Configure menu.
+							当对话历史超过模型 Configure 菜单中选定的上下文大小时，如何处理历史记录。
 						</div>
 						<select id="contextManagement" class="model-input">
-							<option value="summarize">Summarize old history (recommended)</option>
-							<option value="off">Off — send history unchanged</option>
+							<option value="summarize">摘要压缩旧历史（推荐）</option>
+							<option value="off">关闭——历史原样发送</option>
 						</select>
 					</div>
 					<div class="field">
-						<label for="summarizationInstructions">Summarization Instructions</label>
+						<label for="summarizationInstructions">摘要附加指令</label>
 						<div class="field-description">
-							Optional extra instructions appended to the summarization prompt.
+							追加到摘要提示词中的可选额外指令。
 						</div>
-						<input id="summarizationInstructions" type="text" placeholder="e.g. Always preserve error messages verbatim" />
+						<input id="summarizationInstructions" type="text" placeholder="例如：始终原样保留错误消息" />
 					</div>
 					<div class="field">
-						<label for="summarizeMaxTokens">Summary Max Tokens</label>
-						<div class="field-description">Maximum output tokens for the summary itself. Default 4000.</div>
+						<label for="summarizeMaxTokens">摘要最大 Token 数</label>
+						<div class="field-description">摘要本身的最大输出 Token 数。默认 4000。</div>
 						<input id="summarizeMaxTokens" type="number" min="256" max="32768" placeholder="4000" />
 					</div>
 				</div>
 			</div>
 			<div class="block-gap">
-				<button id="saveBase">Save Global Configuration</button>
+				<button id="saveBase">保存全局配置</button>
 			</div>
 		</section>
 
 		<section id="providerManagementSection">
 			<div class="section-header">
-				<h2>Provider Management</h2>
+				<h2>供应商管理</h2>
 				<div class="section-actions">
-					<button id="addProvider">Add Provider</button>
-					<button id="refreshProviders" class="secondary">Refresh</button>
+					<button id="addProvider" class="secondary add-provider-hidden">添加供应商</button>
+					<button id="refreshProviders" class="secondary">刷新</button>
 				</div>
 			</div>
 			<div class="table-container">
 				<table id="providerTable">
 					<thead>
 						<tr>
-							<th>Provider ID</th>
+							<th>供应商 ID</th>
 							<th>Base URL</th>
 							<th>API Key</th>
-							<th>API Mode</th>
-							<th>Custom Headers (JSON)</th>
-							<th>Actions</th>
+							<th>API 模式</th>
+							<th>自定义请求头 (JSON)</th>
 						</tr>
 					</thead>
 					<tbody id="providerTableBody">
