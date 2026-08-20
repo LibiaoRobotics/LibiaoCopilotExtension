@@ -116,6 +116,11 @@ const saveGlobalConfig = () => {
 document.getElementById("saveBaseTop").addEventListener("click", saveGlobalConfig);
 document.getElementById("saveBase").addEventListener("click", saveGlobalConfig);
 
+// Open the VS Code settings.json file
+document.getElementById("openSettings").addEventListener("click", () => {
+	vscode.postMessage({ type: "openSettings" });
+});
+
 const handleRefresh = () => {
 	// Hide the model form if it's visible
 	if (modelFormSection.style.display !== "none") {

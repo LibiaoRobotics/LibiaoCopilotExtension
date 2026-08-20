@@ -91,7 +91,8 @@ type IncomingMessage =
 	| { type: "deleteModel"; modelId: string }
 	| { type: "requestConfirm"; id: string; message: string; action: string }
 	| { type: "exportConfig" }
-	| { type: "importConfig" };
+	| { type: "importConfig" }
+	| { type: "openSettings" };
 
 type OutgoingMessage =
 	| { type: "init"; payload: InitPayload }
@@ -230,9 +231,17 @@ export class ConfigViewPanel {
 			case "importConfig":
 				await this.importConfig();
 				break;
+			case "openSettings":
+				await this.openSettings();
+				break;
 			default:
 				break;
 		}
+	}
+
+	private async openSettings() {
+		// Open the user settings.json where libiaoCopilot.* options live
+		await vscode.commands.executeCommand("workbench.action.openSettingsJson");
 	}
 
 	private async handleConfirmRequest(id: string, message: string, action: string) {
