@@ -1,5 +1,11 @@
 # 更新日志
 
+## 1.0.6
+
+### 新增
+
+- **零配置即可生成提交信息**：内置默认模型列表中 `deepseek-v4-flash` 默认用于 Git 提交信息生成（`useForCommitGeneration: true`）。首次安装、未配置任何模型时，源代码管理视图标题栏的魔法棒按钮直接可用，默认走 deepseek-v4-flash（需先配置全局 baseUrl 与 API Key）。已自定义过模型列表的用户不受影响，仍以自己标记的模型为准，配置面板「Git Commit Model」可随时更换。
+
 ## 1.0.5
 
 ### 新增

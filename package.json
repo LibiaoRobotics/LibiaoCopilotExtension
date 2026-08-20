@@ -194,7 +194,8 @@
 							"max_tokens": 384000,
 							"reasoning_effort": "max",
 							"reasoning_efforts": ["low", "high", "xhigh", "max"],
-							"include_reasoning_in_request": true
+							"include_reasoning_in_request": true,
+							"useForCommitGeneration": true
 						},
 						{
 							"id": "gemini-3.1-pro-preview",

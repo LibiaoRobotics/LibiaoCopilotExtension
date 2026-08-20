@@ -2,6 +2,7 @@
 
 <!-- 使用绝对地址：VS Code 扩展页的 README 不解析相对路径图片，GitHub 两侧均可正常显示。
      只指定 width，高度按原图比例（925x363）自动缩放，避免变形 -->
+
 <img src="https://raw.githubusercontent.com/LibiaoRobotics/LibiaoCopilotExtension/main/assets/logo.png" alt="Libiao Copilot Logo" width="240">
 
 # Libiao Copilot
@@ -77,13 +78,14 @@
 
 通过模型配置的 `apiMode` 参数指定协议：
 
-| 模式 | 端点 | 适用场景 |
-|---|---|---|
-| `openai`（默认） | `/chat/completions` | 大多数 OpenAI 兼容供应商 |
-| `openai-responses` | `/responses` | OpenAI 官方 Responses API |
-| `ollama` | `/api/chat` | 本地 Ollama 实例 |
-| `anthropic` | `/messages`（baseUrl 需包含版本前缀 `/v1`） | Anthropic Claude |
-| `gemini` | `/v1beta/models/{model}:streamGenerateContent?alt=sse` | Google Gemini |
+
+| 模式               | 端点                                                   | 适用场景                  |
+| ------------------ | ------------------------------------------------------ | ------------------------- |
+| `openai`（默认）   | `/chat/completions`                                    | 大多数 OpenAI 兼容供应商  |
+| `openai-responses` | `/responses`                                           | OpenAI 官方 Responses API |
+| `ollama`           | `/api/chat`                                            | 本地 Ollama 实例          |
+| `anthropic`        | `/messages`（baseUrl 需包含版本前缀 `/v1`）            | Anthropic Claude          |
+| `gemini`           | `/v1beta/models/{model}:streamGenerateContent?alt=sse` | Google Gemini             |
 
 ### 混合配置示例
 
@@ -148,7 +150,7 @@ A：能。配置只作为元数据层，供应商新模型会自动出现（默�
 A：修改设置会自动清空模型缓存；如仍无变化，重新加载 VS Code 窗口。
 
 **Q：模型选择器是空的？**
-A：检查 `libiaoCopilot.baseUrl` 与 API Key 是否已配置。未配置时扩展静默不拉取模型。
+A：查看错误提示信息，检查 `libiaoCopilot.baseUrl` 与 API Key 是否已配置。未配置时扩展静默不拉取模型。
 
 ## 致谢
 
