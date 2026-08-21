@@ -230,7 +230,8 @@ export function toModelPickerInfo(m: HFModelItem): ModelPickerChatInformation {
 
 	// Use configId when present so each model configuration stays distinct.
 	const modelId = m.configId ? `${m.id}::${m.configId}` : m.id;
-	const modelName = m.displayName || modelId;
+	// 用户配置缺失 displayName 时，从内置模型表兜底，避免模型列表只显示 id
+	const modelName = m.displayName || getBuiltInModel(m.id)?.displayName || modelId;
 	const detail = m.owned_by ? `${m.owned_by} (${EXTENSION_LABEL})` : EXTENSION_LABEL;
 	const configurationSchema = createModelConfigurationSchema(m);
 

@@ -190,7 +190,8 @@ suite("modelConfiguration", () => {
 		const info = toModelPickerInfo(model) as ModelPickerChatInformation;
 
 		assert.strictEqual(info.id, "deepseek-v4-flash");
-		assert.strictEqual(info.name, "deepseek-v4-flash");
+		// 用户配置缺失 displayName 时回退到内置模型表名称（package.json 默认值）
+		assert.strictEqual(info.name, "DeepSeek Flash");
 		assert.strictEqual(info.detail, "deepseek (Libiao Copilot)");
 		assert.strictEqual(info.isUserSelectable, true);
 		assert.deepStrictEqual(info.configurationSchema, createModelConfigurationSchema(model));

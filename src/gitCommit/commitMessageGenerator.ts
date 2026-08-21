@@ -5,7 +5,7 @@ import { OpenaiApi } from "../openai/openaiApi";
 import { OpenaiResponsesApi } from "../openai/openaiResponsesApi";
 import { AnthropicApi } from "../anthropic/anthropicApi";
 import { OllamaApi } from "../ollama/ollamaApi";
-import { normalizeUserModels } from "../utils";
+import { normalizeUserModels, parseModelId, getBuiltInModel } from "../utils";
 import { logger } from "../logger";
 import type { HFModelItem } from "../types";
 
@@ -183,17 +183,23 @@ async function performCommitMsgGeneration(
 		// Get user models from configuration
 		const userModels = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
 
-		// Filter models that are marked for commit generation
-		const commitModels = userModels.filter((model: HFModelItem) => model.useForCommitGeneration === true);
+		// 提交信息生成模型：读独立配置项 libiaoCopilot.commitModel
+		const configuredCommitModel = config.get<string>("libiaoCopilot.commitModel", "deepseek-v4-flash");
+		const { baseId, configId } = parseModelId(configuredCommitModel);
+		let selectedModel = userModels.find(
+			(m) => m.id === baseId && ((configId && m.configId === configId) || (!configId && !m.configId))
+		);
+		// 用户配置里没有该模型时，回退到内置模型表（含供应商元数据）
+		if (!selectedModel) {
+			selectedModel = getBuiltInModel(baseId);
+		}
 
-		if (commitModels.length === 0) {
+		if (!selectedModel) {
 			throw new Error(
-				"No models configured for commit message generation. Please set 'useForCommitGeneration' to true for at least one model in your configuration."
+				`No model configured for commit message generation. Set 'libiaoCopilot.commitModel' to a model id from your configuration.`
 			);
 		}
 
-		// Use the first model marked for commit generation
-		const selectedModel = commitModels[0];
 		modelId = selectedModel.id;
 		logger.info("commit.start", { modelId });
 

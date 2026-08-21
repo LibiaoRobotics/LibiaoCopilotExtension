@@ -138,8 +138,11 @@
 - `extra`：额外请求体透传参数
 - `include_reasoning_in_request`：助手消息中是否回传 `reasoning_content`（deepseek-v3.2 等）
 - `delay`：模型级请求间隔（毫秒），未设置时回退全局 `libiaoCopilot.delay`
-- `useForCommitGeneration`：是否用于 Git 提交信息生成（不支持 gemini 模式）
 - `cache_control`：Anthropic 提示词缓存断点开关（仅 `anthropic` 模式）
+
+### Git 提交信息生成模型
+
+- `libiaoCopilot.commitModel`：用于生成 Git 提交信息的模型 ID（可含 configId，如 `glm-5.2::thinking`），默认 `deepseek-v4-flash`。未配置时从内置模型表兜底；配置的模型不存在时会报错提示。
 
 ## 常见问题
 

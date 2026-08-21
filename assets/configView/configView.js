@@ -8,6 +8,7 @@ const state = {
 	summarizationInstructions: "",
 	summarizeMaxTokens: 4000,
 	commitModel: "",
+	commitModels: [],
 	models: [],
 	providerKeys: {},
 	providerInfo: {},
@@ -115,6 +116,14 @@ const saveGlobalConfig = () => {
 // Top and bottom save buttons both trigger the same save logic
 document.getElementById("saveBaseTop").addEventListener("click", saveGlobalConfig);
 document.getElementById("saveBase").addEventListener("click", saveGlobalConfig);
+
+// Open the VS Code settings.json file
+const resetModelsBtn = document.getElementById("resetModels");
+if (resetModelsBtn) {
+	resetModelsBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "resetModels" });
+	});
+}
 
 // Open the VS Code settings.json file
 document.getElementById("openSettings").addEventListener("click", () => {
@@ -316,6 +325,7 @@ window.addEventListener("message", (event) => {
 				summarizationInstructions,
 				summarizeMaxTokens,
 				commitModel,
+				commitModels,
 				models,
 				providerKeys,
 				commitLanguage,
@@ -334,6 +344,7 @@ window.addEventListener("message", (event) => {
 			state.summarizationInstructions = summarizationInstructions || "";
 			state.summarizeMaxTokens = summarizeMaxTokens || 4000;
 			state.models = models || [];
+			state.commitModels = commitModels || [];
 			state.commitModel = commitModel || "";
 			state.providerKeys = providerKeys || {};
 
@@ -843,7 +854,7 @@ function populateCommitModelDropdown() {
 	}
 
 	// Filter models that support commit generation (openai, openai-responses, anthropic, ollama apiMode)
-	const commitCompatibleModels = state.models
+	const commitCompatibleModels = state.commitModels
 		.filter((model) => {
 			const apiMode = model.apiMode || "openai";
 			return apiMode !== "gemini" && !model.id.startsWith("__provider__");

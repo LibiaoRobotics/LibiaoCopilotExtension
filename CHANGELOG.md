@@ -5,6 +5,8 @@
 ### 新增
 
 - **新增内置模型 deepseek-v4-flash-vision-exp**（DeepSeek 实验性视觉模型）：1M 上下文 / 384K 最大输出 / 支持图片输入（JPEG/PNG/GIF/WebP），思考默认最高档。走 Responses 链路（与 deepseek-v4-flash 同款配置），价格与 flash 相同。无需额外配置，网关配置好即可选用。
+- **提交信息模型配置独立化**：Git 提交信息生成模型改为独立配置项 `libiaoCopilot.commitModel`（默认 `deepseek-v4-flash`），保存全局配置不再把模型列表写入 settings.json（避免旧配置快照覆盖内置模型）。配置面板「Git Commit Model」下拉框现在包含内置模型 + 用户配置，旧版 `useForCommitGeneration` 字段已废弃。
+- **新增「获取模型列表」按钮**：配置面板顶部新增按钮，点击后清空标准模型列表（只保留自定义供应商），模型列表回落到内置模型 + API 拉取，用于清理旧版本留下的模型快照。
 
 ## 1.0.6
 

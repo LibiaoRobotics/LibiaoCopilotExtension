@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import type { HFApiMode, HFModelItem } from "../types";
-import { normalizeUserModels, parseModelId } from "../utils";
-import { fetchModels } from "../provideModel";
+import { normalizeUserModels, parseModelId, getBuiltInModels } from "../utils";
+import { fetchModels, clearModelListCache } from "../provideModel";
 import { ensureModelContextDefaults } from "../modelConfiguration";
 import { VersionManager } from "../versionManager";
 
@@ -17,6 +17,7 @@ interface InitPayload {
 		status_codes?: number[];
 	};
 	commitModel: string;
+	commitModels: HFModelItem[];
 	commitLanguage: string;
 	contextManagement: string;
 	summarizationInstructions: string;
@@ -92,7 +93,8 @@ type IncomingMessage =
 	| { type: "requestConfirm"; id: string; message: string; action: string }
 	| { type: "exportConfig" }
 	| { type: "importConfig" }
-	| { type: "openSettings" };
+	| { type: "openSettings" }
+	| { type: "resetModels" };
 
 type OutgoingMessage =
 	| { type: "init"; payload: InitPayload }
@@ -231,6 +233,9 @@ export class ConfigViewPanel {
 			case "importConfig":
 				await this.importConfig();
 				break;
+			case "resetModels":
+				await this.resetModelList();
+				break;
 			case "openSettings":
 				await this.openSettings();
 				break;
@@ -301,9 +306,21 @@ export class ConfigViewPanel {
 			interval_ms: 1000,
 		});
 
-		const foundModel = models.find((model) => model.useForCommitGeneration === true);
-		const commitModel = foundModel ? `${foundModel.id}${foundModel.configId ? "::" + foundModel.configId : ""}` : "";
+		const commitModel = config.get<string>("libiaoCopilot.commitModel", "deepseek-v4-flash");
 		const commitLanguage = config.get<string>("libiaoCopilot.commitLanguage", "Chinese (Simplified)");
+
+		// 提交模型下拉列表：用户配置（排除 __provider__ 占位）∪ 内置模型，按 id+configId 去重
+		const builtInModels = getBuiltInModels();
+		const seen = new Set<string>();
+		const commitModels: HFModelItem[] = [];
+		for (const m of [...models.filter((model) => !model.id.startsWith("__provider__")), ...builtInModels.values()]) {
+			const key = `${m.id}::${m.configId ?? ""}`;
+			if (!seen.has(key)) {
+				seen.add(key);
+				commitModels.push(m);
+			}
+		}
+
 		const readFileLines = config.get<number>("libiaoCopilot.readFileLines", 0);
 		const contextManagement = config.get<string>("libiaoCopilot.contextManagement", "summarize");
 		const summarizationInstructions = config.get<string>("libiaoCopilot.summarizationInstructions", "");
@@ -315,6 +332,7 @@ export class ConfigViewPanel {
 			readFileLines,
 			retry,
 			commitModel,
+			commitModels,
 			commitLanguage,
 			contextManagement,
 			summarizationInstructions,
@@ -356,29 +374,29 @@ export class ConfigViewPanel {
 			vscode.ConfigurationTarget.Global
 		);
 		await config.update("libiaoCopilot.summarizeMaxTokens", summarizeMaxTokens, vscode.ConfigurationTarget.Global);
+		await config.update("libiaoCopilot.commitModel", commitModel.trim(), vscode.ConfigurationTarget.Global);
 		if (apiKey) {
 			await this.secrets.store("libiaoCopilot.apiKey", apiKey);
 		} else {
 			await this.secrets.delete("libiaoCopilot.apiKey");
 		}
 
-		// Update models to set useForCommitGeneration based on selected commitModel
-		if (commitModel) {
-			const models = config.get<HFModelItem[]>("libiaoCopilot.models", []);
-			const updatedModels = models.map((model) => {
-				const fullModelId = `${model.id}${model.configId ? "::" + model.configId : ""}`;
-				if (fullModelId === commitModel) {
-					return { ...model, useForCommitGeneration: true };
-				} else {
-					const { useForCommitGeneration: _useForCommitGeneration, ...rest } = model;
-					return rest;
-				}
-			});
-			await config.update("libiaoCopilot.models", updatedModels, vscode.ConfigurationTarget.Global);
-		}
-
 		vscode.window.showInformationMessage("全局配置（Base URL、请求延迟、重试和 API Key）已保存。");
 		// Send refresh signal to frontend
+		await this.sendInit();
+	}
+
+	/**
+	 * 清空标准模型列表，只保留自定义供应商（__provider__ 前缀条目）。
+	 * 写入空数组（而非删除配置项）以保持 API fallback 路径。
+	 */
+	private async resetModelList() {
+		const config = vscode.workspace.getConfiguration();
+		const models = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
+		const preserved = models.filter((m) => m.id.startsWith("__provider__"));
+		await config.update("libiaoCopilot.models", preserved, vscode.ConfigurationTarget.Global);
+		clearModelListCache();
+		vscode.window.showInformationMessage("模型列表已重置为内置模型 + 自定义供应商。");
 		await this.sendInit();
 	}
 
@@ -619,8 +637,7 @@ export class ConfigViewPanel {
 			const summarizeMaxTokens = config.get<number>("libiaoCopilot.summarizeMaxTokens", 4000);
 			const models = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
 
-			const foundModel = models.find((model) => model.useForCommitGeneration === true);
-			const commitModel = foundModel ? `${foundModel.id}${foundModel.configId ? "::" + foundModel.configId : ""}` : "";
+			const commitModel = config.get<string>("libiaoCopilot.commitModel", "deepseek-v4-flash");
 
 			const providerKeys: Record<string, string> = {};
 			const providers = Array.from(new Set(models.map((m) => m.owned_by).filter(Boolean)));
@@ -701,6 +718,9 @@ export class ConfigViewPanel {
 			await config.update("libiaoCopilot.retry", importData.retry, vscode.ConfigurationTarget.Global);
 			await config.update("libiaoCopilot.readFileLines", importData.readFileLines, vscode.ConfigurationTarget.Global);
 			await config.update("libiaoCopilot.commitLanguage", importData.commitLanguage, vscode.ConfigurationTarget.Global);
+			if (importData.commitModel) {
+				await config.update("libiaoCopilot.commitModel", importData.commitModel, vscode.ConfigurationTarget.Global);
+			}
 			if (importData.contextManagement) {
 				await config.update(
 					"libiaoCopilot.contextManagement",

@@ -86,13 +86,6 @@ export interface HFModelItem {
 	apiMode?: HFApiMode;
 
 	/**
-	 * Whether this model can be used for Git commit message generation.
-	 * If true, this model will be available for generating commit messages.
-	 * Default is false.
-	 */
-	useForCommitGeneration?: boolean;
-
-	/**
 	 * Model-specific delay in milliseconds between consecutive requests.
 	 * If not specified, falls back to global `libiaoCopilot.delay` configuration.
 	 */

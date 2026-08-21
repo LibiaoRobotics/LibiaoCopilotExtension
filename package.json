@@ -134,7 +134,7 @@
 					"default": [
 						{
 							"id": "qwen3.8-max-preview",
-							"displayName": "[图]Qwen 3.8 Max 预览版",
+							"displayName": "🖼️Qwen 3.8 Max 预览版",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
@@ -151,7 +151,7 @@
 						},
 						{
 							"id": "qwen3.8-max",
-							"displayName": "[图]Qwen 3.8 Max",
+							"displayName": "🖼️Qwen 3.8 Max",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
@@ -198,12 +198,11 @@
 							"max_tokens": 384000,
 							"reasoning_effort": "max",
 							"reasoning_efforts": ["low", "high", "xhigh", "max"],
-							"include_reasoning_in_request": true,
-							"useForCommitGeneration": true
+							"include_reasoning_in_request": true
 						},
 						{
 							"id": "deepseek-v4-flash-vision-exp",
-							"displayName": "[图]Deepseek Flash",
+							"displayName": "🖼️Deepseek Flash 识图版",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
@@ -221,7 +220,7 @@
 						},
 						{
 							"id": "gemini-3.1-pro-preview",
-							"displayName": "[图]Gemini 3.1 Pro 预览版",
+							"displayName": "🖼️Gemini 3.1 Pro 预览版",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1048576,
@@ -238,7 +237,7 @@
 						},
 						{
 							"id": "gemini-3.1-flash-image",
-							"displayName": "[图]Gemini 3.1 Flash",
+							"displayName": "🖼️Gemini 3.1 Flash",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 131072,
@@ -252,7 +251,7 @@
 						},
 						{
 							"id": "gemini-3.5-flash",
-							"displayName": "[图]Gemini 3.5 Flash",
+							"displayName": "🖼️Gemini 3.5 Flash",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1048576,
@@ -269,7 +268,7 @@
 						},
 						{
 							"id": "gemini-3.6-flash",
-							"displayName": "[图]Gemini 3.6 Flash",
+							"displayName": "🖼️Gemini 3.6 Flash",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1048576,
@@ -286,7 +285,7 @@
 						},
 						{
 							"id": "gpt-5.6-luna",
-							"displayName": "[图]GPT-5.6 Luna",
+							"displayName": "🖼️GPT-5.6 Luna",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1050000,
@@ -303,7 +302,7 @@
 						},
 						{
 							"id": "gpt-5.6-sol",
-							"displayName": "[图]GPT-5.6 Sol",
+							"displayName": "🖼️GPT-5.6 Sol",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1050000,
@@ -320,7 +319,7 @@
 						},
 						{
 							"id": "gpt-5.6-terra",
-							"displayName": "[图]GPT-5.6 Terra",
+							"displayName": "🖼️GPT-5.6 Terra",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1050000,
@@ -337,7 +336,7 @@
 						},
 						{
 							"id": "gpt-5.5",
-							"displayName": "[图]GPT-5.5",
+							"displayName": "🖼️GPT-5.5",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1050000,
@@ -354,7 +353,7 @@
 						},
 						{
 							"id": "claude-opus-4-8",
-							"displayName": "[图]Claude Opus 4.8",
+							"displayName": "🖼️Claude Opus 4.8",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1000000,
@@ -371,7 +370,7 @@
 						},
 						{
 							"id": "claude-opus-5",
-							"displayName": "[图]Claude Opus 5",
+							"displayName": "🖼️Claude Opus 5",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1000000,
@@ -388,7 +387,7 @@
 						},
 						{
 							"id": "claude-sonnet-5",
-							"displayName": "[图]Claude Sonnet 5",
+							"displayName": "🖼️Claude Sonnet 5",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1000000,
@@ -405,7 +404,7 @@
 						},
 						{
 							"id": "MiniMax-M3",
-							"displayName": "[图]MiniMax M3",
+							"displayName": "🖼️MiniMax M3",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1000000,
@@ -464,7 +463,7 @@
 						},
 						{
 							"id": "qwen3.7-plus",
-							"displayName": "[图]Qwen 3.7 Plus",
+							"displayName": "🖼️Qwen 3.7 Plus",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
@@ -742,11 +741,6 @@
 								"default": "openai",
 								"description": "API 模式：'openai'（默认）为 OpenAI Chat Completions（/chat/completions），'openai-responses' 为 OpenAI Responses（/responses），'ollama' 为 Ollama（/api/chat），'anthropic' 为 Anthropic（/messages，baseUrl 需包含版本前缀 /v1），'gemini' 为 Gemini（*/v1beta/models/{model}:streamGenerateContent?alt=sse）。"
 							},
-							"useForCommitGeneration": {
-								"type": "boolean",
-								"default": false,
-								"description": "是否用于 Git 提交信息生成。不支持 gemini apiMode。"
-							},
 							"delay": {
 								"type": "number",
 								"default": 0,
@@ -829,6 +823,11 @@
 					"default": 10,
 					"minimum": 0,
 					"description": "供应商模型列表缓存的 TTL（分钟）。缓存有效期内直接返回缓存、不请求供应商；刷新失败时返回过期缓存。设为 0 可禁用缓存，每次请求都实时拉取。"
+				},
+				"libiaoCopilot.commitModel": {
+					"type": "string",
+					"default": "deepseek-v4-flash",
+					"description": "用于生成 Git 提交信息的模型 ID（可含 configId，如 'glm-5.2::thinking'）。默认 deepseek-v4-flash。"
 				},
 				"libiaoCopilot.commitLanguage": {
 					"type": "string",
