@@ -33,7 +33,7 @@
 		"git-commit",
 		"thinking"
 	],
-	"version": "1.0.6",
+	"version": "1.0.7",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -196,6 +196,23 @@
 							"reasoning_efforts": ["low", "high", "xhigh", "max"],
 							"include_reasoning_in_request": true,
 							"useForCommitGeneration": true
+						},
+						{
+							"id": "deepseek-v4-flash-vision-exp",
+							"owned_by": "libiaorobot",
+							"apiMode": "openai-responses",
+							"context_length": 1000000,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 384000,
+							"reasoning_effort": "max",
+							"reasoning_efforts": ["low", "high", "xhigh", "max"],
+							"include_reasoning_in_request": true,
+							"vision": true
 						},
 						{
 							"id": "gemini-3.1-pro-preview",

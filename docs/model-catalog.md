@@ -35,6 +35,7 @@
 | qwen3.7-plus | 1,000,000（输入上限 991,808） | 131,072（中国区官方确认） | 思考模式（开关） | ✅（Text/Image/Video） | ¥2/¥8（≤256K），¥6/¥24（>256K） |
 | qwen3.7-max | 1,000,000（输入上限 991,808） | 65,536 | 思考模式（开关） | ❌（标准版；6/8 快照支持视觉） | ¥12/¥36 |
 | qwen3.8-max（-preview 为网关别名，参数同） | 1,000,000 | 128,000 | effort：xhigh(默认)，档位 low/medium/xhigh | ✅ | 未公布 |
+| deepseek-v4-flash-vision-exp（2026-08-21 新上线，实验性） | 1,000,000 | 384,000 | effort：max(默认)，档位 low/high/xhigh/max | ✅（图片输入） | ¥0.05~3.0 输入 / ¥4.5~9.0 输出（与 flash 同价） |
 
 ---
 
@@ -358,6 +359,30 @@
 }
 ```
 
+### 18. deepseek-v4-flash-vision-exp（DeepSeek，实验性视觉模型）
+
+- 来源：DeepSeek 官方 api-docs.deepseek.com（模型与价格页 + 图像理解指南，2026-08-21 直抓核对）
+- 规格：上下文 1,000,000 / 最大输出 384,000；**支持图片输入**（JPEG/PNG/GIF/WebP，base64 data URL / 外部 URL / Files API file_id 三种方式，`detail` 档位 low/high/original/auto，图片自动缩放、单图上限约 384 token）；思考模式支持（默认开启）；Json Output / Tool Calls / Responses API / Anthropic API 均支持（官方文档明确列出）；**FIM 补全不支持**（勿用于补全场景）
+- 价格（2026-08-21 官方）：输入缓存命中 0.05 元（空闲）/0.10 元（高峰），未命中 1.5/3.0 元；输出 4.5/9.0 元（每 1M token，与 deepseek-v4-flash 同价）
+- 状态：实验性模型，ID 带 `-exp` 后缀；图片仅限 user 消息（system/assistant 带图报 400）
+- 思考配置与同系 flash 保持一致（openai-responses 路径只读 `reasoning.effort`）：默认 max，档位 low/high/xhigh/max
+
+```json
+{
+  "id": "deepseek-v4-flash-vision-exp",
+  "owned_by": "libiaorobot",
+  "apiMode": "openai-responses",
+  "context_length": 1000000,
+  "context_sizes": [262144, 524288, 1000000],
+  "default_context_size": 524288,
+  "max_tokens": 384000,
+  "reasoning_effort": "max",
+  "reasoning_efforts": ["low", "high", "xhigh", "max"],
+  "include_reasoning_in_request": true,
+  "vision": true
+}
+```
+
 ### 16. qwen3.8-max（阿里云千问，-preview 为网关内部别名）
 
 - 来源：阿里云百炼/Qwen 官方博客（2026-08 查证）
@@ -423,6 +448,7 @@
 | qwen3.8-max | openai-responses | Chat Completions | ✅ | 已改 openai-responses（2026-08-13） |
 | deepseek-v4-pro | openai-responses | Chat Completions + Anthropic 格式 | ❌ 官方无此 API（responses 页 404） | **保持 openai-responses**：网关已确认支持（2026-08-13） |
 | deepseek-v4-flash | openai-responses | 同上 | ❌ 同上 | 同上 |
+| deepseek-v4-flash-vision-exp | openai-responses | Chat Completions + Anthropic + Responses + 视觉 | ✅ **官方文档明确支持**（2026-08-21 模型页功能表 + 图像理解指南 Responses API 章节） | 沿用 openai-responses（与 v4 系一致，2026-08-21 新接入） |
 | gemini-3.1-pro-preview | openai | OpenAI 兼容仅 Chat Completions | ❌ | 保持 |
 | gemini-3.1-flash-image | openai | 同上 | ❌ | 保持 |
 | gemini-3.5-flash | openai | 同上 | ❌ | 保持 |
@@ -442,7 +468,7 @@
 
 ### 关键发现
 
-1. **deepseek-v4-pro / flash 的 `openai-responses` 非官方能力，但网关已确认可用**：DeepSeek 官方仅开放 `/chat/completions`（OpenAI 格式）与 `/anthropic`（Claude 格式），responses 文档页 404。当前两条目标 `openai-responses` 依赖公司 new-api 网关的中继，**2026-08-13 管理员确认支持 + 同日 curl 实测通过，保持现状**：`/v1/responses` 对 deepseek-v4-pro 返回 HTTP 200，标准 Responses 语义（`object: response`、`output` 数组含 `reasoning` + `message` 两段），`reasoning.effort: max` 被接受并回显，思考正常输出（reasoning_tokens 可见）；唯一痕迹是响应 `id` 为裸 uuid（无 `resp_` 前缀），说明是中继实现而非原生 Responses。若未来改走官方直连，需改回 `openai`（或 `anthropic`）。
+1. **deepseek-v4-pro / flash 的 `openai-responses` 非官方能力，但网关已确认可用**：DeepSeek 官方仅开放 `/chat/completions`（OpenAI 格式）与 `/anthropic`（Claude 格式），responses 文档页 404。当前两条目标 `openai-responses` 依赖公司 new-api 网关的中继，**2026-08-13 管理员确认支持 + 同日 curl 实测通过，保持现状**：`/v1/responses` 对 deepseek-v4-pro 返回 HTTP 200，标准 Responses 语义（`object: response`、`output` 数组含 `reasoning` + `message` 两段），`reasoning.effort: max` 被接受并回显，思考正常输出（reasoning_tokens 可见）；唯一痕迹是响应 `id` 为裸 uuid（无 `resp_` 前缀），说明是中继实现而非原生 Responses。若未来改走官方直连，需改回 `openai`（或 `anthropic`）。**2026-08-21 更新**：官方文档已上线 Responses API 指南页（api-docs.deepseek.com/zh-cn/guides/responses_api），模型功能表明确列出 Responses API 支持——「官方无此 API」的旧结论作废，官方口径已改。
 2. **qwen 系四条官方支持 Responses**（阿里云百炼 `compatible-mode/v1/responses`，支持模型清单明确含 qwen3.8-max、qwen3.8-max-preview、qwen3.7-max、qwen3.7-plus；文档 2026-08-03 更新）。**已于 2026-08-13 切换为 `openai-responses`**。**同日 curl 实测通过**：`/v1/responses` 对 qwen3.8-max 返回 HTTP 200，响应 `id` 为 `resp_` 前缀、带 `x_details`（`x_billing_type: response_api`），为百炼兼容端点原生格式；内置默认档 `reasoning.effort: xhigh` 被接受并回显，思考正常（原担心百炼文档档位表无 xhigh，实测网关认）。注意：旧路径 `/api/v2/apps/protocols/compatible-mode/v1/responses` 将弃用，用新路径；官方提示 `reasoning.effort` 优先于 `enable_thinking`，后者将弃用。
 3. **gpt-5.6 全系 + gpt-5.5 官方双支持**（OpenAI 官方模型页 Endpoints 表：Chat Completions 与 Responses 均 Supported）。**已于 2026-08-13 切换为 `openai-responses`**。
 4. ⚠️ **qwen3.7-plus / qwen3.7-max 的 `enable_thinking` 在 responses 路径下不生效**：扩展 `openaiResponsesApi` 只发送 `reasoning.effort`，不发送 `enable_thinking`。**已于 2026-08-13 处理**：两条内置条目移除 `enable_thinking: true`，改配 `reasoning_effort` + `reasoning_efforts: ["minimal", "low", "medium", "high"]`（默认 effort 当天随“默认思考等级全部调至最高档”一并设为 `high`，见第 7 条）。取值依据：百炼官方 Responses 文档 effort 档位为 none/minimal/low/medium(默认)/high（2026-08-03 更新，官方示例即 medium），与扩展枚举（minimal/low/medium/high/xhigh/max，无 none）取交集得 minimal/low/medium/high，最高档为 high。
@@ -450,6 +476,7 @@
 6. **Gemini / MiniMax 官方无 Responses**，`openai` 模式正确；GLM 亦无 Responses，glm-5.2 走 `anthropic` 见关键发现第 8 条。
 7. **2026-08-13：内置条目默认思考等级调整**：先统一调至官方最高档，后因成本与首字延迟考量，经确认将以下 6 条回调为 medium：gpt-5.6-luna / gpt-5.6-sol / gpt-5.6-terra（max → medium）、claude-opus-4-8 / claude-opus-5 / claude-sonnet-5（max → medium，注：Claude 三条调最高前原始默认是 high，本次回调后比原始默认还低一档）。保持最高档未动的：gpt-5.5 xhigh（官方无 max 档）、gemini-3.5-flash / gemini-3.6-flash high、qwen3.7-plus / qwen3.7-max high、qwen3.8-max(-preview) xhigh、deepseek-v4-pro/flash max、gemini-3.1-pro-preview high。开关式思考无等级档位未动：gemini-3.1-flash-image、MiniMax-M3、glm-5.2（thinking 已 enabled）。⚠️ 提醒：Claude 官方限制关闭 thinking 时 effort 最高只能到 high（disabled + xhigh/max 会报 400）；如需更高质量输出，可在设置 UI 中逐模型上调档位。本文档上方 JSON 示例块中的 `reasoning_effort` 仍为旧默认值，仅作结构参考。
 9. **glm-5.3 接入决策（2026-08-15）：anthropic 模式 + 强制思考 + 官方 Responses 协议尚不可用**。①官方文档（glm-5.3 页）列出三个端点：OpenAI Chat Completion / OpenAI Response（`/api/v1`）/ Anthropic Message（`/api/anthropic`），但明确注明「模型 API 将于近期上线」——Responses 端点官方尚未开放。②网关实测：`/v1/messages` HTTP 200 且为**原生 Anthropic 链路**（`msg_` 前缀、原生 thinking block 带 `signature`、usage 为 Anthropic 原生结构、无 `billing_usage` 痕迹）；`/v1/responses` 返回 `500 not implemented (convert_request_failed)`（极简 body 复测为 `{"code":500,"msg":"404 NOT_FOUND"}`，网关未配置渠道）；`/v1/chat/completions` HTTP 200 但是**翻译层**（`billing_usage.source: claude_messages`，上游 Anthropic 翻成 OpenAI 格式）。③**effort 档位陷阱**：官方 `reasoning_effort`（low/high/max）仅 Chat Completions 口径有效；Claude 兼容端点实测**静默忽略**该字段（同题 low vs max：thinking 长度 2297 vs 2313 字符，无差异），实际控制思考深度的是 `thinking.budget_tokens`（budget 2000 vs 60000：output_tokens 821 vs 1044，封顶生效）。因此条目**不配 `reasoning_effort`**——anthropic 路径不读该字段，配了只会让 UI 出现选择器却完全不生效，误导用户；采用 `extra.thinking` + `budget_tokens: 32000`（与 glm-5.2 同策略）。④GLM-5.3 强制思考（`thinking.type: disabled` 会报错），无需考虑 disabled 组合。待办：官方 Responses API 上线且网关配通渠道后复测，届时可评估切换 `openai-responses`（切换时 effort 档位取 low/high/max，默认 max——官方旗舰模型策略）。
+10. **deepseek-v4-flash-vision-exp 接入（2026-08-21）**：DeepSeek 新上线的实验性视觉模型，ID 带 `-exp` 后缀；官方规格 1M 上下文 / 384K 输出，图片输入（JPEG/PNG/GIF/WebP，三种传图方式，单图 ≤384 token，仅限 user 消息），**价格与 deepseek-v4-flash 完全相同**；功能表明确列出 Responses API 支持（官方 responses 文档页同日确认上线，见关键发现 1 更新）。条目沿用同系 `openai-responses` + `reasoning.effort: max`（档位 low/high/xhigh/max）配置并补 `vision: true`；**不加 `useForCommitGeneration`**（实验性视觉模型不宜承担 commit 生成）。**待网关实测**：`/v1/responses` 连通性、effort 回显、视觉输入是否经网关转发正常（new-api 对 Responses 视觉块的翻译待验证）。
 8. **glm-5.2 的 anthropic 链路（2026-08-13 回退 → 2026-08-15 二次切换 → 当日打通原生）**：历程：①2026-08-13 初切 anthropic 实测网关为翻译层（响应 `id` 前缀 `chatcmpl-`、`billing_usage.source: oai_chat`、`semantic: openai`，网关内部把 Anthropic 请求翻成 OpenAI 发给 GLM），遂回退 `openai`；②2026-08-15 二次切回 `anthropic`，初测仍是翻译层；③同日特哥调整网关渠道配置（渠道类型 Anthropic + 官方 base_url + 智谱 key）后复测，**翻译层消失，链路打通原生**：响应 `id` 前缀变为 `msg_`、`billing_usage` 痕迹全部消失、思考以原生 `thinking` block（带 `signature` 字段）输出、usage 为 Anthropic 原生结构。配置采用 `extra.thinking` 透传 Anthropic 原生格式。备忘：①openai 风格 `thinking: {type: "enabled"}` 在 anthropic 模式下不被扩展读取，必须用 `extra.thinking`（Anthropic 原生格式，enabled 必带 `budget_tokens`）透传；②cache_control 测试中 `cache_creation_input_tokens` 仍为 0，但测试提示词仅 61 tokens，低于 Anthropic 缓存最小阈值（约 1024 tokens），不能据此断定原生端不支持缓存，长提示词场景待复测；③anthropic 模式不读 `reasoning_effort`；④直连验证：智谱官方 key 对 `https://open.bigmodel.cn/api/anthropic/v1/messages` 初测 429（code 1113 余额不足，错误结构为原生 Anthropic 格式），网关 key 直连 401，确认两套 key 体系互不通用；打通原生后网关渠道使用的是智谱平台 key。
 
 ### 核实来源（2026-08-13）
