@@ -12,7 +12,7 @@ import { fetchGeminiModels } from "./gemini/geminiApi";
 import { fetchOllamaModels } from "./ollama/ollamaApi";
 import { logger } from "./logger";
 
-const DEFAULT_CONTEXT_LENGTH = 128000;
+const DEFAULT_CONTEXT_LENGTH = 256000;
 const DEFAULT_MAX_TOKENS = 4096;
 const EXTENSION_LABEL = "Libiao Copilot";
 
