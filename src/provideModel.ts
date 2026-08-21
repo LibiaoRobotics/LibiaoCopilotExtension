@@ -536,8 +536,11 @@ async function resolveGroupApiKey(group: EndpointGroup, secrets: vscode.SecretSt
  * window and max tokens (e.g. reporting a model as 128K when the factory
  * entry declares 1M), so the built-in entry is merged over the live
  * listing while live-only fields are kept.
+ *
+ * Exported for direct unit testing of the fallback path (the merge path
+ * requires a verifiable endpoint, which the test environment cannot provide).
  */
-function toDiscoveredModelItem(m: HFModelItem): HFModelItem {
+export function toDiscoveredModelItem(m: HFModelItem): HFModelItem {
 	const builtIn = getBuiltInModel(m.id);
 	const modalities = m.architecture?.input_modalities ?? [];
 	const vision = m.vision ?? builtIn?.vision ?? (Array.isArray(modalities) && modalities.includes("image"));
