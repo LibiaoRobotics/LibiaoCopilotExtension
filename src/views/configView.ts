@@ -70,23 +70,6 @@ type IncomingMessage =
 			apiMode?: HFApiMode | string;
 			headers?: Record<string, string>;
 	  }
-	| {
-			type: "addProvider";
-			provider: string;
-			baseUrl?: string;
-			apiKey?: string;
-			apiMode?: string;
-			headers?: Record<string, string>;
-	  }
-	| {
-			type: "updateProvider";
-			provider: string;
-			baseUrl?: string;
-			apiKey?: string;
-			apiMode?: string;
-			headers?: Record<string, string>;
-	  }
-	| { type: "deleteProvider"; provider: string }
 	| { type: "addModel"; model: HFModelItem }
 	| { type: "updateModel"; model: HFModelItem; originalModelId?: string; originalConfigId?: string }
 	| { type: "deleteModel"; modelId: string }
@@ -206,15 +189,6 @@ export class ConfigViewPanel {
 				}
 				break;
 			}
-			case "addProvider":
-				await this.addProvider(message.provider, message.baseUrl, message.apiKey, message.apiMode, message.headers);
-				break;
-			case "updateProvider":
-				await this.updateProvider(message.provider, message.baseUrl, message.apiKey, message.apiMode, message.headers);
-				break;
-			case "deleteProvider":
-				await this.deleteProvider(message.provider);
-				break;
 			case "addModel":
 				await this.addModel(message.model);
 				break;
@@ -425,123 +399,6 @@ export class ConfigViewPanel {
 
 	private getNonce() {
 		return Array.from({ length: 16 }, () => Math.floor(Math.random() * 36).toString(36)).join("");
-	}
-
-	private async addProvider(
-		provider: string,
-		baseUrl?: string,
-		apiKey?: string,
-		apiMode?: string,
-		headers?: Record<string, string>
-	) {
-		const trimmedProvider = provider.trim();
-		if (!trimmedProvider) {
-			vscode.window.showErrorMessage("供应商 ID 为必填项。");
-			return;
-		}
-		const normalizedProvider = trimmedProvider.toLowerCase();
-		// Save API key for the provider
-		if (apiKey) {
-			await this.secrets.store(`libiaoCopilot.apiKey.${normalizedProvider}`, apiKey);
-			if (trimmedProvider !== normalizedProvider) {
-				await this.secrets.delete(`libiaoCopilot.apiKey.${trimmedProvider}`);
-			}
-		}
-
-		// Save provider configuration to the model list
-		const config = vscode.workspace.getConfiguration();
-		const models = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
-
-		// If the provider doesn't have models yet, add a default model
-		const hasProviderModels = models.some((model) => model.owned_by === trimmedProvider);
-		if (!hasProviderModels) {
-			const defaultModel: HFModelItem = {
-				id: `__provider__${trimmedProvider}`,
-				owned_by: trimmedProvider,
-				baseUrl: baseUrl,
-				apiMode: (apiMode as HFApiMode) || "openai",
-				headers: headers,
-			};
-			models.push(defaultModel);
-		}
-
-		await config.update("libiaoCopilot.models", models, vscode.ConfigurationTarget.Global);
-		vscode.window.showInformationMessage(`供应商 ${provider} 已添加。`);
-		// Send refresh signal to frontend
-		await this.sendInit();
-	}
-
-	private async updateProvider(
-		provider: string,
-		baseUrl?: string,
-		apiKey?: string,
-		apiMode?: string,
-		headers?: Record<string, string>
-	) {
-		const trimmedProvider = provider.trim();
-		if (!trimmedProvider) {
-			vscode.window.showErrorMessage("供应商 ID 为必填项。");
-			return;
-		}
-		const normalizedProvider = trimmedProvider.toLowerCase();
-		// Update provider API key
-		if (apiKey) {
-			await this.secrets.store(`libiaoCopilot.apiKey.${normalizedProvider}`, apiKey);
-			if (trimmedProvider !== normalizedProvider) {
-				await this.secrets.delete(`libiaoCopilot.apiKey.${trimmedProvider}`);
-			}
-		} else {
-			await this.secrets.delete(`libiaoCopilot.apiKey.${normalizedProvider}`);
-			if (trimmedProvider !== normalizedProvider) {
-				await this.secrets.delete(`libiaoCopilot.apiKey.${trimmedProvider}`);
-			}
-		}
-
-		// Update the provider's configuration in the model list
-		const config = vscode.workspace.getConfiguration();
-		const models = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
-
-		const updatedModels = models.map((model) => {
-			if (model.owned_by === trimmedProvider) {
-				const { headers: _, ...rest } = model;
-				return {
-					...rest,
-					baseUrl: baseUrl || model.baseUrl,
-					apiMode: (apiMode as HFApiMode) || model.apiMode,
-					...(headers !== undefined && { headers }),
-				};
-			}
-			return model;
-		});
-
-		await config.update("libiaoCopilot.models", updatedModels, vscode.ConfigurationTarget.Global);
-		vscode.window.showInformationMessage(`供应商 ${provider} 已更新。`);
-		// Send refresh signal to frontend
-		await this.sendInit();
-	}
-
-	private async deleteProvider(provider: string) {
-		const trimmedProvider = provider.trim();
-		if (!trimmedProvider) {
-			vscode.window.showErrorMessage("供应商 ID 为必填项。");
-			return;
-		}
-		const normalizedProvider = trimmedProvider.toLowerCase();
-		// Delete provider API key
-		await this.secrets.delete(`libiaoCopilot.apiKey.${normalizedProvider}`);
-		if (trimmedProvider !== normalizedProvider) {
-			await this.secrets.delete(`libiaoCopilot.apiKey.${trimmedProvider}`);
-		}
-
-		// Remove all models of this provider from the model list
-		const config = vscode.workspace.getConfiguration();
-		const models = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
-		const filteredModels = models.filter((model) => model.owned_by !== trimmedProvider);
-
-		await config.update("libiaoCopilot.models", filteredModels, vscode.ConfigurationTarget.Global);
-		vscode.window.showInformationMessage(`供应商 ${provider} 及其全部模型已删除。`);
-		// Send refresh signal to frontend
-		await this.sendInit();
 	}
 
 	private async addModel(model: HFModelItem) {

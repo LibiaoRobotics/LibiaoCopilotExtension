@@ -30,9 +30,6 @@ const contextManagementInput = document.getElementById("contextManagement");
 const summarizationInstructionsInput = document.getElementById("summarizationInstructions");
 const summarizeMaxTokensInput = document.getElementById("summarizeMaxTokens");
 
-// Provider management elements
-const providerTableBody = document.getElementById("providerTableBody");
-
 // Model management elements
 const modelTableBody = document.getElementById("modelTableBody");
 const modelFormSection = document.getElementById("modelFormSection");
@@ -150,71 +147,7 @@ document.getElementById("importConfig").addEventListener("click", () => {
 
 // Refresh buttons event listeners
 document.getElementById("refreshGlobalConfig").addEventListener("click", handleRefresh);
-document.getElementById("refreshProviders").addEventListener("click", handleRefresh);
 document.getElementById("refreshModels").addEventListener("click", handleRefresh);
-
-// Add Provider button event listener
-document.getElementById("addProvider").addEventListener("click", () => {
-	// Add new provider row to the table
-	const newRow = document.createElement("tr");
-	newRow.innerHTML = `
-		<td><input type="text" class="provider-input" data-field="provider" placeholder="供应商 ID" /></td>
-		<td><input type="text" class="provider-input" data-field="baseUrl" placeholder="Base URL" /></td>
-		<td><input type="password" class="provider-input" data-field="apiKey" placeholder="API Key" /></td>
-		<td>
-			<select class="provider-input" data-field="apiMode">
-				<option value="openai">OpenAI</option>
-				<option value="openai-responses">OpenAI Responses</option>
-				<option value="ollama">Ollama</option>
-				<option value="anthropic">Anthropic</option>
-				<option value="gemini">Gemini</option>
-			</select>
-		</td>
-		<td><textarea class="provider-input" data-field="headers" rows="2" placeholder='{"X-API-Version": "v1"}' style="width: 100%; font-family: monospace; font-size: 12px;"></textarea></td>
-		<td>
-			<button class="save-provider-btn secondary">保存</button>
-			<button class="cancel-provider-btn secondary">取消</button>
-		</td>
-	`;
-	providerTableBody.appendChild(newRow);
-
-	// Add event listeners for the new row
-	const saveBtn = newRow.querySelector(".save-provider-btn");
-	const cancelBtn = newRow.querySelector(".cancel-provider-btn");
-
-	saveBtn.addEventListener("click", () => {
-		const inputs = newRow.querySelectorAll(".provider-input");
-		const providerData = {};
-		inputs.forEach((input) => {
-			const field = input.getAttribute("data-field");
-			providerData[field] = input.value;
-		});
-
-		let headers = undefined;
-		if (providerData.headers && providerData.headers.trim()) {
-			try {
-				headers = JSON.parse(providerData.headers);
-			} catch (e) {
-				// ignore invalid JSON
-			}
-		}
-
-		vscode.postMessage({
-			type: "addProvider",
-			provider: providerData.provider,
-			baseUrl: providerData.baseUrl || undefined,
-			apiKey: providerData.apiKey || undefined,
-			apiMode: providerData.apiMode || undefined,
-			headers: headers,
-		});
-
-		newRow.remove();
-	});
-
-	cancelBtn.addEventListener("click", () => {
-		newRow.remove();
-	});
-});
 
 // Add Model button event listeners
 document.getElementById("addModel").addEventListener("click", () => {
@@ -366,8 +299,7 @@ window.addEventListener("message", (event) => {
 			commitModelInput.value = state.commitModel || "";
 			commitLanguageInput.value = commitLanguage;
 
-			// Render provider and model management
-			renderProviders();
+			// Render model management
 			renderModels();
 			break;
 		case "modelsFetched":
@@ -396,69 +328,6 @@ window.addEventListener("message", (event) => {
 			break;
 	}
 });
-
-function renderProviders() {
-	// Get all unique providers
-	const providers = Array.from(new Set(state.models.map((m) => m.owned_by).filter(Boolean))).sort((a, b) =>
-		a.localeCompare(b)
-	);
-
-	if (!providers.length) {
-		providerTableBody.innerHTML = '<tr><td colspan="5" class="no-data">无供应商</td></tr>';
-		// Clear the provider dropdown as well
-		modelProviderInput.innerHTML = '<option value="">选择供应商</option>';
-		return;
-	}
-
-	const rows = providers
-		.map((provider) => {
-			// Get the provider's configuration information
-			const providerModels = state.models.filter((m) => m.owned_by === provider);
-			const firstModel = providerModels[0];
-			const headersJson = firstModel.headers ? JSON.stringify(firstModel.headers, null, 2) : "";
-
-			return `
-			<tr data-provider="${provider}">
-				<td>${provider}</td>
-				<td><input type="text" class="provider-input" data-field="baseUrl" value="${firstModel.baseUrl || ""}" placeholder="Base URL" readonly /></td>
-				<td><input type="password" class="provider-input" data-field="apiKey" value="${state.providerKeys[provider] || ""}" placeholder="API Key" readonly /></td>
-				<td>
-					<select class="provider-input" data-field="apiMode" disabled>
-						<option value="openai" ${firstModel.apiMode === "openai" ? "selected" : ""}>OpenAI</option>
-						<option value="openai-responses" ${firstModel.apiMode === "openai-responses" ? "selected" : ""}>OpenAI Responses</option>
-						<option value="ollama" ${firstModel.apiMode === "ollama" ? "selected" : ""}>Ollama</option>
-						<option value="anthropic" ${firstModel.apiMode === "anthropic" ? "selected" : ""}>Anthropic</option>
-						<option value="gemini" ${firstModel.apiMode === "gemini" ? "selected" : ""}>Gemini</option>
-					</select>
-				</td>
-				<td><textarea class="provider-input" data-field="headers" rows="2" placeholder='{"X-API-Version": "v1"}' readonly style="width: 100%; font-family: monospace; font-size: 12px;">${headersJson}</textarea></td>
-			</tr>`;
-		})
-		.join("");
-
-	providerTableBody.innerHTML = rows;
-
-	// Populate the provider dropdown in the model form and provider info
-	state.providerInfo = {}; // Reset provider info
-	const providerOptions = providers
-		.map((provider) => {
-			// Get the provider's configuration information
-			const providerModels = state.models.filter((m) => m.owned_by === provider);
-			const firstModel = providerModels[0];
-
-			// Store provider info for auto-fill
-			state.providerInfo[provider] = {
-				baseUrl: firstModel.baseUrl || state.baseUrl,
-				apiMode: firstModel.apiMode || "openai",
-				apiKey: state.providerKeys[provider] || state.apiKey,
-				headers: firstModel.headers,
-			};
-
-			return `<option value="${provider}">${provider}</option>`;
-		})
-		.join("");
-	modelProviderInput.innerHTML = '<option value="">选择供应商</option>' + providerOptions;
-}
 
 function renderModels() {
 	const models = state.models.filter((m) => !m.id.startsWith("__provider__")).sort((a, b) => a.id.localeCompare(b.id));

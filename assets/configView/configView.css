@@ -20,10 +20,6 @@ section {
 #modelManagementSection {
 	display: none;
 }
-/* 供应商管理只读：隐藏添加按钮 */
-.add-provider-hidden {
-	display: none !important;
-}
 label {
 	display: block;
 	font-weight: 600;
@@ -109,15 +105,6 @@ button:active {
 }
 .block-gap {
 	margin-top: 10px;
-}
-.provider-row {
-	display: flex;
-	gap: 10px;
-	align-items: center;
-	margin-bottom: 10px;
-}
-.provider-row label {
-	margin: 0;
 }
 .model-list {
 	display: flex;
@@ -240,8 +227,7 @@ tr:hover {
 	color: var(--vscode-descriptionForeground);
 }
 
-.model-input,
-.provider-input {
+.model-input {
 	width: 100%;
 	padding: 6px 8px;
 	border: 1px solid var(--vscode-editorWidget-border);
@@ -251,8 +237,7 @@ tr:hover {
 	box-sizing: border-box;
 }
 
-.model-input:focus,
-.provider-input:focus {
+.model-input:focus {
 	outline: 1px solid var(--vscode-focusBorder);
 }
 

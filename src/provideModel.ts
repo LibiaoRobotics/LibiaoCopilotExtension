@@ -171,9 +171,11 @@ export async function prepareLanguageModelChatInformation(
 				const maxOutput = DEFAULT_MAX_TOKENS;
 				const maxInput = Math.max(1, contextLen - maxOutput);
 				const detail = p.provider ? `${p.provider} (${EXTENSION_LABEL})` : EXTENSION_LABEL;
+				// API 返回不带 displayName 时，从内置模型表兜底，避免模型列表只显示 id
+				const modelName = m.displayName || getBuiltInModel(m.id)?.displayName || m.id;
 				entries.push({
 					id: `${m.id}:${p.provider}`,
-					name: `${m.id}`,
+					name: modelName,
 					detail: detail,
 					tooltip: detail,
 					family: m.family ?? EXTENSION_LABEL,
@@ -195,7 +197,8 @@ export async function prepareLanguageModelChatInformation(
 				const maxInput = Math.max(1, contextLen - maxOutput);
 				entries.push({
 					id: `${m.id}`,
-					name: `${m.id}`,
+					// API 返回不带 displayName 时，从内置模型表兜底，避免模型列表只显示 id
+					name: m.displayName || getBuiltInModel(m.id)?.displayName || m.id,
 					detail: EXTENSION_LABEL,
 					tooltip: EXTENSION_LABEL,
 					family: m.family ?? EXTENSION_LABEL,

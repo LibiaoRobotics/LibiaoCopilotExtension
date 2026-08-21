@@ -28,17 +28,22 @@
 					<div class="field-description">用于身份认证的 API 密钥。</div>
 					<input id="apiKey" type="password" placeholder="sk-..." />
 				</div>
-				<div class="field">
-					<label for="delay">请求延迟（毫秒）</label>
-					<div class="field-description">连续请求之间的固定延迟（毫秒）。</div>
-					<input id="delay" type="number" min="0" placeholder="0" />
-				</div>
-				<div class="field">
-					<label for="readFileLines">read_file 读取行数</label>
-					<div class="field-description">
-						使用 `read_file` 工具时读取的行数。行数过多可能消耗更多 token。默认 0，由模型自行决定。
+			</div>
+			<div class="retry-config">
+				<h3>高级配置</h3>
+				<div class="row">
+					<div class="field">
+						<label for="delay">请求延迟（毫秒）</label>
+						<div class="field-description">连续请求之间的固定延迟（毫秒）。</div>
+						<input id="delay" type="number" min="0" placeholder="0" />
 					</div>
-					<input id="readFileLines" type="number" min="0" placeholder="0" />
+					<div class="field">
+						<label for="readFileLines">read_file 读取行数</label>
+						<div class="field-description">
+							使用 `read_file` 工具时读取的行数。行数过多可能消耗更多 token。默认 0，由模型自行决定。
+						</div>
+						<input id="readFileLines" type="number" min="0" placeholder="0" />
+					</div>
 				</div>
 			</div>
 			<div class="retry-config">
@@ -130,32 +135,6 @@
 				<button id="exportConfig" class="secondary">导出</button>
 				<button id="importConfig" class="secondary">导入</button>
 				<button id="refreshGlobalConfig" class="secondary">刷新</button>
-			</div>
-		</section>
-
-		<section id="providerManagementSection">
-			<div class="section-header">
-				<h2>供应商管理</h2>
-				<div class="section-actions">
-					<button id="addProvider" class="secondary add-provider-hidden">添加供应商</button>
-					<button id="refreshProviders" class="secondary">刷新</button>
-				</div>
-			</div>
-			<div class="table-container">
-				<table id="providerTable">
-					<thead>
-						<tr>
-							<th>供应商 ID</th>
-							<th>Base URL</th>
-							<th>API Key</th>
-							<th>API 模式</th>
-							<th>自定义请求头 (JSON)</th>
-						</tr>
-					</thead>
-					<tbody id="providerTableBody">
-						<!-- Provider rows will be inserted here -->
-					</tbody>
-				</table>
 			</div>
 		</section>
 
