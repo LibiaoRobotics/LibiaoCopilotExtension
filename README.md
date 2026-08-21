@@ -18,7 +18,7 @@
 - **模型实时发现**：配置模型不再跳过供应商列表。已配置模型与供应商端点实时核对，供应商新上线的模型自动出现，同事无需任何操作
 - **模型列表 TTL 缓存**：默认 10 分钟缓存（`libiaoCopilot.modelCacheTtlMinutes`），减少网关请求；刷新失败时自动使用过期缓存兜底
 - **原生上下文/思考强度选择**：在 Copilot 模型配置菜单直接选择上下文大小（256K / 512K / 1M）与思考强度，无需编辑 JSON
-- **模型健康检查**：启动时自动检查已配置模型可用性（每 24 小时限一次），也可随时手动检查
+- **上下文智能管理**：长会话自动压缩（旧消息摘要 + 硬截断），预算内不丢关键信息，可通过 `libiaoCopilot.contextManagement` 关闭
 - **多 API 支持**：OpenAI / OpenAI Responses / Ollama / Anthropic / Gemini 五种协议（ModelScope、SiliconFlow、DeepSeek 等）
 - **视觉模型**：完整支持图像理解能力
 - **多供应商管理**：同时配置多个供应商，独立管理各自 API 密钥
