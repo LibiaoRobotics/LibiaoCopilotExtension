@@ -45,6 +45,18 @@
 						<input id="readFileLines" type="number" min="0" placeholder="0" />
 					</div>
 				</div>
+				<div class="row">
+					<div class="field">
+						<label for="visionIcon">视觉模型图标</label>
+						<div class="field-description">
+							突出模型视觉能力时使用的图标。默认图片。
+						</div>
+						<select id="visionIcon" class="model-input">
+							<option value="picture">🖼️ 图片（默认）</option>
+							<option value="eye">👁️ 眼睛</option>
+						</select>
+					</div>
+				</div>
 			</div>
 			<div class="retry-config">
 				<h3>重试配置</h3>
@@ -114,16 +126,6 @@
 						<select id="contextManagement" class="model-input">
 							<option value="summarize">摘要压缩旧历史（推荐）</option>
 							<option value="off">关闭——历史原样发送</option>
-						</select>
-					</div>
-					<div class="field">
-						<label for="visionIcon">视觉模型图标</label>
-						<div class="field-description">
-							突出模型视觉能力时使用的图标。默认图片。
-						</div>
-						<select id="visionIcon" class="model-input">
-							<option value="picture">🖼️ 图片（默认）</option>
-							<option value="eye">👁️ 眼睛</option>
 						</select>
 					</div>
 					<div class="field">
