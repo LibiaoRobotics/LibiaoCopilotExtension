@@ -21,6 +21,12 @@ declare module "vscode" {
 	 */
 	export interface LanguageModelChatInformation {
 		/**
+		 * Optional pricing label for this model, such as "Free", "$0.01/request", etc.
+		 * This value is meant for display purposes and will be shown in the model management UI.
+		 */
+		readonly pricing?: string;
+
+		/**
 		 * When present, this gates the use of `requestLanguageModelAccess` behind an authorization flow where
 		 * the user must approve of another extension accessing the models contributed by this extension.
 		 * Additionally, the extension can provide a label that will be shown in the UI.

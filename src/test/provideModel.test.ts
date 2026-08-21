@@ -149,6 +149,46 @@ suite("provideModel", () => {
 		});
 	});
 
+	suite("toModelPickerInfo priceNote mapping", () => {
+		test("maps priceNote to pricing for customized models", () => {
+			const model: HFModelItem = {
+				id: "qwen3.8-max",
+				owned_by: "libiaorobot",
+				priceNote: "⭐ 推荐 ⭐",
+			};
+			const info = toModelPickerInfo(model);
+			assert.strictEqual(info.pricing, "⭐ 推荐 ⭐");
+		});
+
+		test("leaves pricing undefined when no priceNote is set anywhere", () => {
+			const model: HFModelItem = { id: "totally-unknown-model", owned_by: "gateway" };
+			const info = toModelPickerInfo(model);
+			assert.strictEqual(info.pricing, undefined);
+		});
+
+		test("falls back to built-in priceNote when user config lacks it", () => {
+			// 用户配置未写 priceNote，但内置表有 → 从内置表兜底（与 vision 同款逻辑）
+			const model: HFModelItem = { id: "deepseek-v4-flash", owned_by: "libiaorobot" };
+			const merged = toDiscoveredModelItem(model);
+			const info = toModelPickerInfo(merged);
+			// 若内置表未填 priceNote，则为 undefined；填了则透传内置值
+			const builtInNote = merged.priceNote;
+			assert.strictEqual(info.pricing, builtInNote);
+		});
+
+		test("keeps user priceNote authoritative over built-in value", () => {
+			// 用户配置显式写了 priceNote → 内置值不得覆盖（即使内置表有值）
+			const model: HFModelItem = {
+				id: "deepseek-v4-flash",
+				owned_by: "libiaorobot",
+				priceNote: "自定义备注",
+			};
+			const merged = toDiscoveredModelItem(model);
+			const info = toModelPickerInfo(merged);
+			assert.strictEqual(info.pricing, "自定义备注");
+		});
+	});
+
 	suite("toModelPickerInfo fallback schema", () => {
 		test("generates configurationSchema with both context size and reasoning effort after merge", () => {
 			// 模拟 fallback path：API 裸模型 → toDiscoveredModelItem 合并内置元数据

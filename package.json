@@ -151,6 +151,7 @@
 						},
 						{
 							"id": "qwen3.8-max",
+							"priceNote": "\u2B50\uFE0F推荐\u2B50\uFE0F",
 							"displayName": "Qwen 3.8 Max",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
@@ -168,6 +169,7 @@
 						},
 						{
 							"id": "deepseek-v4-pro",
+							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
 							"displayName": "DeepSeek Pro",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
@@ -202,6 +204,7 @@
 						},
 						{
 							"id": "deepseek-v4-flash-vision-exp",
+							"priceNote": "\u2B50\uFE0F推荐\u2B50\uFE0F",
 							"displayName": "Deepseek Flash 识图版",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
@@ -237,6 +240,7 @@
 						},
 						{
 							"id": "gemini-3.1-flash-image",
+							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
 							"displayName": "Gemini 3.1 Flash",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
@@ -251,6 +255,7 @@
 						},
 						{
 							"id": "gemini-3.5-flash",
+							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
 							"displayName": "Gemini 3.5 Flash",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
@@ -285,6 +290,7 @@
 						},
 						{
 							"id": "gpt-5.6-luna",
+							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
 							"displayName": "GPT-5.6 Luna",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
@@ -319,6 +325,7 @@
 						},
 						{
 							"id": "gpt-5.6-terra",
+							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
 							"displayName": "GPT-5.6 Terra",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
@@ -336,6 +343,7 @@
 						},
 						{
 							"id": "gpt-5.5",
+							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
 							"displayName": "GPT-5.5",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
@@ -353,6 +361,7 @@
 						},
 						{
 							"id": "claude-opus-4-8",
+							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
 							"displayName": "Claude Opus 4.8",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
@@ -404,6 +413,7 @@
 						},
 						{
 							"id": "MiniMax-M3",
+							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
 							"displayName": "MiniMax M3",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
@@ -419,6 +429,7 @@
 						},
 						{
 							"id": "glm-5.2",
+							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
 							"displayName": "GLM 5.2",
 							"owned_by": "libiaorobot",
 							"apiMode": "anthropic",
@@ -441,6 +452,7 @@
 						},
 						{
 							"id": "glm-5.3",
+							"priceNote": "\u2B50\uFE0F推荐\u2B50\uFE0F",
 							"displayName": "GLM 5.3",
 							"owned_by": "libiaorobot",
 							"apiMode": "anthropic",
@@ -463,6 +475,7 @@
 						},
 						{
 							"id": "qwen3.7-plus",
+							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
 							"displayName": "Qwen 3.7 Plus",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
@@ -481,6 +494,7 @@
 						},
 						{
 							"id": "qwen3.7-max",
+							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
 							"displayName": "Qwen 3.7 Max",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",

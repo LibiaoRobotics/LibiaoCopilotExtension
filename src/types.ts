@@ -24,6 +24,11 @@ export interface HFModelItem {
 	owned_by: string;
 	configId?: string;
 	displayName?: string;
+	/**
+	 * （可选）自定义备注文字，显示在“语言模型”管理界面的成本列。
+	 * 由内置模型表（package.json 默认值）提供，用户配置缺失时从内置表兜底。
+	 */
+	priceNote?: string;
 	baseUrl?: string;
 	providers?: HFProvider[];
 	architecture?: HFArchitecture;

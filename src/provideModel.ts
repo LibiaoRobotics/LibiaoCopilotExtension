@@ -29,6 +29,14 @@ export function getVisionEmoji(icon: VisionIcon): string {
 }
 
 /**
+ * 解析模型的备注文字（显示在"语言模型"管理界面的成本列）：
+ * 用户配置优先，缺失时从内置模型表兜底。
+ */
+function resolvePriceNote(m: HFModelItem): string | undefined {
+	return m.priceNote ?? getBuiltInModel(m.id)?.priceNote;
+}
+
+/**
  * 为模型显示名添加视觉图标前缀，由 vision 字段驱动（displayName 不再手工维护 emoji）。
  * 先剥离旧版图标前缀（👁️/🖼️ 都剥），避免切换图标后出现双前缀；
  * 兼容存量配置中已含 emoji 的 displayName。
@@ -226,6 +234,7 @@ export async function prepareLanguageModelChatInformation(
 					name: modelName,
 					detail: detail,
 					tooltip: detail,
+					pricing: resolvePriceNote(merged),
 					family: m.family ?? EXTENSION_LABEL,
 					version: "1.0.0",
 					maxInputTokens: maxInput,
@@ -257,6 +266,7 @@ export async function prepareLanguageModelChatInformation(
 					),
 					detail: EXTENSION_LABEL,
 					tooltip: EXTENSION_LABEL,
+					pricing: resolvePriceNote(merged),
 					family: m.family ?? EXTENSION_LABEL,
 					version: "1.0.0",
 					maxInputTokens: maxInput,
@@ -301,12 +311,14 @@ export function toModelPickerInfo(m: HFModelItem, icon: VisionIcon = "picture"):
 	);
 	const detail = m.owned_by ? `${m.owned_by} (${EXTENSION_LABEL})` : EXTENSION_LABEL;
 	const configurationSchema = createModelConfigurationSchema(m);
+	const priceNote = resolvePriceNote(m);
 
 	return {
 		id: modelId,
 		name: modelName,
 		detail: detail,
 		tooltip: detail,
+		pricing: priceNote,
 		family: m.family ?? EXTENSION_LABEL,
 		version: "1.0.0",
 		maxInputTokens: maxInput,
@@ -606,6 +618,8 @@ export function toDiscoveredModelItem(m: HFModelItem): HFModelItem {
 		...m,
 		...builtIn,
 		vision,
+		// 用户配置显式声明的 priceNote 优先，内置值仅兜底（与 vision 同款处理）
+		priceNote: m.priceNote ?? builtIn.priceNote,
 	};
 }
 
