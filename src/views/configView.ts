@@ -246,7 +246,13 @@ export class ConfigViewPanel {
 	private async sendInit() {
 		const config = vscode.workspace.getConfiguration();
 		const baseUrl = config.get<string>("libiaoCopilot.baseUrl", "https://api.openai.com/v1");
-		const models = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
+		// 前端展示用：vision 缺失时从内置模型表兜底（内置表是 vision 的权威来源，
+		// 显示名 emoji 由 vision 驱动，见 configView.js formatModelDisplayName）
+		const builtInForVision = getBuiltInModels();
+		const models = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", [])).map((m) => ({
+			...m,
+			vision: m.vision ?? builtInForVision.get(m.id)?.vision,
+		}));
 
 		const apiKey = (await this.secrets.get("libiaoCopilot.apiKey")) ?? "";
 		const providerKeys: Record<string, string> = {};

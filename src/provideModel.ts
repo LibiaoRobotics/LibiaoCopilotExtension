@@ -16,6 +16,20 @@ const DEFAULT_CONTEXT_LENGTH = 256000;
 const DEFAULT_MAX_TOKENS = 4096;
 const EXTENSION_LABEL = "Libiao Copilot";
 
+/** 视觉模型图标前缀（U+1F5BC U+FE0F，码点转义写入避免编码问题） */
+const VISION_EMOJI = "\u{1F5BC}\uFE0F";
+
+/**
+ * 为模型显示名添加视觉图标前缀，由 vision 字段驱动（displayName 不再手工维护 emoji）。
+ * 已带前缀时不重复添加，兼容存量配置中已含 emoji 的 displayName。
+ */
+function formatModelDisplayName(name: string, vision?: boolean): string {
+	if (vision && !name.startsWith(VISION_EMOJI)) {
+		return VISION_EMOJI + name;
+	}
+	return name;
+}
+
 /**
  * Model id of the placeholder entry shown when no model could be verified
  * (missing/wrong base URL or API key, network error). VS Code hides the
@@ -164,8 +178,9 @@ export async function prepareLanguageModelChatInformation(
 		infos = models.flatMap((m) => {
 			const merged = toDiscoveredModelItem(m);
 			const providers = m?.providers ?? [];
-			const modalities = m.architecture?.input_modalities ?? [];
-			const vision = Array.isArray(modalities) && modalities.includes("image");
+			// 修复：vision 以 merged（内置表 + modalities 推断后的权威值）为准，
+			// 原实现只看 modalities，网关不返回模态信息但内置表声明 vision 时会误判为 false
+			const vision = merged.vision === true;
 
 			// Build entries for all providers that support tool calling
 			const toolProviders = providers.filter((p) => p.supports_tools === true);
@@ -179,7 +194,10 @@ export async function prepareLanguageModelChatInformation(
 				const maxInput = Math.max(1, contextLen - maxOutput);
 				const detail = p.provider ? `${p.provider} (${EXTENSION_LABEL})` : EXTENSION_LABEL;
 				// API 返回不带 displayName 时，从内置模型表兜底，避免模型列表只显示 id
-				const modelName = merged.displayName || m.displayName || getBuiltInModel(m.id)?.displayName || m.id;
+				const modelName = formatModelDisplayName(
+					merged.displayName || m.displayName || getBuiltInModel(m.id)?.displayName || m.id,
+					merged.vision
+				);
 				const configurationSchema = createModelConfigurationSchema(merged);
 				entries.push({
 					id: `${m.id}:${p.provider}`,
@@ -210,7 +228,10 @@ export async function prepareLanguageModelChatInformation(
 				entries.push({
 					id: `${m.id}`,
 					// API 返回不带 displayName 时，从内置模型表兜底，避免模型列表只显示 id
-					name: merged.displayName || m.displayName || getBuiltInModel(m.id)?.displayName || m.id,
+					name: formatModelDisplayName(
+						merged.displayName || m.displayName || getBuiltInModel(m.id)?.displayName || m.id,
+						merged.vision
+					),
 					detail: EXTENSION_LABEL,
 					tooltip: EXTENSION_LABEL,
 					family: m.family ?? EXTENSION_LABEL,
@@ -221,7 +242,8 @@ export async function prepareLanguageModelChatInformation(
 					...(configurationSchema ? { configurationSchema } : {}),
 					capabilities: {
 						toolCalling: true,
-						imageInput: true,
+						// 修复：原来写死 true，改为跟随合并后的权威 vision 值
+						imageInput: merged.vision === true,
 					},
 				} satisfies LanguageModelChatInformation);
 			}
@@ -247,7 +269,12 @@ export function toModelPickerInfo(m: HFModelItem): ModelPickerChatInformation {
 	// Use configId when present so each model configuration stays distinct.
 	const modelId = m.configId ? `${m.id}::${m.configId}` : m.id;
 	// 用户配置缺失 displayName 时，从内置模型表兜底，避免模型列表只显示 id
-	const modelName = m.displayName || getBuiltInModel(m.id)?.displayName || modelId;
+	// vision 缺失时同样从内置表兜底（merge 路径的用户配置可能没写 vision 字段）
+	const vision = m?.vision ?? getBuiltInModel(m.id)?.vision ?? false;
+	const modelName = formatModelDisplayName(
+		m.displayName || getBuiltInModel(m.id)?.displayName || modelId,
+		vision
+	);
 	const detail = m.owned_by ? `${m.owned_by} (${EXTENSION_LABEL})` : EXTENSION_LABEL;
 	const configurationSchema = createModelConfigurationSchema(m);
 
@@ -264,7 +291,7 @@ export function toModelPickerInfo(m: HFModelItem): ModelPickerChatInformation {
 		...(configurationSchema ? { configurationSchema } : {}),
 		capabilities: {
 			toolCalling: true,
-			imageInput: m?.vision ?? false,
+			imageInput: vision,
 		},
 	} satisfies ModelPickerChatInformation;
 }

@@ -1,4 +1,16 @@
 const vscode = acquireVsCodeApi();
+
+// 视觉模型图标前缀（U+1F5BC U+FE0F，码点转义写入避免编码问题）
+const VISION_EMOJI = "\u{1F5BC}\uFE0F";
+
+// 模型显示名：vision 字段驱动 emoji 前缀（displayName 数据本身保持纯净）
+function formatModelDisplayName(name, vision) {
+	if (vision && name && !name.startsWith(VISION_EMOJI)) {
+		return VISION_EMOJI + name;
+	}
+	return name;
+}
+
 const state = {
 	baseUrl: "",
 	apiKey: "",
@@ -342,7 +354,7 @@ function renderModels() {
 			<tr data-model-id="${model.id}${model.configId ? "::" + model.configId : ""}">
 				<td>${model.id}</td>
 				<td>${model.owned_by}</td>
-				<td>${model.displayName || ""}</td>
+				<td>${formatModelDisplayName(model.displayName || "", model.vision)}</td>
 				<td>${model.configId || ""}</td>
 				<td>${model.context_length || ""}</td>
 				<td>${model.max_tokens || model.max_completion_tokens || ""}</td>
@@ -735,7 +747,7 @@ function populateCommitModelDropdown() {
 		const option = document.createElement("option");
 		const fullModelId = `${model.id}${model.configId ? "::" + model.configId : ""}`;
 		option.value = fullModelId;
-		option.textContent = model.displayName || fullModelId;
+		option.textContent = formatModelDisplayName(model.displayName || "", model.vision) || fullModelId;
 		commitModelInput.appendChild(option);
 	});
 }

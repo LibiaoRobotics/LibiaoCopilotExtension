@@ -7,7 +7,6 @@ import { AnthropicApi } from "../anthropic/anthropicApi";
 import { OllamaApi } from "../ollama/ollamaApi";
 import { normalizeUserModels, parseModelId, getBuiltInModel } from "../utils";
 import { logger } from "../logger";
-import type { HFModelItem } from "../types";
 
 /**
  * Git commit message generator module

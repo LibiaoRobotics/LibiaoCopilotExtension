@@ -93,6 +93,43 @@ suite("provideModel", () => {
 		});
 	});
 
+	suite("toModelPickerInfo vision-driven display name", () => {
+		// emoji 用码点转义（U+1F5BC + U+FE0F），避免字面 emoji 编码问题
+		const VISION_EMOJI = "\u{1F5BC}\uFE0F";
+
+		test("adds vision emoji prefix when vision is true", () => {
+			const model: HFModelItem = { id: "qwen3.8-max", owned_by: "libiaorobot", vision: true, displayName: "Qwen 3.8 Max" };
+			const info = toModelPickerInfo(model);
+			assert.strictEqual(info.name, `${VISION_EMOJI}Qwen 3.8 Max`);
+		});
+
+		test("does not add emoji when vision is false or undefined", () => {
+			const model: HFModelItem = { id: "deepseek-v4-flash", owned_by: "libiaorobot", vision: false, displayName: "DeepSeek Flash" };
+			const info = toModelPickerInfo(model);
+			assert.strictEqual(info.name, "DeepSeek Flash");
+		});
+
+		test("does not duplicate the emoji prefix for legacy configured names", () => {
+			// 存量用户配置的 displayName 可能已含 emoji（旧版手工维护）→ 不得重复添加
+			const model: HFModelItem = {
+				id: "qwen3.8-max",
+				owned_by: "libiaorobot",
+				vision: true,
+				displayName: `${VISION_EMOJI}Qwen 3.8 Max`,
+			};
+			const info = toModelPickerInfo(model);
+			assert.strictEqual(info.name, `${VISION_EMOJI}Qwen 3.8 Max`);
+		});
+
+		test("falls back to built-in vision when the model declares none", () => {
+			// 用户配置未写 vision，但内置表声明 vision: true（deepseek-v4-flash-vision-exp）
+			const model: HFModelItem = { id: "deepseek-v4-flash-vision-exp", owned_by: "libiaorobot" };
+			const info = toModelPickerInfo(model);
+			assert.strictEqual(info.name, `${VISION_EMOJI}Deepseek Flash 识图版`);
+			assert.strictEqual(info.capabilities.imageInput, true);
+		});
+	});
+
 	suite("toModelPickerInfo fallback schema", () => {
 		test("generates configurationSchema with both context size and reasoning effort after merge", () => {
 			// 模拟 fallback path：API 裸模型 → toDiscoveredModelItem 合并内置元数据
