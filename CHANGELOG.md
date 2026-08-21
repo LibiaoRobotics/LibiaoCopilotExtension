@@ -1,5 +1,11 @@
 # 更新日志
 
+## 1.0.7
+
+### 新增
+
+- **新增内置模型 deepseek-v4-flash-vision-exp**（DeepSeek 实验性视觉模型）：1M 上下文 / 384K 最大输出 / 支持图片输入（JPEG/PNG/GIF/WebP），思考默认最高档。走 Responses 链路（与 deepseek-v4-flash 同款配置），价格与 flash 相同。无需额外配置，网关配置好即可选用。
+
 ## 1.0.6
 
 ### 新增
