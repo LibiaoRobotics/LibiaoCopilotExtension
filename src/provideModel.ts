@@ -157,7 +157,12 @@ export async function prepareLanguageModelChatInformation(
 		}
 		const { models } = await fetchModelsCached(BASE_URL, apiKey);
 
+		// 每个 API 模型先经 toDiscoveredModelItem 合并内置模型元数据
+		// （context_length/context_sizes/reasoning_effort 等），再走
+		// toModelPickerInfo 生成 configurationSchema —— 与 merge path 对齐，
+		// 保证 models 为空时上下文大小/思考深度选择器依然可用。
 		infos = models.flatMap((m) => {
+			const merged = toDiscoveredModelItem(m);
 			const providers = m?.providers ?? [];
 			const modalities = m.architecture?.input_modalities ?? [];
 			const vision = Array.isArray(modalities) && modalities.includes("image");
@@ -167,12 +172,15 @@ export async function prepareLanguageModelChatInformation(
 			const entries: ModelPickerChatInformation[] = [];
 
 			for (const p of toolProviders) {
-				const contextLen = p?.context_length ?? DEFAULT_CONTEXT_LENGTH;
-				const maxOutput = DEFAULT_MAX_TOKENS;
+				// 内置模型元数据为权威源（网关 listing 常低估上下文），
+				// provider 的 context_length 仅作内置表缺失时的兜底
+				const contextLen = merged.context_length ?? p?.context_length ?? DEFAULT_CONTEXT_LENGTH;
+				const maxOutput = merged.max_completion_tokens ?? merged.max_tokens ?? DEFAULT_MAX_TOKENS;
 				const maxInput = Math.max(1, contextLen - maxOutput);
 				const detail = p.provider ? `${p.provider} (${EXTENSION_LABEL})` : EXTENSION_LABEL;
 				// API 返回不带 displayName 时，从内置模型表兜底，避免模型列表只显示 id
-				const modelName = m.displayName || getBuiltInModel(m.id)?.displayName || m.id;
+				const modelName = merged.displayName || m.displayName || getBuiltInModel(m.id)?.displayName || m.id;
+				const configurationSchema = createModelConfigurationSchema(merged);
 				entries.push({
 					id: `${m.id}:${p.provider}`,
 					name: modelName,
@@ -183,6 +191,7 @@ export async function prepareLanguageModelChatInformation(
 					maxInputTokens: maxInput,
 					maxOutputTokens: maxOutput,
 					isUserSelectable: true,
+					...(configurationSchema ? { configurationSchema } : {}),
 					capabilities: {
 						toolCalling: true,
 						imageInput: vision,
@@ -192,13 +201,16 @@ export async function prepareLanguageModelChatInformation(
 
 			if (entries.length === 0) {
 				const base = providers.length > 0 ? providers[0] : null;
-				const contextLen = base?.context_length ?? DEFAULT_CONTEXT_LENGTH;
-				const maxOutput = DEFAULT_MAX_TOKENS;
+				// 内置模型元数据为权威源（网关 listing 常低估上下文），
+				// provider 的 context_length 仅作内置表缺失时的兜底
+				const contextLen = merged.context_length ?? base?.context_length ?? DEFAULT_CONTEXT_LENGTH;
+				const maxOutput = merged.max_completion_tokens ?? merged.max_tokens ?? DEFAULT_MAX_TOKENS;
 				const maxInput = Math.max(1, contextLen - maxOutput);
+				const configurationSchema = createModelConfigurationSchema(merged);
 				entries.push({
 					id: `${m.id}`,
 					// API 返回不带 displayName 时，从内置模型表兜底，避免模型列表只显示 id
-					name: m.displayName || getBuiltInModel(m.id)?.displayName || m.id,
+					name: merged.displayName || m.displayName || getBuiltInModel(m.id)?.displayName || m.id,
 					detail: EXTENSION_LABEL,
 					tooltip: EXTENSION_LABEL,
 					family: m.family ?? EXTENSION_LABEL,
@@ -206,6 +218,7 @@ export async function prepareLanguageModelChatInformation(
 					maxInputTokens: maxInput,
 					maxOutputTokens: maxOutput,
 					isUserSelectable: true,
+					...(configurationSchema ? { configurationSchema } : {}),
 					capabilities: {
 						toolCalling: true,
 						imageInput: true,

@@ -361,14 +361,20 @@ export class ConfigViewPanel {
 	}
 
 	/**
-	 * 清空标准模型列表，只保留自定义供应商（__provider__ 前缀条目）。
-	 * 写入空数组（而非删除配置项）以保持 API fallback 路径。
+	 * 重置模型列表：只保留自定义供应商（__provider__ 前缀条目）。
+	 * 没有自定义供应商时删除配置键，让 package.json 内置模型默认值生效
+	 * （写入空数组会覆盖默认值，导致模型选择器走 API fallback 路径）。
 	 */
 	private async resetModelList() {
 		const config = vscode.workspace.getConfiguration();
 		const models = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
 		const preserved = models.filter((m) => m.id.startsWith("__provider__"));
-		await config.update("libiaoCopilot.models", preserved, vscode.ConfigurationTarget.Global);
+		if (preserved.length > 0) {
+			await config.update("libiaoCopilot.models", preserved, vscode.ConfigurationTarget.Global);
+		} else {
+			// 无自定义供应商：删除配置键，恢复 package.json 内置模型默认值
+			await config.update("libiaoCopilot.models", undefined, vscode.ConfigurationTarget.Global);
+		}
 		clearModelListCache();
 		vscode.window.showInformationMessage("模型列表已重置为内置模型 + 自定义供应商。");
 		await this.sendInit();
