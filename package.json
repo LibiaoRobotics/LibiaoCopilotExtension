@@ -862,6 +862,19 @@
 					"maximum": 10000,
 					"description": "使用 `read_file` 工具时读取的行数。行数过多可能消耗更多 token。默认 0，由模型自行决定行数。"
 				},
+				"libiaoCopilot.visionIcon": {
+					"type": "string",
+					"enum": [
+						"eye",
+						"picture"
+					],
+					"enumDescriptions": [
+						"\uD83D\uDC41\uFE0F 眼睛",
+						"\uD83D\uDDBC\uFE0F 图片（默认）"
+					],
+					"default": "picture",
+					"description": "视觉模型图标：突出模型视觉能力时使用的 emoji。默认图片。"
+				},
 				"libiaoCopilot.contextManagement": {
 					"type": "string",
 					"enum": [

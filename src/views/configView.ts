@@ -19,6 +19,7 @@ interface InitPayload {
 	commitModel: string;
 	commitModels: HFModelItem[];
 	commitLanguage: string;
+	visionIcon: string;
 	contextManagement: string;
 	summarizationInstructions: string;
 	summarizeMaxTokens: number;
@@ -40,6 +41,7 @@ interface ExportConfig {
 	};
 	commitLanguage: string;
 	commitModel: string;
+	visionIcon: string;
 	contextManagement: string;
 	summarizationInstructions: string;
 	summarizeMaxTokens: number;
@@ -58,6 +60,7 @@ type IncomingMessage =
 			readFileLines: number;
 			retry: { enabled?: boolean; max_attempts?: number; interval_ms?: number; status_codes?: number[] };
 			commitModel: string;
+			visionIcon: string;
 			commitLanguage: string;
 			contextManagement: string;
 			summarizationInstructions: string;
@@ -173,6 +176,7 @@ export class ConfigViewPanel {
 					message.retry,
 					message.commitModel,
 					message.commitLanguage,
+					message.visionIcon,
 					message.contextManagement,
 					message.summarizationInstructions,
 					message.summarizeMaxTokens
@@ -302,6 +306,7 @@ export class ConfigViewPanel {
 		}
 
 		const readFileLines = config.get<number>("libiaoCopilot.readFileLines", 0);
+		const visionIcon = config.get<string>("libiaoCopilot.visionIcon", "picture");
 		const contextManagement = config.get<string>("libiaoCopilot.contextManagement", "summarize");
 		const summarizationInstructions = config.get<string>("libiaoCopilot.summarizationInstructions", "");
 		const summarizeMaxTokens = config.get<number>("libiaoCopilot.summarizeMaxTokens", 4000);
@@ -314,6 +319,7 @@ export class ConfigViewPanel {
 			commitModel,
 			commitModels,
 			commitLanguage,
+			visionIcon,
 			contextManagement,
 			summarizationInstructions,
 			summarizeMaxTokens,
@@ -331,6 +337,7 @@ export class ConfigViewPanel {
 		retry: { enabled?: boolean; max_attempts?: number; interval_ms?: number; status_codes?: number[] },
 		commitModel: string,
 		commitLanguage: string,
+		visionIcon: string,
 		contextManagement: string,
 		summarizationInstructions: string,
 		summarizeMaxTokens: number
@@ -343,6 +350,11 @@ export class ConfigViewPanel {
 		await config.update("libiaoCopilot.readFileLines", readFileLines, vscode.ConfigurationTarget.Global);
 		await config.update("libiaoCopilot.retry", retry, vscode.ConfigurationTarget.Global);
 		await config.update("libiaoCopilot.commitLanguage", commitLanguage, vscode.ConfigurationTarget.Global);
+		await config.update(
+			"libiaoCopilot.visionIcon",
+			visionIcon === "picture" ? "picture" : "eye",
+			vscode.ConfigurationTarget.Global
+		);
 		await config.update(
 			"libiaoCopilot.contextManagement",
 			contextManagement === "off" ? "off" : "summarize",
@@ -501,6 +513,7 @@ export class ConfigViewPanel {
 			});
 			const commitLanguage = config.get<string>("libiaoCopilot.commitLanguage", "Chinese (Simplified)");
 			const readFileLines = config.get<number>("libiaoCopilot.readFileLines", 0);
+			const visionIcon = config.get<string>("libiaoCopilot.visionIcon", "picture");
 			const contextManagement = config.get<string>("libiaoCopilot.contextManagement", "summarize");
 			const summarizationInstructions = config.get<string>("libiaoCopilot.summarizationInstructions", "");
 			const summarizeMaxTokens = config.get<number>("libiaoCopilot.summarizeMaxTokens", 4000);
@@ -527,6 +540,7 @@ export class ConfigViewPanel {
 				retry,
 				commitLanguage,
 				commitModel,
+				visionIcon,
 				contextManagement,
 				summarizationInstructions,
 				summarizeMaxTokens,
@@ -587,6 +601,9 @@ export class ConfigViewPanel {
 			await config.update("libiaoCopilot.retry", importData.retry, vscode.ConfigurationTarget.Global);
 			await config.update("libiaoCopilot.readFileLines", importData.readFileLines, vscode.ConfigurationTarget.Global);
 			await config.update("libiaoCopilot.commitLanguage", importData.commitLanguage, vscode.ConfigurationTarget.Global);
+			if (importData.visionIcon === "picture" || importData.visionIcon === "eye") {
+				await config.update("libiaoCopilot.visionIcon", importData.visionIcon, vscode.ConfigurationTarget.Global);
+			}
 			if (importData.commitModel) {
 				await config.update("libiaoCopilot.commitModel", importData.commitModel, vscode.ConfigurationTarget.Global);
 			}

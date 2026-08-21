@@ -1,12 +1,28 @@
 const vscode = acquireVsCodeApi();
 
-// 视觉模型图标前缀（U+1F5BC U+FE0F，码点转义写入避免编码问题）
-const VISION_EMOJI = "\u{1F5BC}\uFE0F";
+// 视觉模型图标（码点转义写入避免编码问题）：picture（🖼️ 默认）/ eye（👁️）
+const VISION_EMOJI_EYE = "\u{1F441}\uFE0F";
+const VISION_EMOJI_PICTURE = "\u{1F5BC}\uFE0F";
 
-// 模型显示名：vision 字段驱动 emoji 前缀（displayName 数据本身保持纯净）
-function formatModelDisplayName(name, vision) {
-	if (vision && name && !name.startsWith(VISION_EMOJI)) {
-		return VISION_EMOJI + name;
+// 根据配置值返回对应的 emoji
+function getVisionEmoji(icon) {
+	return icon === "picture" ? VISION_EMOJI_PICTURE : VISION_EMOJI_EYE;
+}
+
+// 模型显示名：vision 字段驱动 emoji 前缀（displayName 数据本身保持纯净）。
+// 先剥离旧版图标前缀（👁️/🖼️ 都剥），避免切换图标后出现双前缀。
+function formatModelDisplayName(name, vision, icon) {
+	if (vision && name) {
+		const emoji = getVisionEmoji(icon);
+		for (const old of [VISION_EMOJI_EYE, VISION_EMOJI_PICTURE]) {
+			if (name.startsWith(old)) {
+				name = name.slice(old.length);
+				break;
+			}
+		}
+		if (!name.startsWith(emoji)) {
+			return emoji + name;
+		}
 	}
 	return name;
 }
@@ -17,6 +33,7 @@ const state = {
 	delay: 0,
 	retry: { enabled: true, max_attempts: 3, interval_ms: 1000, status_codes: [429, 500, 502, 503, 504] },
 	contextManagement: "summarize",
+	visionIcon: "picture",
 	summarizationInstructions: "",
 	summarizeMaxTokens: 4000,
 	commitModel: "",
@@ -39,6 +56,7 @@ const maxAttemptsInput = document.getElementById("maxAttempts");
 const intervalMsInput = document.getElementById("intervalMs");
 const statusCodesInput = document.getElementById("statusCodes");
 const contextManagementInput = document.getElementById("contextManagement");
+const visionIconInput = document.getElementById("visionIcon");
 const summarizationInstructionsInput = document.getElementById("summarizationInstructions");
 const summarizeMaxTokensInput = document.getElementById("summarizeMaxTokens");
 
@@ -115,6 +133,7 @@ const saveGlobalConfig = () => {
 		readFileLines: parseInt(readFileLinesInput.value) || 0,
 		retry: retry,
 		contextManagement: contextManagementInput.value,
+		visionIcon: visionIconInput.value,
 		summarizationInstructions: summarizationInstructionsInput.value,
 		summarizeMaxTokens: parseInt(summarizeMaxTokensInput.value) || 4000,
 		commitModel: commitModelInput.value,
@@ -267,6 +286,7 @@ window.addEventListener("message", (event) => {
 				readFileLines,
 				retry,
 				contextManagement,
+				visionIcon,
 				summarizationInstructions,
 				summarizeMaxTokens,
 				commitModel,
@@ -286,6 +306,7 @@ window.addEventListener("message", (event) => {
 				status_codes: [],
 			};
 			state.contextManagement = contextManagement || "summarize";
+			state.visionIcon = visionIcon || "picture";
 			state.summarizationInstructions = summarizationInstructions || "";
 			state.summarizeMaxTokens = summarizeMaxTokens || 4000;
 			state.models = models || [];
@@ -303,6 +324,7 @@ window.addEventListener("message", (event) => {
 			intervalMsInput.value = state.retry.interval_ms || 1000;
 			statusCodesInput.value = state.retry.status_codes ? state.retry.status_codes.join(",") : "";
 			contextManagementInput.value = state.contextManagement;
+			visionIconInput.value = state.visionIcon;
 			summarizationInstructionsInput.value = state.summarizationInstructions;
 			summarizeMaxTokensInput.value = state.summarizeMaxTokens;
 
@@ -354,7 +376,7 @@ function renderModels() {
 			<tr data-model-id="${model.id}${model.configId ? "::" + model.configId : ""}">
 				<td>${model.id}</td>
 				<td>${model.owned_by}</td>
-				<td>${formatModelDisplayName(model.displayName || "", model.vision)}</td>
+				<td>${formatModelDisplayName(model.displayName || "", model.vision, state.visionIcon)}</td>
 				<td>${model.configId || ""}</td>
 				<td>${model.context_length || ""}</td>
 				<td>${model.max_tokens || model.max_completion_tokens || ""}</td>
@@ -747,7 +769,7 @@ function populateCommitModelDropdown() {
 		const option = document.createElement("option");
 		const fullModelId = `${model.id}${model.configId ? "::" + model.configId : ""}`;
 		option.value = fullModelId;
-		option.textContent = formatModelDisplayName(model.displayName || "", model.vision) || fullModelId;
+		option.textContent = formatModelDisplayName(model.displayName || "", model.vision, state.visionIcon) || fullModelId;
 		commitModelInput.appendChild(option);
 	});
 }

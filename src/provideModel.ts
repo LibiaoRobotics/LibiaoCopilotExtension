@@ -16,16 +16,35 @@ const DEFAULT_CONTEXT_LENGTH = 256000;
 const DEFAULT_MAX_TOKENS = 4096;
 const EXTENSION_LABEL = "Libiao Copilot";
 
-/** 视觉模型图标前缀（U+1F5BC U+FE0F，码点转义写入避免编码问题） */
-const VISION_EMOJI = "\u{1F5BC}\uFE0F";
+/** 视觉模型图标类型：picture（🖼️ 默认）/ eye（👁️） */
+export type VisionIcon = "eye" | "picture";
+
+/** 视觉模型图标前缀（码点转义写入避免编码问题） */
+export const VISION_EMOJI_EYE = "\u{1F441}\uFE0F";
+export const VISION_EMOJI_PICTURE = "\u{1F5BC}\uFE0F";
+
+/** 根据配置值返回对应的 emoji 字符串 */
+export function getVisionEmoji(icon: VisionIcon): string {
+	return icon === "picture" ? VISION_EMOJI_PICTURE : VISION_EMOJI_EYE;
+}
 
 /**
  * 为模型显示名添加视觉图标前缀，由 vision 字段驱动（displayName 不再手工维护 emoji）。
- * 已带前缀时不重复添加，兼容存量配置中已含 emoji 的 displayName。
+ * 先剥离旧版图标前缀（👁️/🖼️ 都剥），避免切换图标后出现双前缀；
+ * 兼容存量配置中已含 emoji 的 displayName。
  */
-function formatModelDisplayName(name: string, vision?: boolean): string {
-	if (vision && !name.startsWith(VISION_EMOJI)) {
-		return VISION_EMOJI + name;
+function formatModelDisplayName(name: string, vision?: boolean, icon: VisionIcon = "picture"): string {
+	if (vision) {
+		const emoji = getVisionEmoji(icon);
+		for (const old of [VISION_EMOJI_EYE, VISION_EMOJI_PICTURE]) {
+			if (name.startsWith(old)) {
+				name = name.slice(old.length);
+				break;
+			}
+		}
+		if (!name.startsWith(emoji)) {
+			return emoji + name;
+		}
 	}
 	return name;
 }
@@ -122,6 +141,8 @@ export async function prepareLanguageModelChatInformation(
 	const config = vscode.workspace.getConfiguration();
 	const userModels = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
 	const configuredModels = userModels.filter((m) => !m.id.startsWith("__provider__"));
+	// 视觉模型图标：配置面板高级配置可选（picture 默认 / eye）
+	const visionIcon: VisionIcon = config.get<string>("libiaoCopilot.visionIcon", "picture") === "picture" ? "picture" : "eye";
 
 	let infos: ModelPickerChatInformation[];
 	let source: string;
@@ -145,7 +166,7 @@ export async function prepareLanguageModelChatInformation(
 			infos = [createNoModelsPlaceholderInfo(merged.reason)];
 			source = "config+api (placeholder)";
 		} else {
-			infos = merged.models.map(toModelPickerInfo);
+			infos = merged.models.map((m) => toModelPickerInfo(m, visionIcon));
 			source = "config+api";
 		}
 	} else {
@@ -196,7 +217,8 @@ export async function prepareLanguageModelChatInformation(
 				// API 返回不带 displayName 时，从内置模型表兜底，避免模型列表只显示 id
 				const modelName = formatModelDisplayName(
 					merged.displayName || m.displayName || getBuiltInModel(m.id)?.displayName || m.id,
-					merged.vision
+					merged.vision,
+					visionIcon
 				);
 				const configurationSchema = createModelConfigurationSchema(merged);
 				entries.push({
@@ -230,7 +252,8 @@ export async function prepareLanguageModelChatInformation(
 					// API 返回不带 displayName 时，从内置模型表兜底，避免模型列表只显示 id
 					name: formatModelDisplayName(
 						merged.displayName || m.displayName || getBuiltInModel(m.id)?.displayName || m.id,
-						merged.vision
+						merged.vision,
+						visionIcon
 					),
 					detail: EXTENSION_LABEL,
 					tooltip: EXTENSION_LABEL,
@@ -261,7 +284,7 @@ export async function prepareLanguageModelChatInformation(
  * Exported for direct unit testing (the merge path requires a verifiable
  * endpoint, which the test environment cannot provide).
  */
-export function toModelPickerInfo(m: HFModelItem): ModelPickerChatInformation {
+export function toModelPickerInfo(m: HFModelItem, icon: VisionIcon = "picture"): ModelPickerChatInformation {
 	const contextLen = m?.context_length ?? DEFAULT_CONTEXT_LENGTH;
 	const maxOutput = m?.max_completion_tokens ?? m?.max_tokens ?? DEFAULT_MAX_TOKENS;
 	const maxInput = Math.max(1, contextLen - maxOutput);
@@ -273,7 +296,8 @@ export function toModelPickerInfo(m: HFModelItem): ModelPickerChatInformation {
 	const vision = m?.vision ?? getBuiltInModel(m.id)?.vision ?? false;
 	const modelName = formatModelDisplayName(
 		m.displayName || getBuiltInModel(m.id)?.displayName || modelId,
-		vision
+		vision,
+		icon
 	);
 	const detail = m.owned_by ? `${m.owned_by} (${EXTENSION_LABEL})` : EXTENSION_LABEL;
 	const configurationSchema = createModelConfigurationSchema(m);
