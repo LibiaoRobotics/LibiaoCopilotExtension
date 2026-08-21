@@ -134,7 +134,7 @@
 					"default": [
 						{
 							"id": "qwen3.8-max-preview",
-							"displayName": "千问3.8 Max 预览版",
+							"displayName": "[图]Qwen 3.8 Max 预览版",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
@@ -151,7 +151,7 @@
 						},
 						{
 							"id": "qwen3.8-max",
-							"displayName": "千问3.8 Max",
+							"displayName": "[图]Qwen 3.8 Max",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
@@ -167,8 +167,8 @@
 							"vision": true
 						},
 						{
-							"displayName": "DeepSeek V4 Pro",
 							"id": "deepseek-v4-pro",
+							"displayName": "DeepSeek Pro",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
@@ -184,8 +184,8 @@
 							"include_reasoning_in_request": true
 						},
 						{
-							"displayName": "DeepSeek V4 Flash",
 							"id": "deepseek-v4-flash",
+							"displayName": "DeepSeek Flash",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
@@ -203,7 +203,7 @@
 						},
 						{
 							"id": "deepseek-v4-flash-vision-exp",
-							"displayName": "识图版Deepseek Flash",
+							"displayName": "[图]Deepseek Flash",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
@@ -220,8 +220,8 @@
 							"vision": true
 						},
 						{
-							"displayName": "Gemini 3.1 Pro 预览版",
 							"id": "gemini-3.1-pro-preview",
+							"displayName": "[图]Gemini 3.1 Pro 预览版",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1048576,
@@ -238,7 +238,7 @@
 						},
 						{
 							"id": "gemini-3.1-flash-image",
-							"displayName": "Gemini 3.1 Flash 图像版",
+							"displayName": "[图]Gemini 3.1 Flash",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 131072,
@@ -252,7 +252,7 @@
 						},
 						{
 							"id": "gemini-3.5-flash",
-							"displayName": "Gemini 3.5 Flash",
+							"displayName": "[图]Gemini 3.5 Flash",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1048576,
@@ -269,7 +269,7 @@
 						},
 						{
 							"id": "gemini-3.6-flash",
-							"displayName": "Gemini 3.6 Flash",
+							"displayName": "[图]Gemini 3.6 Flash",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1048576,
@@ -286,7 +286,7 @@
 						},
 						{
 							"id": "gpt-5.6-luna",
-							"displayName": "GPT-5.6 Luna",
+							"displayName": "[图]GPT-5.6 Luna",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1050000,
@@ -303,7 +303,7 @@
 						},
 						{
 							"id": "gpt-5.6-sol",
-							"displayName": "GPT-5.6 Sol",
+							"displayName": "[图]GPT-5.6 Sol",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1050000,
@@ -320,7 +320,7 @@
 						},
 						{
 							"id": "gpt-5.6-terra",
-							"displayName": "GPT-5.6 Terra",
+							"displayName": "[图]GPT-5.6 Terra",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1050000,
@@ -337,7 +337,7 @@
 						},
 						{
 							"id": "gpt-5.5",
-							"displayName": "GPT-5.5",
+							"displayName": "[图]GPT-5.5",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1050000,
@@ -354,7 +354,7 @@
 						},
 						{
 							"id": "claude-opus-4-8",
-							"displayName": "Claude Opus 4.8",
+							"displayName": "[图]Claude Opus 4.8",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1000000,
@@ -370,8 +370,8 @@
 							"vision": true
 						},
 						{
-							"displayName": "Claude Opus 5",
 							"id": "claude-opus-5",
+							"displayName": "[图]Claude Opus 5",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1000000,
@@ -387,8 +387,8 @@
 							"vision": true
 						},
 						{
-							"displayName": "Claude Sonnet 5",
 							"id": "claude-sonnet-5",
+							"displayName": "[图]Claude Sonnet 5",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1000000,
@@ -404,8 +404,8 @@
 							"vision": true
 						},
 						{
-							"displayName": "MiniMax M3",
 							"id": "MiniMax-M3",
+							"displayName": "[图]MiniMax M3",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1000000,
@@ -464,7 +464,7 @@
 						},
 						{
 							"id": "qwen3.7-plus",
-							"displayName": "千问3.7 Plus",
+							"displayName": "[图]Qwen 3.7 Plus",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
@@ -482,7 +482,7 @@
 						},
 						{
 							"id": "qwen3.7-max",
-							"displayName": "千问3.7 Max",
+							"displayName": "Qwen 3.7 Max",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
