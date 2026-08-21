@@ -101,7 +101,11 @@ async function trySummarize(
 			target.push(messages[idx]);
 		}
 	}
-	if (summaryWindow.length === 0) {
+	// Nothing worth summarizing: no older messages at all, or only a single
+	// one. Compressing one message into one summary message neither reduces
+	// the message count nor saves a meaningful amount of tokens, but still
+	// costs a full model call — fall back to silent hard trimming instead.
+	if (summaryWindow.length <= 1) {
 		return null;
 	}
 
