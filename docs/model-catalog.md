@@ -370,6 +370,7 @@
 ```json
 {
   "id": "deepseek-v4-flash-vision-exp",
+  "displayName": "识图版Deepseek V4 Flash",
   "owned_by": "libiaorobot",
   "apiMode": "openai-responses",
   "context_length": 1000000,
