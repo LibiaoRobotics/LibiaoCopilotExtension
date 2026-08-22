@@ -224,9 +224,13 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		um: HFModelItem | undefined,
 		options?: ProvideLanguageModelChatResponseOptions
 	): AnthropicRequestBody {
-		// Set max_tokens (required for Anthropic)
+		// Set max_tokens (required for Anthropic; fall back to avoid 400 when unconfigured)
 		if (um?.max_tokens !== undefined) {
 			rb.max_tokens = um.max_tokens;
+		} else if (um?.max_completion_tokens !== undefined) {
+			rb.max_tokens = um.max_completion_tokens;
+		} else {
+			rb.max_tokens = 4096;
 		}
 
 		// Add system content if we extracted it. When caching is enabled, emit the system prompt
@@ -526,16 +530,29 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		}
 
 		if (chunk.type === "message_delta") {
-			// 官方协议：message_delta 只携带最终 output_tokens（无 input 字段）
-			if (chunk.usage?.output_tokens !== undefined) {
+			// 官方协议：message_delta 只携带最终 output_tokens；但部分网关会把全量
+			// input_tokens 也塞进 message_delta——存在时优先采用，缺失时保留 message_start 的 prompt 数据
+			const u = chunk.usage as
+				| {
+						output_tokens?: number;
+						input_tokens?: number;
+						cache_creation_input_tokens?: number;
+						cache_read_input_tokens?: number;
+				  }
+				| undefined;
+			if (u && (u.output_tokens !== undefined || (typeof u.input_tokens === "number" && u.input_tokens > 0))) {
 				const prev = this._usage;
-				const prevPrompt = prev?.prompt_tokens ?? 0;
-				const prevCache = prev?.prompt_tokens_details?.cached_tokens ?? 0;
+				const inputTokens = typeof u.input_tokens === "number" ? u.input_tokens : 0;
+				const hasInput = inputTokens > 0;
+				const promptTokens = hasInput
+					? inputTokens + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0)
+					: (prev?.prompt_tokens ?? 0);
+				const completionTokens = u.output_tokens ?? prev?.completion_tokens ?? 0;
 				this._usage = {
-					prompt_tokens: prevPrompt,
-					completion_tokens: chunk.usage.output_tokens,
-					total_tokens: prevPrompt + chunk.usage.output_tokens,
-					prompt_tokens_details: prev?.prompt_tokens_details,
+					prompt_tokens: promptTokens,
+					completion_tokens: completionTokens,
+					total_tokens: promptTokens + completionTokens,
+					prompt_tokens_details: hasInput ? { cached_tokens: u.cache_read_input_tokens ?? 0 } : prev?.prompt_tokens_details,
 				};
 				logger.debug("usage.capture", { modelId: this._modelId, usage: this._usage });
 			}
@@ -574,9 +591,9 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			}
 		} else if (chunk.type === "content_block_delta" && chunk.delta) {
 			if (chunk.delta.type === "text_delta" && chunk.delta.text) {
-				// Emit text content
-				progress.report(new vscode.LanguageModelTextPart(chunk.delta.text));
-				this._hasEmittedAssistantText = true;
+				// 与 OpenAI 链路对齐：先试 XML think 解析，否则关闭思考按正文发射
+				// （防止网关把思考内联进 text 时裸 <think> 标签泄漏到正文）
+				this.processStreamedTextChunk(chunk.delta.text, progress);
 			} else if (chunk.delta.type === "thinking_delta" && chunk.delta.thinking) {
 				// Buffer thinking content
 				this.bufferThinkingContent(chunk.delta.thinking, progress);

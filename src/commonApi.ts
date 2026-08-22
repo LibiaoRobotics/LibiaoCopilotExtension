@@ -39,7 +39,10 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 
 	// XML think block parsing state
 	protected _xmlThinkActive = false;
-	protected _xmlThinkDetectionAttempted = false;
+	/** 当前激活 think 块对应的闭合标签（兼容 </think> 与 </thinking> 两种标签族） */
+	protected _xmlThinkEndTag = "</think>";
+	/** 跨 chunk 的被截断标签前缀挂起缓冲（标签在 chunk 边界被切开时暂存尾部） */
+	protected _xmlThinkPending = "";
 
 	// Thinking content state management
 	protected _currentThinkingId: string | null = null;
@@ -328,16 +331,29 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 	 * Returns which parts were emitted for logging/flow control.
 	 */
 	protected processTextContent(input: string, progress: Progress<LanguageModelResponsePart2>): { emittedAny: boolean } {
-		let emittedAny = false;
-
-		// Emit any visible text
-		const textToEmit = input;
-		if (textToEmit && textToEmit.length > 0) {
-			progress.report(new vscode.LanguageModelTextPart(textToEmit));
-			emittedAny = true;
+		// 跳过纯空白块：不发射、也不计入"已发射正文"（否则前导空白会永久关闭 think 标签探测）
+		if (!input || input.trim().length === 0) {
+			return { emittedAny: false };
 		}
+		progress.report(new vscode.LanguageModelTextPart(input));
+		this._hasEmittedAssistantText = true;
+		return { emittedAny: true };
+	}
 
-		return { emittedAny };
+	/**
+	 * 各链路共享的文本输出统一入口：先尝试 XML think 块解析；
+	 * 未命中 think 标签时，关闭思考序列并按正文发射。
+	 * 防止裸 <think>/<thinking> 标签泄漏到可见正文，并保证思考/正文顺序正确。
+	 */
+	protected processStreamedTextChunk(text: string, progress: Progress<LanguageModelResponsePart2>): void {
+		if (!text) {
+			return;
+		}
+		const xmlRes = this.processXmlThinkBlocks(text, progress);
+		if (!xmlRes.emittedAny) {
+			this.reportEndThinking(progress);
+			this.processTextContent(text, progress);
+		}
 	}
 
 	/**
@@ -348,35 +364,60 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 		input: string,
 		progress: Progress<LanguageModelResponsePart2>
 	): { emittedAny: boolean } {
-		// If we've already attempted detection and found no THINK_START, skip processing
-		if (this._xmlThinkDetectionAttempted && !this._xmlThinkActive) {
+		// 已发射真实正文后停止找 think 标签（之后的 <think> 更可能是字面内容）；
+		// think 块激活期间始终继续解析。
+		// 取代旧的一次性 _xmlThinkDetectionAttempted：旧逻辑在首个无标签 chunk
+		// （如前导空白）后就永久禁用解析，导致大段思考被当正文显示（2026-08-22 修复）。
+		if (this._hasEmittedAssistantText && !this._xmlThinkActive) {
 			return { emittedAny: false };
 		}
 
-		const THINK_START = "<think>";
-		const THINK_END = "</think>";
+		// 不同模型族 think 标签不同（Qwen/DeepSeek/GLM: <think>，部分旧模型: <thinking>）
+		const START_TAGS = ["<think>", "<thinking>"];
+		const END_TAGS = ["</think>", "</thinking>"];
 
-		let data = input;
+		// 拼接上一块挂起的截断标签前缀
+		let data = this._xmlThinkPending + input;
+		this._xmlThinkPending = "";
 		let emittedAny = false;
+
+		// 返回串尾被截断的标签前缀长度（无则 0）：如 "<thi" 是 "<think>" 的前缀
+		const partialTagTail = (s: string, tags: string[]): number => {
+			for (const tag of tags) {
+				const max = Math.min(tag.length - 1, s.length);
+				for (let L = max; L >= 1; L--) {
+					if (s.endsWith(tag.slice(0, L))) {
+						return L;
+					}
+				}
+			}
+			return 0;
+		};
 
 		while (data.length > 0) {
 			if (!this._xmlThinkActive) {
-				// Look for think start tag
-				const startIdx = data.indexOf(THINK_START);
-				if (startIdx === -1) {
-					// No think start found, mark detection as attempted and skip future processing
-					this._xmlThinkDetectionAttempted = true;
-					if (emittedAny && data.length > 0) {
-						// A think block closed earlier in this same chunk and the rest is
-						// plain text. The caller only re-emits the input when we return
-						// emittedAny=false for the WHOLE input, so emit the tail here —
-						// closing the thinking sequence first, mirroring the caller's
-						// text path. (2026-08-15 fix: the tail used to be dropped.)
-						this.reportEndThinking(progress);
-						if (this.processTextContent(data, progress).emittedAny) {
-							this._hasEmittedAssistantText = true;
-						}
+				// Look for the earliest-appearing think start tag
+				let startIdx = -1;
+				let tagLen = 0;
+				for (let i = 0; i < START_TAGS.length; i++) {
+					const idx = data.indexOf(START_TAGS[i]);
+					if (idx !== -1 && (startIdx === -1 || idx < startIdx)) {
+						startIdx = idx;
+						tagLen = START_TAGS[i].length;
+						this._xmlThinkEndTag = END_TAGS[i];
 					}
+				}
+				if (startIdx === -1) {
+					// 无完整开始标签：尾部截断前缀挂起等下一块，其余按正文发射。
+					// 无论发射还是挂起，本块都已被消费（emittedAny=true），调用方不得重发。
+					const partial = partialTagTail(data, START_TAGS);
+					const emitPart = data.slice(0, data.length - partial);
+					this._xmlThinkPending = data.slice(data.length - partial);
+					if (emitPart) {
+						this.reportEndThinking(progress);
+						this.processTextContent(emitPart, progress);
+					}
+					emittedAny = true;
 					data = "";
 					break;
 				}
@@ -386,9 +427,7 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 				// re-emit the input, so the prefix must be emitted here.
 				if (startIdx > 0) {
 					this.reportEndThinking(progress);
-					if (this.processTextContent(data.slice(0, startIdx), progress).emittedAny) {
-						this._hasEmittedAssistantText = true;
-					}
+					this.processTextContent(data.slice(0, startIdx), progress);
 				}
 
 				// Found think start tag - mark that we processed XML tags
@@ -396,14 +435,20 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 				this._xmlThinkActive = true;
 
 				// Skip the start tag and continue processing
-				data = data.slice(startIdx + THINK_START.length);
+				data = data.slice(startIdx + tagLen);
 				continue;
 			}
 
-			// We are inside a think block, look for end tag
-			const endIdx = data.indexOf(THINK_END);
+			// We are inside a think block, look for the end tag matching the active start tag
+			const endIdx = data.indexOf(this._xmlThinkEndTag);
 			if (endIdx === -1) {
-				this.bufferThinkingContent(data, progress);
+				// 无完整闭合标签：尾部截断前缀挂起，其余缓冲为思考内容
+				const partial = partialTagTail(data, [this._xmlThinkEndTag]);
+				const bufferPart = data.slice(0, data.length - partial);
+				this._xmlThinkPending = data.slice(data.length - partial);
+				if (bufferPart) {
+					this.bufferThinkingContent(bufferPart, progress);
+				}
 				emittedAny = true;
 				data = "";
 				break;
@@ -416,7 +461,7 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 			// Mark end tag as processed and reset state
 			emittedAny = true;
 			this._xmlThinkActive = false;
-			data = data.slice(endIdx + THINK_END.length);
+			data = data.slice(endIdx + this._xmlThinkEndTag.length);
 		}
 
 		return { emittedAny };
