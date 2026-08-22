@@ -112,6 +112,12 @@
 		"configuration": {
 			"title": "Libiao Copilot",
 			"properties": {
+				"libiaoCopilot.modelTestEnabled": {
+					"type": "boolean",
+					"default": false,
+					"scope": "window",
+					"description": "（隐藏参数）启用模型 TPS 测试功能。默认 false。仅手动编辑 settings.json 启用；保存/导出/导入配置均不会迁移该参数。"
+				},
 				"libiaoCopilot.logLevel": {
 					"type": "string",
 					"default": "off",

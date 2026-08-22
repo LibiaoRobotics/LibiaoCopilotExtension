@@ -41,6 +41,10 @@ const state = {
 	models: [],
 	providerKeys: {},
 	providerInfo: {},
+	modelTestEnabled: false,
+	modelTestTesting: false,
+	modelTestDone: 0,
+	modelTestTotal: 0,
 };
 
 // Store the action to be performed after confirmation
@@ -103,6 +107,13 @@ const toggleAdvancedSettingsBtn = document.getElementById("toggleAdvancedSetting
 const commitModelInput = document.getElementById("commitModel");
 const commitLanguageInput = document.getElementById("commitLanguage");
 const advancedSettingsContent = document.getElementById("advancedSettingsContent");
+
+// Model test elements
+const modelTestSection = document.getElementById("modelTestSection");
+const startModelTestBtn = document.getElementById("startModelTest");
+const cancelModelTestBtn = document.getElementById("cancelModelTest");
+const modelTestProgress = document.getElementById("modelTestProgress");
+const modelTestTableBody = document.getElementById("modelTestTableBody");
 
 // Error message element
 const modelErrorElement = document.getElementById("modelError");
@@ -274,6 +285,22 @@ cancelModelBtn.addEventListener("click", () => {
 	resetModelForm();
 });
 
+// Model test button event listeners
+startModelTestBtn.addEventListener("click", () => {
+	// 清空上次结果重新开始
+	modelTestTableBody.innerHTML = "";
+	modelTestProgress.textContent = "测试中…";
+	state.modelTestTesting = true;
+	state.modelTestDone = 0;
+	state.modelTestTotal = 0;
+	updateModelTestUi();
+	vscode.postMessage({ type: "testAllModels" });
+});
+
+cancelModelTestBtn.addEventListener("click", () => {
+	vscode.postMessage({ type: "cancelModelTest" });
+});
+
 window.addEventListener("message", (event) => {
 	const message = event.data;
 
@@ -294,6 +321,7 @@ window.addEventListener("message", (event) => {
 				models,
 				providerKeys,
 				commitLanguage,
+				modelTestEnabled,
 			} = message.payload;
 			state.baseUrl = baseUrl;
 			state.apiKey = apiKey;
@@ -313,6 +341,10 @@ window.addEventListener("message", (event) => {
 			state.commitModels = commitModels || [];
 			state.commitModel = commitModel || "";
 			state.providerKeys = providerKeys || {};
+			state.modelTestEnabled = !!modelTestEnabled;
+
+			// 更新模型测试区显示：仅当隐藏参数启用时展示
+			modelTestSection.style.display = state.modelTestEnabled ? "block" : "none";
 
 			// Update base configuration
 			baseUrlInput.value = baseUrl || "";
@@ -360,18 +392,82 @@ window.addEventListener("message", (event) => {
 				pendingConfirmations.delete(message.id);
 			}
 			break;
+		case "modelTestStatus":
+			state.modelTestTesting = !!message.testing;
+			if (!message.testing) {
+				// 测试结束（含取消），更新按钮状态
+				updateModelTestUi();
+			}
+			break;
+		case "modelTestStarted":
+			state.modelTestTotal = message.total;
+			state.modelTestDone = 0;
+			modelTestProgress.textContent = `开始测试，共 ${message.total} 个模型…`;
+			updateModelTestUi();
+			break;
+		case "modelTestResult":
+			state.modelTestDone = message.done;
+			state.modelTestTotal = message.total;
+			appendModelTestRow(message.result);
+			modelTestProgress.textContent = `已完成 ${message.done}/${message.total || message.done}`;
+			updateModelTestUi();
+			break;
+		case "modelTestDone":
+			state.modelTestTesting = false;
+			modelTestProgress.textContent = `测试完成：${message.succeeded}/${message.tested} 个模型可用`;
+			updateModelTestUi();
+			break;
 	}
 });
 
-function renderModels() {
-	const models = state.models.filter((m) => !m.id.startsWith("__provider__")).sort((a, b) => a.id.localeCompare(b.id));
-	if (!models.length) {
-		modelTableBody.innerHTML = '<tr><td colspan="11" class="no-data">无模型</td></tr>';
-		return;
+	function updateModelTestUi() {
+		startModelTestBtn.disabled = state.modelTestTesting;
+		cancelModelTestBtn.disabled = !state.modelTestTesting;
 	}
 
-	const rows = models
-		.map((model) => {
+	function appendModelTestRow(result) {
+		const tr = document.createElement("tr");
+		if (result.ok) {
+			tr.innerHTML = `
+				<td>${result.modelId}</td>
+				<td class="test-ok">✓ 可用</td>
+				<td>${result.ttftMs ?? ""}</td>
+				<td>${result.generateMs ?? ""}</td>
+				<td>${result.outputTokens ?? ""}</td>
+				<td class="test-tps">${result.tps ?? ""}</td>
+				<td></td>`;
+		} else {
+			tr.innerHTML = `
+				<td>${result.modelId}</td>
+				<td class="test-fail">✗ 失败</td>
+				<td></td>
+				<td></td>
+				<td></td>
+				<td></td>
+				<td class="test-error">${escapeHtml(result.error || "")}</td>`;
+		}
+		modelTestTableBody.appendChild(tr);
+	}
+
+	function escapeHtml(value) {
+		return String(value)
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;");
+	}
+
+	function renderModels() {
+		const models = state.models
+			.filter((m) => !m.id.startsWith("__provider__"))
+			.sort((a, b) => a.id.localeCompare(b.id));
+		if (!models.length) {
+			modelTableBody.innerHTML = '<tr><td colspan="11" class="no-data">无模型</td></tr>';
+			return;
+		}
+
+		const rows = models
+			.map((model) => {
 			return `
 			<tr data-model-id="${model.id}${model.configId ? "::" + model.configId : ""}">
 				<td>${model.id}</td>

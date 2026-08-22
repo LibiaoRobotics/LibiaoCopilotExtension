@@ -371,3 +371,51 @@ button:not(.secondary):not(.danger) {
 	line-height: 1.4;
 	padding: 4px 0;
 }
+
+/* 模型测试区域样式 */
+#modelTestSection .test-progress {
+	margin-bottom: 10px;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
+
+#modelTestTable {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+#modelTestTable th,
+#modelTestTable td {
+	padding: 6px 8px;
+	text-align: left;
+	font-size: 12px;
+	border-bottom: 1px solid var(--vscode-editorWidget-border);
+}
+
+#modelTestTable th {
+	font-weight: 600;
+	color: var(--vscode-descriptionForeground);
+	white-space: nowrap;
+}
+
+#modelTestTable .test-ok {
+	color: var(--vscode-testing-iconPassed);
+	font-weight: 600;
+}
+
+#modelTestTable .test-fail {
+	color: var(--vscode-testing-iconFailed);
+	font-weight: 600;
+}
+
+#modelTestTable .test-tps {
+	font-weight: 600;
+	color: var(--vscode-charts-blue);
+}
+
+#modelTestTable .test-error {
+	color: var(--vscode-testing-iconFailed);
+	font-size: 11px;
+	word-break: break-all;
+	max-width: 320px;
+}

@@ -395,10 +395,35 @@ function createNoModelsPlaceholderInfo(reason?: NoModelsReason): ModelPickerChat
 	} satisfies ModelPickerChatInformation;
 }
 
-interface EndpointGroup {
+export interface EndpointGroup {
 	baseUrl: string;
 	apiMode: HFApiMode;
 	models: HFModelItem[];
+}
+
+/**
+ * Group configured models by the endpoint they actually talk to:
+ * per-model `baseUrl`/`apiMode`, falling back to the global settings.
+ * Exported so the model speed tester can reuse the same grouping to
+ * resolve the API key for each verified model.
+ */
+export function buildEndpointGroups(
+	configuredModels: HFModelItem[],
+	globalBaseUrl: string
+): Map<string, EndpointGroup> {
+	const groups = new Map<string, EndpointGroup>();
+	for (const m of configuredModels) {
+		const baseUrl = m.baseUrl || globalBaseUrl;
+		const apiMode = m.apiMode ?? "openai";
+		const key = `${apiMode}|${baseUrl}`;
+		let group = groups.get(key);
+		if (!group) {
+			group = { baseUrl, apiMode, models: [] };
+			groups.set(key, group);
+		}
+		group.models.push(m);
+	}
+	return groups;
 }
 
 /**
@@ -420,26 +445,21 @@ interface EndpointGroup {
  * Outage tolerance is provided by the TTL cache instead: a failed refresh
  * serves the previously successful (stale) listing when one exists (see
  * fetchModelsCached).
+ *
+ * Exported so the model speed tester can measure exactly the same verified
+ * model list the picker shows.
  */
-async function mergeConfiguredModelWithProviders(options: {
+export async function mergeConfiguredModelWithProviders(options: {
 	secrets: vscode.SecretStorage;
 	configuredModels: HFModelItem[];
 	globalBaseUrl: string;
 }): Promise<{ models: HFModelItem[]; reason?: NoModelsReason }> {
 	const { secrets, configuredModels, globalBaseUrl } = options;
 
-	const groups = new Map<string, EndpointGroup>();
-	for (const m of configuredModels) {
-		const baseUrl = m.baseUrl || globalBaseUrl;
-		const apiMode = m.apiMode ?? "openai";
-		const key = `${apiMode}|${baseUrl}`;
-		let group = groups.get(key);
-		if (!group) {
-			group = { baseUrl, apiMode, models: [] };
-			groups.set(key, group);
-		}
-		group.models.push(m);
-	}
+	// 分组逻辑统一由 buildEndpointGroups 生成（含每模型的 baseUrl/apiMode 归一化）。
+	// 注意：这里不能再重复建组，否则每个模型会被 push 进 group.models 两次，
+	// merge 时重复进入模型列表（选择器出现重复项）。
+	const groups = buildEndpointGroups(configuredModels, globalBaseUrl);
 
 	// Global id sets shared across all endpoint groups so every model is
 	// exposed exactly once. Without this, two groups (e.g. "openai" and
@@ -567,8 +587,13 @@ async function fetchProviderModelsForGroup(
 /**
  * Resolve an API key for an endpoint group: the global key first, then any
  * provider-specific key referenced by the group's configured models.
+ * Exported so the model speed tester can resolve the same key the real
+ * request path would use.
  */
-async function resolveGroupApiKey(group: EndpointGroup, secrets: vscode.SecretStorage): Promise<string | undefined> {
+export async function resolveGroupApiKey(
+	group: EndpointGroup,
+	secrets: vscode.SecretStorage
+): Promise<string | undefined> {
 	const globalKey = await secrets.get("libiaoCopilot.apiKey");
 	if (globalKey) {
 		return globalKey;

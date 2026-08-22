@@ -4,6 +4,7 @@ import { normalizeUserModels, parseModelId, getBuiltInModels } from "../utils";
 import { fetchModels, clearModelListCache } from "../provideModel";
 import { ensureModelContextDefaults } from "../modelConfiguration";
 import { VersionManager } from "../versionManager";
+import { runModelTests, type ModelTestResult } from "../modelTester";
 
 interface InitPayload {
 	baseUrl: string;
@@ -25,6 +26,7 @@ interface InitPayload {
 	summarizeMaxTokens: number;
 	models: HFModelItem[];
 	providerKeys: Record<string, string>;
+	modelTestEnabled: boolean;
 }
 
 interface ExportConfig {
@@ -80,12 +82,23 @@ type IncomingMessage =
 	| { type: "exportConfig" }
 	| { type: "importConfig" }
 	| { type: "openSettings" }
-	| { type: "resetModels" };
+	| { type: "resetModels" }
+	| { type: "testAllModels" }
+	| { type: "cancelModelTest" };
 
 type OutgoingMessage =
 	| { type: "init"; payload: InitPayload }
 	| { type: "modelsFetched"; models: HFModelItem[] }
-	| { type: "confirmResponse"; id: string; confirmed: boolean };
+	| { type: "confirmResponse"; id: string; confirmed: boolean }
+	| { type: "modelTestStarted"; total: number }
+	| {
+			type: "modelTestResult";
+			result: ModelTestResult;
+			done: number;
+			total: number;
+	  }
+	| { type: "modelTestDone"; tested: number; succeeded: number }
+	| { type: "modelTestStatus"; testing: boolean };
 
 export class ConfigViewPanel {
 	public static currentPanel: ConfigViewPanel | undefined;
@@ -93,6 +106,9 @@ export class ConfigViewPanel {
 	private readonly extensionUri: vscode.Uri;
 	private readonly secrets: vscode.SecretStorage;
 	private disposables: vscode.Disposable[] = [];
+	// 模型测试会话状态（面板级，防止面板重建后状态泄漏）
+	private modelTestRunning = false;
+	private modelTestCancelToken: vscode.CancellationTokenSource | undefined;
 
 	public static openPanel(extensionUri: vscode.Uri, secrets: vscode.SecretStorage) {
 		const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : undefined;
@@ -151,6 +167,13 @@ export class ConfigViewPanel {
 
 	public dispose() {
 		ConfigViewPanel.currentPanel = undefined;
+
+		// 面板关闭时取消正在运行的模型测试，避免测试在后台继续消耗 token
+		if (this.modelTestRunning && this.modelTestCancelToken) {
+			this.modelTestCancelToken.cancel();
+		}
+		this.modelTestCancelToken?.dispose();
+		this.modelTestCancelToken = undefined;
 
 		this.panel.dispose();
 
@@ -217,6 +240,12 @@ export class ConfigViewPanel {
 			case "openSettings":
 				await this.openSettings();
 				break;
+			case "testAllModels":
+				await this.testAllModels();
+				break;
+			case "cancelModelTest":
+				this.cancelModelTests();
+				break;
 			default:
 				break;
 		}
@@ -225,6 +254,88 @@ export class ConfigViewPanel {
 	private async openSettings() {
 		// Open the user settings.json where libiaoCopilot.* options live
 		await vscode.commands.executeCommand("workbench.action.openSettingsJson");
+	}
+
+	/**
+	 * 前端查询测试状态（init 后补充同步，防面板重建后状态丢失）
+	 */
+	private sendTestStatus() {
+		this.panel.webview.postMessage({ type: "modelTestStatus", testing: this.modelTestRunning } as OutgoingMessage);
+	}
+
+	/**
+	 * 一键测试：对有效模型列表逐个实测 TPS 并验证可用性。
+	 * 开关（libiaoCopilot.modelTestEnabled，默认 false）由 settings.json 控制，
+	 * 保存/导出/导入配置均不触碰该参数（保持隐藏不迁移）。
+	 */
+	private async testAllModels() {
+		if (this.modelTestRunning) {
+			return;
+		}
+		const config = vscode.workspace.getConfiguration();
+		const enabled = config.get<boolean>("libiaoCopilot.modelTestEnabled", false);
+		if (!enabled) {
+			this.panel.webview.postMessage({ type: "modelTestStatus", testing: false } as OutgoingMessage);
+			vscode.window.showInformationMessage(
+				"模型测试功能未启用：请在设置中开启 libiaoCopilot.modelTestEnabled（高级/隐藏参数）。"
+			);
+			return;
+		}
+
+		this.modelTestRunning = true;
+		this.modelTestCancelToken = new vscode.CancellationTokenSource();
+		this.sendTestStatus();
+
+		let done = 0;
+		let total = 0;
+		try {
+			const { tested, succeeded } = await runModelTests({
+				secrets: this.secrets,
+				onStart: (n) => {
+					total = n;
+					this.panel.webview.postMessage({ type: "modelTestStarted", total: n } as OutgoingMessage);
+				},
+				onResult: (result) => {
+					done++;
+					this.panel.webview.postMessage({
+						type: "modelTestResult",
+						result,
+						done,
+						total,
+					} as OutgoingMessage);
+				},
+				// 传入面板级取消 token：用户点「取消测试」时中断整个流程
+				token: this.modelTestCancelToken.token,
+			});
+
+			this.panel.webview.postMessage({
+				type: "modelTestDone",
+				tested,
+				succeeded,
+			} as OutgoingMessage);
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			this.panel.webview.postMessage({
+				type: "modelTestResult",
+				result: { modelId: "__error__", ok: false, error: errorMessage },
+				done: ++done,
+				total: Math.max(total, done),
+			} as OutgoingMessage);
+		} finally {
+			this.modelTestRunning = false;
+			this.modelTestCancelToken?.dispose();
+			this.modelTestCancelToken = undefined;
+			this.sendTestStatus();
+		}
+	}
+
+	/**
+	 * 取消当前测试流程（若在运行中）。
+	 */
+	private cancelModelTests() {
+		if (this.modelTestRunning && this.modelTestCancelToken) {
+			this.modelTestCancelToken.cancel();
+		}
 	}
 
 	private async handleConfirmRequest(id: string, message: string, action: string) {
@@ -310,6 +421,8 @@ export class ConfigViewPanel {
 		const contextManagement = config.get<string>("libiaoCopilot.contextManagement", "summarize");
 		const summarizationInstructions = config.get<string>("libiaoCopilot.summarizationInstructions", "");
 		const summarizeMaxTokens = config.get<number>("libiaoCopilot.summarizeMaxTokens", 4000);
+		// 隐藏高级参数：默认 false，仅管理员手动编辑 settings.json 启用（保存/导出/导入不迁移）
+		const modelTestEnabled = config.get<boolean>("libiaoCopilot.modelTestEnabled", false);
 		const payload: InitPayload = {
 			baseUrl,
 			apiKey,
@@ -325,6 +438,7 @@ export class ConfigViewPanel {
 			summarizeMaxTokens,
 			models,
 			providerKeys,
+			modelTestEnabled,
 		};
 		this.panel.webview.postMessage({ type: "init", payload });
 	}
