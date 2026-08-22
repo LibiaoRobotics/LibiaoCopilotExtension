@@ -10,6 +10,7 @@ import {
 } from "vscode";
 
 import type { HFModelItem } from "./types";
+import type { TokenUsage } from "./types";
 
 import type { OllamaRequestBody } from "./ollama/ollamaTypes";
 
@@ -18,6 +19,7 @@ import { parseModelId, createRetryConfig, executeWithRetry, normalizeUserModels,
 import { prepareLanguageModelChatInformation, NO_MODELS_PLACEHOLDER_ID } from "./provideModel";
 import { countMessageTokens } from "./provideToken";
 import { updateContextStatusBar } from "./statusBar";
+import { TpsTracker, extractPartText, isContentPart, logRequestTps } from "./tpsStats";
 import { OllamaApi } from "./ollama/ollamaApi";
 import { OpenaiApi } from "./openai/openaiApi";
 import { OpenaiResponsesApi } from "./openai/openaiResponsesApi";
@@ -98,9 +100,25 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			// Placeholder entry: no verified models exist, so never send a
 			// request — fail fast with an actionable message.
 			throw new Error("No models available. Please check the base URL and API Key configuration.");
-		}		const trackingProgress: Progress<LanguageModelResponsePart2> = {
+		}		// TPS 统计：状态栏实时显示开关（配置项 libiaoCopilot.tpsStatusBar）
+		const tpsStatusBarEnabled = vscode.workspace
+			.getConfiguration()
+			.get<boolean>("libiaoCopilot.tpsStatusBar", true);
+		const tpsTracker: TpsTracker | null = tpsStatusBarEnabled
+			? new TpsTracker(model.id, Date.now())
+			: null;
+		// 记录请求开始前的状态栏文本，流式结束后恢复（进度条由 updateContextStatusBar 维护）
+		const originalStatusText = this.statusBarItem.text;
+		const trackingProgress: Progress<LanguageModelResponsePart2> = {
 			report: (part) => {
 				try {
+					// TPS 统计：统一出口拦截所有 part（五种 apiMode 全覆盖）
+					if (tpsTracker && isContentPart(part)) {
+						const text = extractPartText(part);
+						if (text) {
+							tpsTracker.recordDelta(text);
+						}
+					}
 					progress.report(part);
 				} catch (e) {
 					console.error("[OAI Compatible Model Provider] Progress.report failed", {
@@ -110,6 +128,19 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				}
 			},
 		};
+		// 实时估算显示：流式期间状态栏显示 `$(zap) N t/s`
+		if (tpsTracker) {
+			tpsTracker.onEstimate((tps) => {
+				if (tps !== null && tps > 0) {
+					this.statusBarItem.text = `$(zap) ${tps.toFixed(0)} t/s`;
+				}
+			});
+			tpsTracker.onStall(() => {
+				this.statusBarItem.text = `$(circle-slash) 停滞`;
+			});
+		}
+		// 各 apiMode 实例的 usage 出口（finally 结算用）
+		let currentApi: { getUsage(): TokenUsage | null } | null = null;
 		const requestStartTime = Date.now();
 		try {
 			// get model config from user settings
@@ -267,6 +298,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			if (apiMode === "ollama") {
 				// Ollama native API mode
 				const ollamaApi = new OllamaApi(model.id);
+				currentApi = ollamaApi;
 				const ollamaMessages = ollamaApi.convertMessages(effectiveMessages, modelConfig);
 
 				let ollamaRequestBody: OllamaRequestBody = {
@@ -307,6 +339,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			} else if (apiMode === "anthropic") {
 				// Anthropic API mode
 				const anthropicApi = new AnthropicApi(model.id, um?.cache_control !== false);
+				currentApi = anthropicApi;
 				const anthropicMessages = anthropicApi.convertMessages(effectiveMessages, modelConfig);
 
 				// requestBody
@@ -348,6 +381,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			} else if (apiMode === "openai-responses") {
 				// OpenAI Responses API mode
 				const openaiResponsesApi = new OpenaiResponsesApi(model.id);
+				currentApi = openaiResponsesApi;
 				const normalizedBaseUrl = BASE_URL.replace(/\/+$/, "");
 				const statefulModelId = parsedModelId.baseId;
 
@@ -458,6 +492,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			} else if (apiMode === "gemini") {
 				// Gemini native API mode
 				const geminiApi = new GeminiApi(model.id, this._geminiToolCallMetaByCallId);
+				currentApi = geminiApi;
 				const geminiMessages = geminiApi.convertMessages(effectiveMessages, modelConfig);
 
 				const systemParts: string[] = [];
@@ -519,6 +554,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			} else {
 				// OpenAI compatible API mode (default)
 				const openaiApi = new OpenaiApi(model.id);
+				currentApi = openaiApi;
 				const openaiMessages = openaiApi.convertMessages(effectiveMessages, modelConfig);
 
 				// requestBody
@@ -572,6 +608,14 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 		} finally {
 			const durationMs = Date.now() - requestStartTime;
 			logger.info("request.end", { modelId: model.id, durationMs });
+			// TPS 结算：读取服务端 usage（可能为空），产出结算值并触发状态栏定格
+			if (tpsTracker) {
+				const usage = currentApi?.getUsage() ?? null;
+				const result = tpsTracker.finalize(usage);
+				logRequestTps(result);
+				// 定格：恢复状态栏为请求前文本（后续由 updateContextStatusBar/手动恢复）
+				this.statusBarItem.text = originalStatusText;
+			}
 			// Update last request time after successful completion
 			this._lastRequestTime = Date.now();
 		}

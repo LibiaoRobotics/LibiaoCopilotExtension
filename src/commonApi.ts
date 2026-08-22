@@ -59,6 +59,13 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 	/** Accumulated token usage from the API response. */
 	protected _usage: TokenUsage | null = null;
 
+	/**
+	 * 读取本次请求捕获的服务端 token 用量（TpsTracker 结算用）。
+	 */
+	getUsage(): TokenUsage | null {
+		return this._usage;
+	}
+
 	constructor(modelId: string) {
 		this._modelId = modelId;
 	}

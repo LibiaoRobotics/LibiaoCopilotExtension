@@ -847,6 +847,11 @@
 					"minimum": 0,
 					"description": "连续请求之间的固定延迟（毫秒）。默认 0（无延迟）。"
 				},
+				"libiaoCopilot.tpsStatusBar": {
+					"type": "boolean",
+					"default": true,
+					"description": "在状态栏实时显示生成速度（每秒 token 数）。默认 true。"
+				},
 				"libiaoCopilot.modelCacheTtlMinutes": {
 					"type": "number",
 					"default": 10,
