@@ -8,6 +8,7 @@
 
 ### 修复
 
+- **Anthropic 链路工具调用丢失**：修复 Anthropic 模式下模型只回工具调用时，工具参数被错误丢弃、聊天报「Sorry, no response was returned.」的问题。涉及 glm-5.2 等原生思考模型的工具调用场景。
 - **思考 token 归一化**：OpenAI Responses 链路的 `output_tokens_details.reasoning_tokens` 现归一化到统一的 `completion_tokens_details.reasoning_tokens`，供会话统计使用（此前未捕获思考 token 明细）。
 
 ## 1.0.8

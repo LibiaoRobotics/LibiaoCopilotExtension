@@ -579,8 +579,10 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 					if (chunk) {
 						buf.args += chunk;
 					}
-				} else {
+				} else if (chunk) {
 					// "done" events typically provide the full argument string.
+					// ⚠️ 仅在非空时整体覆盖：部分网关 done 事件会回空串，盲覆盖会把前面
+					// delta 拼好的参数抹空 → 冲刷时退化成 "{}" 或丢弃，工具参数就错了。
 					buf.args = chunk;
 				}
 				this._toolCallBuffers.set(idx, buf);
@@ -639,7 +641,19 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 					buf.name = name;
 				}
 				if (args) {
-					buf.args = args;
+					if (eventType === "response.output_item.added") {
+						// ⚠️ [方案 B，2026-08-23 防同类踩坑] added 事件携带的内联 arguments 进 `inlineArgs`
+						// 槽，绝不写进 `args`：网关可能在 added 预填 "{}" 或部分参数，而真实参数靠后续
+						// function_call_arguments.delta 送达。旧写法把内联值塞进 args 并立刻 tryEmit：
+						// "{}" 能解析成功 → 发射空参数工具调用并标记该 index 完成 → 后续真实参数
+						// delta 全部被丢弃（与 anthropic content_block_start 恒带 input:{} 是同一型雷，
+						// 2026-08-22 glm-5.2 事故同源）。inlineArgs 只在冲刷时「整条流没来过任何 delta」
+						// 才作为兜底（见 commonApi.flushToolCallBuffers 的优先级注释）。
+						buf.inlineArgs = args;
+					} else {
+						// output_item.done 是协议终态（完整参数），覆盖安全。
+						buf.args = args;
+					}
 				}
 				this._toolCallBuffers.set(idx, buf);
 

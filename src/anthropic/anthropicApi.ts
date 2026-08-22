@@ -587,7 +587,18 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 					this._emittedBeginToolCallsHint = true;
 				}
 				const idx = (chunk.index as number) ?? 0;
-				// 防御：若网关在 start 事件已注入完整 input（非流式），直接使用，避免参数丢失
+				// ⚠️ [方案 B，2026-08-23 踩坑修复] 内联 input 与流式参数【分槽存放，绝不混拼】：
+				// - args 恒为空串起点，只由后续 input_json_delta 逐块拼接；
+				// - inlineArgs 存 start 事件携带的完整 input，仅当整条流没有来任何
+				//   input_json_delta 时，才在冲刷阶段作为兜底（见 commonApi.flushToolCallBuffers）。
+				//
+				// 踩坑实录：Anthropic 官方协议 content_block_start 的 tool_use【恒带】 `input: {}`
+				// 占位（非流式网关才会给非空完整参数）。旧实现把 `input` 直接 JSON.stringify
+				// 后塞进 args → args = `{}{"cmd":...}` → JSON.parse 永远失败 →
+				// 工具调用在 flush 时被静默丢弃 → 宿主只收到 thinking、判 Unknown、
+				// 报「Sorry, no response was returned.」（glm-5.2 2026-08-22 事故）。
+				// 若未来想优化「非流式网关」路径，只允许在「确认没有任何 delta 到达」后
+				// 使用 inlineArgs，永远不要在此处预填 args。
 				const hasInlineInput =
 					chunk.content_block.input !== undefined &&
 					typeof chunk.content_block.input === "object" &&
@@ -595,7 +606,8 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 				this._toolCallBuffers.set(idx, {
 					id: chunk.content_block.id,
 					name: chunk.content_block.name,
-					args: hasInlineInput ? JSON.stringify(chunk.content_block.input) : "",
+					args: "",
+					inlineArgs: hasInlineInput ? JSON.stringify(chunk.content_block.input) : undefined,
 				});
 			} else if (chunk.content_block.type === "text") {
 				// Text block start - nothing special to do

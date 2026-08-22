@@ -14,10 +14,21 @@ import { logger } from "./logger";
 import { VersionManager } from "./versionManager";
 
 export abstract class CommonApi<TMessage, TRequestBody> {
-	/** Buffer for assembling streamed tool calls by index. */
-	protected _toolCallBuffers: Map<number, { id?: string; name?: string; args: string }> = new Map<
+	/**
+	 * Buffer for assembling streamed tool calls by index.
+	 *
+	 * ⚠️ 字段分工（方案 B，2026-08-23 踩坑后重构）：
+	 * - `args`       只装「流式 delta 逐块拼接」出来的参数文本，是发射的第一优先来源。
+	 * - `inlineArgs` 只装「start/added 事件里一次性给出的完整参数」（JSON 字符串）。
+	 *   它【绝不能】拼进 `args`，只能在「整条流一个 delta 都没来」时作为兜底使用。
+	 *
+	 * 踩坑实录：Anthropic 官方协议 `content_block_start` 的 tool_use 恒带 `input: {}` 占位，
+	 * 真实参数全靠后续 `input_json_delta` 送达。曾把 `{}` 直接拼进 `args`，导致
+	 * `args = {}{"cmd":...}`，JSON.parse 永远失败 → 工具调用全部被静默丢弃 → 宿主报「no response」。
+	 */
+	protected _toolCallBuffers: Map<number, { id?: string; name?: string; args: string; inlineArgs?: string }> = new Map<
 		number,
-		{ id?: string; name?: string; args: string }
+		{ id?: string; name?: string; args: string; inlineArgs?: string }
 	>();
 
 	/** Indices for which a tool call has been fully emitted. */
@@ -141,6 +152,13 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 		if (!buf.name) {
 			return;
 		}
+		// ⚠️ 流中发射只认 `args`（流式拼接结果），【绝不】用 `inlineArgs` 抢跑。
+		// 踩坑：start 事件内联的 `input:{}` 是占位符，真实参数在后续 delta 才到；
+		// 若在此用 inline 发射会发出「空参数工具调用」并清空缓冲，后续真实参数全丢。
+		// inlineArgs 的兜底统一留给 flushToolCallBuffers（此时已知「是否来过 delta」）。
+		if (!buf.args.trim()) {
+			return;
+		}
 		const canParse = tryParseJSONObject(buf.args);
 		if (!canParse.ok) {
 			return;
@@ -166,18 +184,31 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 			return;
 		}
 		for (const [idx, buf] of Array.from(this._toolCallBuffers.entries())) {
-			// [FIX] Normalize empty args to "{}" for parameterless tool calls
-			const argsText = buf.args.trim() || "{}";
+			// ⚠️ [方案 B] 发射来源优先级（2026-08-23 踩坑后确立，勿改顺序）：
+			//   1. 只要收到过流式 delta（args 非空）→ 一律以 args 为准；
+			//   2. 一个 delta 都没来（args 为空）→ 回退 inlineArgs（非流式网关 start 带完整参数的兜底）；
+			//   3. inlineArgs 也没有 → 视为无参工具调用 "{}"。
+			// 教训：绝不能把 start 内联 input 拼进 args（Anthropic 协议 start 恒带 input:{} 占位），
+			// 否则 args 变成 {}{...}，JSON.parse 必失败，工具调用被静默丢弃。
+			const hasStreamedArgs = buf.args.trim().length > 0;
+			const argsText = hasStreamedArgs ? buf.args : buf.inlineArgs ?? "{}";
 			const parsed = tryParseJSONObject(argsText);
 			if (!parsed.ok) {
+				// 静默丢弃会让这类故障极难排查（本次事故就卡在这），因此无论是否 throw 都打一条 warn。
+				logger.warn("toolCall.flush.invalidJson", {
+					index: idx,
+					name: buf.name ?? "unknown_tool",
+					hasStreamedArgs,
+					snippet: argsText.slice(0, 200),
+				});
 				if (throwOnInvalid) {
 					console.error("[OAI Compatible Model Provider] Invalid JSON for tool call", {
 						idx,
-						snippet: (buf.args || "").slice(0, 200),
+						snippet: argsText.slice(0, 200),
 					});
 					throw new Error("Invalid JSON for tool call");
 				}
-				// When not throwing (e.g. on [DONE]), drop silently to reduce noise
+				// When not throwing (e.g. on [DONE]), drop to reduce noise（但上面已留 warn 记录）
 				continue;
 			}
 			const id = buf.id ?? `call_${Math.random().toString(36).slice(2, 10)}`;
