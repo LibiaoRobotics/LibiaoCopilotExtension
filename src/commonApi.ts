@@ -225,8 +225,11 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 		// Always clean up state after attempting to end the thinking sequence
 		try {
 			this.flushThinkingBuffer(progress);
-			// End the current thinking sequence with empty content and same ID
-			progress.report(new LanguageModelThinkingPart("", this._currentThinkingId));
+			// End the current thinking sequence with empty content and same ID.
+			// 携带官方结束哨兵 { vscode_reasoning_done: true }（对齐官方扩展
+			// languageModelAccess.ts 姿势）：宿主 BYOK 处理器显式识别该元数据作为
+			// 思考结束信号，不再依赖"空值不合并"的隐式规则兜底。
+			progress.report(new LanguageModelThinkingPart("", this._currentThinkingId, { vscode_reasoning_done: true }));
 		} catch (e) {
 			console.error("[OAI Compatible Model Provider] Failed to end thinking sequence:", e);
 		}
@@ -368,7 +371,15 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 		// think 块激活期间始终继续解析。
 		// 取代旧的一次性 _xmlThinkDetectionAttempted：旧逻辑在首个无标签 chunk
 		// （如前导空白）后就永久禁用解析，导致大段思考被当正文显示（2026-08-22 修复）。
+		// 门控命中前先冲刷挂起缓冲：正文跨块时（如 "Array" + "<" + "string>"），
+		// 上一块的截断标签前缀会卡在 pending 里——若不冲刷，这部分字符永久丢失。
+		// 一旦正文已开始发射，pending 不可能再拼成思考开始标签，按正文发射即可。
 		if (this._hasEmittedAssistantText && !this._xmlThinkActive) {
+			if (this._xmlThinkPending) {
+				const pending = this._xmlThinkPending;
+				this._xmlThinkPending = "";
+				this.processTextContent(pending, progress);
+			}
 			return { emittedAny: false };
 		}
 
@@ -465,6 +476,28 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 		}
 
 		return { emittedAny };
+	}
+
+	/**
+	 * 流结束时冲刷 XML think 挂起缓冲（_xmlThinkPending）。
+	 * 正文恰好以截断标签前缀结尾（如泛型/HTML 片段的 "<"、"<th"）时，
+	 * 挂起内容等不到下一块，不冲刷就会静默丢失（最多丢标签长度-1 个字符）。
+	 * 各流处理器在 finally 中调用，顺序：先本方法、后 reportEndThinking
+	 * （think 块激活时挂起属于思考内容，先进思考缓冲再随收尾冲刷）。
+	 */
+	protected flushXmlThinkPending(progress: Progress<LanguageModelResponsePart2>): void {
+		if (!this._xmlThinkPending) {
+			return;
+		}
+		const pending = this._xmlThinkPending;
+		this._xmlThinkPending = "";
+		if (this._xmlThinkActive) {
+			// think 块内：挂起是闭合标签的截断前缀，归入思考内容
+			this.bufferThinkingContent(pending, progress);
+		} else {
+			// think 块外：挂起是开始标签的截断前缀，流已终止不可能再拼成完整标签——按正文发射
+			this.processTextContent(pending, progress);
+		}
 	}
 
 	/**

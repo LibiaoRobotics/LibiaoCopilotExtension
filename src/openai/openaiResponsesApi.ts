@@ -381,6 +381,8 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			throw e;
 		} finally {
 			reader.releaseLock();
+			// 冲刷 XML think 挂起缓冲（先于收尾：激活时挂起归入思考缓冲，随收尾同步冲刷）
+			this.flushXmlThinkPending(progress);
 			this.reportEndThinking(progress);
 			// Report accumulated usage for the Context Window widget
 			this.reportUsage(progress);

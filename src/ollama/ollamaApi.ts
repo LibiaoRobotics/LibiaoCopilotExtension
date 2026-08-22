@@ -230,6 +230,8 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 			throw e;
 		} finally {
 			reader.releaseLock();
+			// 冲刷 XML think 挂起缓冲（先于收尾；ollama 链路通常为 no-op）
+			this.flushXmlThinkPending(progress);
 			// End any active thinking sequence
 			this.reportEndThinking(progress);
 			// Report accumulated usage for the Context Window widget

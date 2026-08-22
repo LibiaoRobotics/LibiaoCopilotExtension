@@ -32,6 +32,15 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 	 */
 	private readonly _cacheControlEnabled: boolean;
 
+	/**
+	 * 本条流是否已收到过原生思考块（thinking 块开始 / thinking_delta）。
+	 * 一旦出现原生思考块，text_delta 就是干净正文，直接发射、不走 XML think 解析——
+	 * 否则正文里的字面量 think 开标签会被误判为思考开始，其后全部正文被吞进
+	 * 思考缓冲，聊天框观感即"消息被截断"（2026-08-22 glm-5.2 事故，回放实证）。
+	 * 翻译层网关的流没有原生思考块（思考内联进 text），保持 XML 解析防标签泄漏。
+	 */
+	private _sawNativeThinkingBlock = false;
+
 	constructor(modelId: string, cacheControlEnabled = true) {
 		super(modelId);
 		this._cacheControlEnabled = cacheControlEnabled;
@@ -480,6 +489,8 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			throw e;
 		} finally {
 			reader.releaseLock();
+			// 冲刷 XML think 挂起缓冲（先于收尾：激活时挂起归入思考缓冲，随收尾同步冲刷）
+			this.flushXmlThinkPending(progress);
 			// If there's an active thinking sequence, end it first
 			this.reportEndThinking(progress);
 			// Report accumulated usage for the Context Window widget
@@ -562,7 +573,8 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		if (chunk.type === "content_block_start" && chunk.content_block) {
 			// Start of a content block
 			if (chunk.content_block.type === "thinking") {
-				// Start thinking block
+				// Start thinking block（原生思考块标记：后续 text_delta 按干净正文直接发射）
+				this._sawNativeThinkingBlock = true;
 				if (chunk.content_block.thinking) {
 					this.bufferThinkingContent(chunk.content_block.thinking, progress);
 				}
@@ -591,11 +603,21 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			}
 		} else if (chunk.type === "content_block_delta" && chunk.delta) {
 			if (chunk.delta.type === "text_delta" && chunk.delta.text) {
-				// 与 OpenAI 链路对齐：先试 XML think 解析，否则关闭思考按正文发射
-				// （防止网关把思考内联进 text 时裸 <think> 标签泄漏到正文）
-				this.processStreamedTextChunk(chunk.delta.text, progress);
+				if (this._sawNativeThinkingBlock) {
+					// 原生思考链路（glm 等）：思考已走原生 thinking 块，text_delta 是干净正文。
+					// 直接发射（旧行为），不做 XML 解析——正文字面量 think 开标签不再吞掉后续正文。
+					// 注意：直发而非 processTextContent，保留纯空白块（代码的换行/缩进常单独成块，
+					// processTextContent 会跳过纯空白，导致代码格式损坏）。
+					this.reportEndThinking(progress);
+					progress.report(new vscode.LanguageModelTextPart(chunk.delta.text));
+					this._hasEmittedAssistantText = true;
+				} else {
+					// 未见原生思考块（翻译层网关可能把思考内联进 text）：XML 解析，防裸标签泄漏到正文
+					this.processStreamedTextChunk(chunk.delta.text, progress);
+				}
 			} else if (chunk.delta.type === "thinking_delta" && chunk.delta.thinking) {
-				// Buffer thinking content
+				// Buffer thinking content（原生思考块标记：后续 text_delta 按干净正文直接发射）
+				this._sawNativeThinkingBlock = true;
 				this.bufferThinkingContent(chunk.delta.thinking, progress);
 			} else if (chunk.delta.type === "input_json_delta" && chunk.delta.partial_json) {
 				// Handle tool call argument streaming

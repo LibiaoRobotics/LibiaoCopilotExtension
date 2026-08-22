@@ -342,6 +342,8 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 			throw e;
 		} finally {
 			reader.releaseLock();
+			// 冲刷 XML think 挂起缓冲（先于收尾：激活时挂起归入思考缓冲，随收尾同步冲刷）
+			this.flushXmlThinkPending(progress);
 			// If there's an active thinking sequence, end it first
 			this.reportEndThinking(progress);
 			// Report accumulated usage for the Context Window widget
