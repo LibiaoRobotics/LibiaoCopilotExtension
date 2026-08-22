@@ -6,10 +6,6 @@
 
 - **会话生成性能统计**：悬停状态栏右下角 token 用量图标，可见当前会话的历史统计——按模型分别累计：请求次数、总输出 token（思考+正文，服务端精确值）、思考 token 占比、累计流式耗时（首个输出 → 最后输出，含思考阶段）、平均生成速度（token/秒）。数值基于服务端 `completion_tokens` 精确计算，不做任何估算；开启新会话（消息条数骤降）时自动清零。此前实时 TPS（字符估算）因换算系数对思考内容严重高估而弃用。
 
-### 改进
-
-- **状态栏实时 TPS 已移除**：删除实时估算、停滞提示、结算定格等状态栏实时功能（`libiaoCopilot.tpsStatusBar` 配置项一并移除）。实时估算存在两个无法根除的偏差：思考内容换算系数不适配（实测高估 2.5 倍，500 t/s 根因）、字符/token 比率因模型与语言差异波动。改为会话级累计统计，全部使用服务端精确 token 数。
-
 ### 修复
 
 - **思考 token 归一化**：OpenAI Responses 链路的 `output_tokens_details.reasoning_tokens` 现归一化到统一的 `completion_tokens_details.reasoning_tokens`，供会话统计使用（此前未捕获思考 token 明细）。
@@ -104,7 +100,6 @@
 ### 修复
 
 - **Anthropic 端点简化**：`anthropic` 模式的请求路径改为直接拼接 `/messages`，版本前缀 `/v1` 由 `baseUrl` 携带（与 `openai` 模式惯例一致）。README 示例已同步更新为 `https://api.anthropic.com/v1`。已配置不带 `/v1` 的 baseUrl 的用户需自行补上，否则会 404。
-
 - **添加模型时自动选中默认上下文大小**：修复新增模型未保存 `default_context_size` 导致 VS Code 原生配置菜单里「Context Size」没有任何选中项的问题。现在三层兜底保证默认值存在：表单里填写「Context Sizes」时自动填充默认档（可手动改）；提交表单时未填则取最大可选档；最终在模型保存/更新/导入时统一归一化（与配置菜单 schema 的回退逻辑同源），保证新增模型开箱即有默认选中项。
 
 ### 移除

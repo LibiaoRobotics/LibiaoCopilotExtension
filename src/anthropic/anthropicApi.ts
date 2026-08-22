@@ -507,26 +507,35 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		}
 
 		if (chunk.type === "message_start" && chunk.message) {
-			// Extract message metadata (id, model, etc.)
-			// Could store for later use, but not required for basic streaming
+			// 官方协议：message_start 携带全量 usage（input_tokens + cache 明细）
+			if (chunk.message.usage) {
+				const inputTokens = chunk.message.usage.input_tokens ?? 0;
+				const cacheCreateTokens = chunk.message.usage.cache_creation_input_tokens ?? 0;
+				const cacheReadTokens = chunk.message.usage.cache_read_input_tokens ?? 0;
+				this._usage = {
+					prompt_tokens: inputTokens + cacheCreateTokens + cacheReadTokens,
+					completion_tokens: chunk.message.usage.output_tokens ?? 0,
+					total_tokens: inputTokens + cacheCreateTokens + cacheReadTokens + (chunk.message.usage.output_tokens ?? 0),
+					prompt_tokens_details: {
+						cached_tokens: cacheReadTokens,
+					},
+				};
+				logger.debug("usage.capture", { modelId: this._modelId, usage: this._usage });
+			}
 			return;
 		}
 
 		if (chunk.type === "message_delta") {
-			// Capture usage from message_delta
-			if (chunk.usage) {
-				// Anthropic: prompt_tokens = input_tokens + cache_creation_input_tokens + cache_read_input_tokens
-				const inputTokens = chunk.usage.input_tokens ?? 0;
-				const cacheCreateTokens = chunk.usage.cache_creation_input_tokens ?? 0;
-				const cacheReadTokens = chunk.usage.cache_read_input_tokens ?? 0;
-				const promptTokens = inputTokens + cacheCreateTokens + cacheReadTokens;
+			// 官方协议：message_delta 只携带最终 output_tokens（无 input 字段）
+			if (chunk.usage?.output_tokens !== undefined) {
+				const prev = this._usage;
+				const prevPrompt = prev?.prompt_tokens ?? 0;
+				const prevCache = prev?.prompt_tokens_details?.cached_tokens ?? 0;
 				this._usage = {
-					prompt_tokens: promptTokens,
-					completion_tokens: chunk.usage.output_tokens ?? 0,
-					total_tokens: promptTokens + (chunk.usage.output_tokens ?? 0),
-					prompt_tokens_details: {
-						cached_tokens: cacheReadTokens,
-					},
+					prompt_tokens: prevPrompt,
+					completion_tokens: chunk.usage.output_tokens,
+					total_tokens: prevPrompt + chunk.usage.output_tokens,
+					prompt_tokens_details: prev?.prompt_tokens_details,
 				};
 				logger.debug("usage.capture", { modelId: this._modelId, usage: this._usage });
 			}
@@ -549,10 +558,15 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 					this._emittedBeginToolCallsHint = true;
 				}
 				const idx = (chunk.index as number) ?? 0;
+				// 防御：若网关在 start 事件已注入完整 input（非流式），直接使用，避免参数丢失
+				const hasInlineInput =
+					chunk.content_block.input !== undefined &&
+					typeof chunk.content_block.input === "object" &&
+					chunk.content_block.input !== null;
 				this._toolCallBuffers.set(idx, {
 					id: chunk.content_block.id,
 					name: chunk.content_block.name,
-					args: "",
+					args: hasInlineInput ? JSON.stringify(chunk.content_block.input) : "",
 				});
 			} else if (chunk.content_block.type === "text") {
 				// Text block start - nothing special to do

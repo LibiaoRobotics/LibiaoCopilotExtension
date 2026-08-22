@@ -120,6 +120,13 @@ export interface AnthropicStreamChunk {
 		model: string;
 		stop_reason?: string;
 		stop_sequence?: string;
+		/** message_start 携带的全量 usage（input_tokens 等） */
+		usage?: {
+			input_tokens: number;
+			output_tokens: number;
+			cache_creation_input_tokens?: number;
+			cache_read_input_tokens?: number;
+		};
 	};
 	content_block?: {
 		type: "text" | "thinking" | "tool_use";
