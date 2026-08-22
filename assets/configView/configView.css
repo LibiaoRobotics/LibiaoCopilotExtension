@@ -180,6 +180,7 @@ button:active {
 .section-actions {
 	display: flex;
 	gap: 8px;
+	flex-wrap: wrap;
 }
 
 .retry-config {
@@ -406,6 +407,35 @@ button:not(.secondary):not(.danger) {
 #modelTestTable .test-fail {
 	color: var(--vscode-testing-iconFailed);
 	font-weight: 600;
+}
+
+/* 等待中：尚未轮到（并发下排队态） */
+#modelTestTable .test-waiting {
+	color: var(--vscode-descriptionForeground);
+}
+
+/* 测试中：正在请求/读流 */
+#modelTestTable .test-running {
+	color: var(--vscode-charts-yellow);
+	font-weight: 600;
+}
+
+/* 已取消：测试被中止，未完成 */
+#modelTestTable .test-cancelled {
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+}
+
+/* 已排除：用户未勾选，不参与本次测试 */
+#modelTestTable .test-excluded {
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+}
+
+/* 选择列：仅勾选框，收窄 */
+#modelTestTable .test-select-col {
+	width: 24px;
+	text-align: center;
 }
 
 #modelTestTable .test-tps {

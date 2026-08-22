@@ -4,7 +4,7 @@ import { normalizeUserModels, parseModelId, getBuiltInModels } from "../utils";
 import { fetchModels, clearModelListCache } from "../provideModel";
 import { ensureModelContextDefaults } from "../modelConfiguration";
 import { VersionManager } from "../versionManager";
-import { runModelTests, type ModelTestResult } from "../modelTester";
+import { loadTestModelList, runModelTests, type ModelTestResult } from "../modelTester";
 
 interface InitPayload {
 	baseUrl: string;
@@ -83,21 +83,26 @@ type IncomingMessage =
 	| { type: "importConfig" }
 	| { type: "openSettings" }
 	| { type: "resetModels" }
-	| { type: "testAllModels" }
+	| { type: "fetchTestModels" }
+	| { type: "updateModelTestExclude"; exclude: string[] }
+	| { type: "testSelectedModels"; modelIds: string[] }
 	| { type: "cancelModelTest" };
 
 type OutgoingMessage =
 	| { type: "init"; payload: InitPayload }
 	| { type: "modelsFetched"; models: HFModelItem[] }
+	| { type: "modelTestListLoaded"; modelIds: string[]; exclude: string[] }
+	| { type: "modelTestListError"; error: string }
 	| { type: "confirmResponse"; id: string; confirmed: boolean }
-	| { type: "modelTestStarted"; total: number }
+	| { type: "modelTestStarted"; modelIds: string[] }
+	| { type: "modelTestRowRunning"; modelId: string }
 	| {
 			type: "modelTestResult";
 			result: ModelTestResult;
 			done: number;
 			total: number;
 	  }
-	| { type: "modelTestDone"; tested: number; succeeded: number }
+	| { type: "modelTestDone"; tested: number; succeeded: number; total: number }
 	| { type: "modelTestStatus"; testing: boolean };
 
 export class ConfigViewPanel {
@@ -240,8 +245,14 @@ export class ConfigViewPanel {
 			case "openSettings":
 				await this.openSettings();
 				break;
-			case "testAllModels":
-				await this.testAllModels();
+			case "fetchTestModels":
+				await this.fetchTestModelList();
+				break;
+			case "updateModelTestExclude":
+				await this.updateModelTestExclude(message.exclude);
+				break;
+			case "testSelectedModels":
+				await this.testSelectedModels(message.modelIds);
 				break;
 			case "cancelModelTest":
 				this.cancelModelTests();
@@ -264,11 +275,61 @@ export class ConfigViewPanel {
 	}
 
 	/**
-	 * 一键测试：对有效模型列表逐个实测 TPS 并验证可用性。
+	 * 加载测试模型列表（不启动测试）：走合并验证，把全部待测模型 + 黑名单发给前端，
+	 * 由用户在表格里勾选后再显式发起测试。
+	 */
+	private async fetchTestModelList() {
+		try {
+			const { modelIds, reason } = await loadTestModelList(this.secrets);
+			const exclude = this.readModelTestExclude();
+			if (modelIds.length === 0) {
+				this.panel.webview.postMessage({
+					type: "modelTestListLoaded",
+					modelIds: [],
+					exclude: [],
+				} as OutgoingMessage);
+				if (reason) {
+					this.panel.webview.postMessage({ type: "modelTestListError", error: reason } as OutgoingMessage);
+				}
+				return;
+			}
+			this.panel.webview.postMessage({
+				type: "modelTestListLoaded",
+				modelIds,
+				exclude,
+			} as OutgoingMessage);
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			this.panel.webview.postMessage({ type: "modelTestListError", error: errorMessage } as OutgoingMessage);
+		}
+	}
+
+	/** 读取模型测试黑名单（隐藏参数，默认空数组） */
+	private readModelTestExclude(): string[] {
+		const config = vscode.workspace.getConfiguration();
+		const value = config.get<unknown>("libiaoCopilot.modelTestExclude", []);
+		return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+	}
+
+	/**
+	 * 整表覆盖写入模型测试黑名单（保存/导出/导入均不触碰该参数）。
+	 * 写入前做类型校验 + 去重，防止前端发垃圾污染 settings。
+	 */
+	private async updateModelTestExclude(exclude: string[]) {
+		if (!Array.isArray(exclude)) {
+			return;
+		}
+		const cleaned = [...new Set(exclude.filter((v): v is string => typeof v === "string" && v.length > 0))];
+		const config = vscode.workspace.getConfiguration();
+		await config.update("libiaoCopilot.modelTestExclude", cleaned, vscode.ConfigurationTarget.Global);
+	}
+
+	/**
+	 * 一键测试：对勾选的模型并发实测 TPS 并验证可用性（点击后立即展示全部待测模型）。
 	 * 开关（libiaoCopilot.modelTestEnabled，默认 false）由 settings.json 控制，
 	 * 保存/导出/导入配置均不触碰该参数（保持隐藏不迁移）。
 	 */
-	private async testAllModels() {
+	private async testSelectedModels(modelIds: string[]) {
 		if (this.modelTestRunning) {
 			return;
 		}
@@ -291,9 +352,14 @@ export class ConfigViewPanel {
 		try {
 			const { tested, succeeded } = await runModelTests({
 				secrets: this.secrets,
-				onStart: (n) => {
-					total = n;
-					this.panel.webview.postMessage({ type: "modelTestStarted", total: n } as OutgoingMessage);
+				// 列表就绪：一次性把全部待测模型发给前端，立即渲染整张表（等待态）
+				onList: (modelIds) => {
+					total = modelIds.length;
+					this.panel.webview.postMessage({ type: "modelTestStarted", modelIds } as OutgoingMessage);
+				},
+				// 单个模型开工：前端把对应行从"等待"切到"测试中"
+				onRunning: (modelId) => {
+					this.panel.webview.postMessage({ type: "modelTestRowRunning", modelId } as OutgoingMessage);
 				},
 				onResult: (result) => {
 					done++;
@@ -306,12 +372,15 @@ export class ConfigViewPanel {
 				},
 				// 传入面板级取消 token：用户点「取消测试」时中断整个流程
 				token: this.modelTestCancelToken.token,
+				// 只测勾选的模型
+				modelIds,
 			});
 
 			this.panel.webview.postMessage({
 				type: "modelTestDone",
 				tested,
 				succeeded,
+				total,
 			} as OutgoingMessage);
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);

@@ -43,6 +43,12 @@ const state = {
 	providerInfo: {},
 	modelTestEnabled: false,
 	modelTestTesting: false,
+	// 模型测试：列表就绪后的全部模型 id + 黑名单（未勾选集合）
+	modelTestModelIds: [],
+	modelTestExclude: [],
+	modelTestListLoaded: false,
+	// 表格当前是否为可勾选态（加载列表后 true，测试渲染后 false）
+	modelTestListEditable: false,
 	modelTestDone: 0,
 	modelTestTotal: 0,
 };
@@ -110,6 +116,9 @@ const advancedSettingsContent = document.getElementById("advancedSettingsContent
 
 // Model test elements
 const modelTestSection = document.getElementById("modelTestSection");
+const loadModelTestListBtn = document.getElementById("loadModelTestList");
+const selectAllModelTestBtn = document.getElementById("selectAllModelTest");
+const selectNoneModelTestBtn = document.getElementById("selectNoneModelTest");
 const startModelTestBtn = document.getElementById("startModelTest");
 const cancelModelTestBtn = document.getElementById("cancelModelTest");
 const modelTestProgress = document.getElementById("modelTestProgress");
@@ -286,15 +295,42 @@ cancelModelBtn.addEventListener("click", () => {
 });
 
 // Model test button event listeners
+loadModelTestListBtn.addEventListener("click", () => {
+	// 拉取验证后的模型列表（不启动测试）
+	modelTestProgress.textContent = "正在加载模型列表…";
+	vscode.postMessage({ type: "fetchTestModels" });
+});
+
+selectAllModelTestBtn.addEventListener("click", () => {
+	// 全选：清空黑名单并持久化
+	state.modelTestExclude = [];
+	refreshModelTestCheckboxes();
+	persistModelTestExclude();
+	updateModelTestUi();
+});
+
+selectNoneModelTestBtn.addEventListener("click", () => {
+	// 全不选：全部加入黑名单并持久化
+	state.modelTestExclude = [...state.modelTestModelIds];
+	refreshModelTestCheckboxes();
+	persistModelTestExclude();
+	updateModelTestUi();
+});
+
 startModelTestBtn.addEventListener("click", () => {
+	// 只测勾选的模型
+	const selected = state.modelTestModelIds.filter((id) => !state.modelTestExclude.includes(id));
+	if (selected.length === 0) {
+		modelTestProgress.textContent = "请先勾选至少一个模型。";
+		return;
+	}
 	// 清空上次结果重新开始
 	modelTestTableBody.innerHTML = "";
-	modelTestProgress.textContent = "测试中…";
 	state.modelTestTesting = true;
 	state.modelTestDone = 0;
-	state.modelTestTotal = 0;
+	state.modelTestTotal = selected.length;
 	updateModelTestUi();
-	vscode.postMessage({ type: "testAllModels" });
+	vscode.postMessage({ type: "testSelectedModels", modelIds: selected });
 });
 
 cancelModelTestBtn.addEventListener("click", () => {
@@ -392,53 +428,224 @@ window.addEventListener("message", (event) => {
 				pendingConfirmations.delete(message.id);
 			}
 			break;
+		case "modelTestListLoaded":
+			// 列表就绪：渲染全部待测模型（可勾选），黑名单里的默认不勾选
+			state.modelTestModelIds = Array.isArray(message.modelIds) ? message.modelIds : [];
+			state.modelTestExclude = Array.isArray(message.exclude) ? message.exclude : [];
+			state.modelTestListLoaded = true;
+			state.modelTestListEditable = true;
+			renderModelTestList();
+			modelTestProgress.textContent = `共 ${state.modelTestModelIds.length} 个模型，勾选后点击「开始测试」。`;
+			updateModelTestUi();
+			break;
+		case "modelTestListError":
+			modelTestProgress.textContent = `加载模型列表失败：${message.error}`;
+			updateModelTestUi();
+			break;
 		case "modelTestStatus":
 			state.modelTestTesting = !!message.testing;
 			if (!message.testing) {
-				// 测试结束（含取消），更新按钮状态
+				// 测试结束（含取消）：仍在等待/测试中的行统一标记为"已取消"
+				finalizePendingModelTestRows();
 				updateModelTestUi();
 			}
 			break;
 		case "modelTestStarted":
-			state.modelTestTotal = message.total;
+			// 本次实际测试的模型（勾选子集）：一次性渲染行（等待态）
+			state.modelTestTotal = message.modelIds.length;
 			state.modelTestDone = 0;
-			modelTestProgress.textContent = `开始测试，共 ${message.total} 个模型…`;
+			state.modelTestListEditable = false;
+			renderModelTestRows(message.modelIds);
+			modelTestProgress.textContent = `开始测试 ${message.modelIds.length} 个模型…`;
 			updateModelTestUi();
+			break;
+		case "modelTestRowRunning":
+			// 单个模型开工：对应行从"等待"切到"测试中"
+			setModelTestRowStatus(message.modelId, "running");
 			break;
 		case "modelTestResult":
 			state.modelTestDone = message.done;
 			state.modelTestTotal = message.total;
-			appendModelTestRow(message.result);
+			updateModelTestRow(message.result);
 			modelTestProgress.textContent = `已完成 ${message.done}/${message.total || message.done}`;
 			updateModelTestUi();
 			break;
 		case "modelTestDone":
 			state.modelTestTesting = false;
 			modelTestProgress.textContent = `测试完成：${message.succeeded}/${message.tested} 个模型可用`;
+			finalizePendingModelTestRows();
 			updateModelTestUi();
 			break;
 	}
 });
 
+	/** 渲染可勾选的模型列表（加载列表后调用） */
+	function renderModelTestList() {
+		modelTestTableBody.innerHTML = "";
+		for (const modelId of state.modelTestModelIds) {
+			const excluded = state.modelTestExclude.includes(modelId);
+			const tr = document.createElement("tr");
+			tr.dataset.modelId = modelId;
+			tr.innerHTML = `
+				<td class="test-select-col"><input type="checkbox" class="model-test-checkbox" ${excluded ? "" : "checked"}></td>
+				<td>${escapeHtml(modelId)}</td>
+				<td class="test-waiting">${excluded ? "— 已排除" : "⏳ 待测"}</td>
+				<td></td>
+				<td></td>
+				<td></td>
+				<td></td>
+				<td></td>`;
+			modelTestTableBody.appendChild(tr);
+		}
+		// 绑定勾选事件：变化即持久化
+		modelTestTableBody.querySelectorAll(".model-test-checkbox").forEach((cb) => {
+			cb.addEventListener("change", () => {
+				const tr = cb.closest("tr");
+				const modelId = tr.dataset.modelId;
+				if (cb.checked) {
+					state.modelTestExclude = state.modelTestExclude.filter((id) => id !== modelId);
+					const statusCell = tr.children[2];
+					statusCell.className = "test-waiting";
+					statusCell.textContent = "⏳ 待测";
+				} else {
+					state.modelTestExclude.push(modelId);
+					const statusCell = tr.children[2];
+					statusCell.className = "test-excluded";
+					statusCell.textContent = "— 已排除";
+				}
+				persistModelTestExclude();
+				updateModelTestUi();
+			});
+		});
+	}
+
+	/** 勾选状态变化后刷新所有 checkbox（全选/全不选用） */
+	function refreshModelTestCheckboxes() {
+		for (const cb of modelTestTableBody.querySelectorAll(".model-test-checkbox")) {
+			// 只刷勾选态行（可交互的 checkbox），跳过测试结果行（disabled，避免覆盖结果状态）
+			if (cb.disabled) {
+				continue;
+			}
+			const tr = cb.closest("tr");
+			const modelId = tr.dataset.modelId;
+			const excluded = state.modelTestExclude.includes(modelId);
+			cb.checked = !excluded;
+			const statusCell = tr.children[2];
+			statusCell.className = excluded ? "test-excluded" : "test-waiting";
+			statusCell.textContent = excluded ? "— 已排除" : "⏳ 待测";
+		}
+	}
+
+	/** 把当前黑名单持久化到 settings（隐藏参数 modelTestExclude） */
+	function persistModelTestExclude() {
+		vscode.postMessage({ type: "updateModelTestExclude", exclude: [...state.modelTestExclude] });
+	}
+
 	function updateModelTestUi() {
-		startModelTestBtn.disabled = state.modelTestTesting;
+		const hasList = state.modelTestListLoaded && state.modelTestModelIds.length > 0;
+		const selectedCount = state.modelTestModelIds.filter((id) => !state.modelTestExclude.includes(id)).length;
+		// 测试中禁用所有编辑操作；勾选编辑仅在「可勾选态」可用（测试结果态需先重新加载列表）
+		const editable = state.modelTestListEditable && !state.modelTestTesting;
+		loadModelTestListBtn.disabled = state.modelTestTesting;
+		selectAllModelTestBtn.disabled = !editable || !hasList;
+		selectNoneModelTestBtn.disabled = !editable || !hasList;
+		startModelTestBtn.disabled = state.modelTestTesting || selectedCount === 0;
+		startModelTestBtn.textContent = `开始测试（${selectedCount}）`;
 		cancelModelTestBtn.disabled = !state.modelTestTesting;
 	}
 
-	function appendModelTestRow(result) {
-		const tr = document.createElement("tr");
+	/** 点击测试后：一次性渲染实际待测模型行（等待态），让用户立刻看到待测清单 */
+	function renderModelTestRows(modelIds) {
+		modelTestTableBody.innerHTML = "";
+		for (const modelId of modelIds) {
+			const tr = document.createElement("tr");
+			tr.dataset.modelId = modelId;
+			tr.innerHTML = `
+				<td class="test-select-col"><input type="checkbox" class="model-test-checkbox" checked disabled></td>
+				<td>${escapeHtml(modelId)}</td>
+				<td class="test-waiting">⏳ 等待</td>
+				<td></td>
+				<td></td>
+				<td></td>
+				<td></td>
+				<td></td>`;
+			modelTestTableBody.appendChild(tr);
+		}
+	}
+
+	function findModelTestRow(modelId) {
+		return modelTestTableBody.querySelector(`tr[data-model-id="${CSS.escape(modelId)}"]`);
+	}
+
+	/** 单个模型开工：状态列切到"测试中" */
+	function setModelTestRowStatus(modelId, status) {
+		const tr = findModelTestRow(modelId);
+		if (!tr) {
+			return;
+		}
+		const statusCell = tr.children[2];
+		if (status === "running") {
+			statusCell.className = "test-running";
+			statusCell.textContent = "⌛ 测试中…";
+		}
+	}
+
+	/** 毫秒转秒显示（生成耗时列，保留 2 位小数） */
+	function formatSeconds(ms) {
+		if (ms === undefined || ms === null || ms === "") {
+			return "";
+		}
+		return (ms / 1000).toFixed(2);
+	}
+
+	/** 结果回报：原地更新对应行（并发下结果乱序到达，按 modelId 定位） */
+	function updateModelTestRow(result) {
+		const tr = findModelTestRow(result.modelId);
+		if (!tr) {
+			// 兜底：找不到预渲染行（如 __empty__/__error__ 等异常占位），直接追加
+			appendModelTestRow(result);
+			return;
+		}
 		if (result.ok) {
 			tr.innerHTML = `
-				<td>${result.modelId}</td>
+				<td class="test-select-col"></td>
+				<td>${escapeHtml(result.modelId)}</td>
 				<td class="test-ok">✓ 可用</td>
 				<td>${result.ttftMs ?? ""}</td>
-				<td>${result.generateMs ?? ""}</td>
+				<td>${formatSeconds(result.generateMs)}</td>
 				<td>${result.outputTokens ?? ""}</td>
 				<td class="test-tps">${result.tps ?? ""}</td>
 				<td></td>`;
 		} else {
 			tr.innerHTML = `
-				<td>${result.modelId}</td>
+				<td class="test-select-col"></td>
+				<td>${escapeHtml(result.modelId)}</td>
+				<td class="test-fail">✗ 失败</td>
+				<td></td>
+				<td></td>
+				<td></td>
+				<td></td>
+				<td class="test-error">${escapeHtml(result.error || "")}</td>`;
+		}
+	}
+
+	/** 兜底追加行（异常占位结果：__empty__/__error__） */
+	function appendModelTestRow(result) {
+		const tr = document.createElement("tr");
+		if (result.ok) {
+			tr.innerHTML = `
+				<td class="test-select-col"></td>
+				<td>${escapeHtml(result.modelId)}</td>
+				<td class="test-ok">✓ 可用</td>
+				<td>${result.ttftMs ?? ""}</td>
+				<td>${formatSeconds(result.generateMs)}</td>
+				<td>${result.outputTokens ?? ""}</td>
+				<td class="test-tps">${result.tps ?? ""}</td>
+				<td></td>`;
+		} else {
+			tr.innerHTML = `
+				<td class="test-select-col"></td>
+				<td>${escapeHtml(result.modelId)}</td>
 				<td class="test-fail">✗ 失败</td>
 				<td></td>
 				<td></td>
@@ -447,6 +654,20 @@ window.addEventListener("message", (event) => {
 				<td class="test-error">${escapeHtml(result.error || "")}</td>`;
 		}
 		modelTestTableBody.appendChild(tr);
+	}
+
+	/** 测试结束（含取消）：仍在等待/测试中的行标记为"已取消"，避免状态悬空 */
+	function finalizePendingModelTestRows() {
+		for (const tr of modelTestTableBody.querySelectorAll("tr")) {
+			const statusCell = tr.children[2];
+			if (!statusCell) {
+				continue;
+			}
+			if (statusCell.classList.contains("test-waiting") || statusCell.classList.contains("test-running")) {
+				statusCell.className = "test-cancelled";
+				statusCell.textContent = "— 已取消";
+			}
+		}
 	}
 
 	function escapeHtml(value) {

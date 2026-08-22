@@ -79,38 +79,116 @@ suite("modelTester", () => {
 	suite("buildTestRequestBody", () => {
 		const model: HFModelItem = { id: "m1", owned_by: "libiaorobot" };
 
-		test("openai: stream + stream_options.include_usage + max_tokens", () => {
+		// 含完整参数化字段的模型：验证真实 prepareRequestBody 的参数透传（根治核心）
+		const fullModel: HFModelItem = {
+			id: "m1",
+			owned_by: "libiaorobot",
+			reasoning_effort: "high",
+			temperature: 0.7,
+			top_p: 0.9,
+		};
+
+		test("openai: stream + stream_options.include_usage + max_tokens 用测试值覆盖", () => {
 			const body = buildTestRequestBody(model, "openai");
 			assert.strictEqual(body.stream, true);
 			assert.deepStrictEqual(body.stream_options, { include_usage: true });
-			assert.strictEqual(body.max_tokens, 1100);
+			// 真实 max_tokens 由 prepareRequestBody 写入（testModel.max_tokens=4096）
+			assert.strictEqual(body.max_tokens, 4096);
 			assert.strictEqual(body.model, "m1");
 		});
 
-		test("openai-responses: input + max_output_tokens", () => {
+		test("openai: 透传真实配置的 reasoning_effort（测试时强制 low，其余参数保持透传）", () => {
+			const body = buildTestRequestBody(fullModel, "openai");
+			// TPS 测试策略：思考档强制 low（防深思考吃光 max_tokens 预算），temperature/top_p 仍透传
+			assert.strictEqual(body.reasoning_effort, "low");
+			assert.strictEqual(body.temperature, 0.7);
+			assert.strictEqual(body.top_p, 0.9);
+		});
+
+		test("openai-responses: input 为标准数组格式 + max_output_tokens 用测试值覆盖", () => {
 			const body = buildTestRequestBody(model, "openai-responses");
 			assert.strictEqual(body.stream, true);
-			assert.strictEqual(body.max_output_tokens, 1100);
+			assert.strictEqual(body.max_output_tokens, 4096);
 			assert.strictEqual(body.model, "m1");
+			// 顶层 reasoning_effort 也强制 low（qwen 认顶层字段；deepseek 认嵌套 reasoning.effort，双保险）
+			assert.strictEqual(body.reasoning_effort, "low");
+			// input 必须与真实请求（openaiResponsesApi.ts）一致：数组格式而非纯字符串
+			assert.ok(Array.isArray(body.input), "input 应为数组（new-api 等网关不兼容字符串）");
+			const first = (body.input as Array<Record<string, unknown>>)[0];
+			assert.strictEqual(first.role, "user");
+			assert.strictEqual(first.type, "message");
+			assert.strictEqual(first.status, "completed");
+			assert.ok(Array.isArray(first.content));
+			assert.strictEqual((first.content as Array<Record<string, unknown>>)[0].type, "input_text");
 		});
 
-		test("anthropic: max_tokens 且有 stream", () => {
+		test("anthropic: max_tokens=4096 且有 stream", () => {
 			const body = buildTestRequestBody(model, "anthropic");
 			assert.strictEqual(body.stream, true);
-			assert.strictEqual(body.max_tokens, 1100);
+			assert.strictEqual(body.max_tokens, 4096);
 			assert.strictEqual(body.model, "m1");
 		});
 
-		test("gemini: 无 stream 字段（URL 控制流式），maxOutputTokens=1100", () => {
-			const body = buildTestRequestBody(model, "gemini");
-			assert.ok(!("stream" in body), "gemini body 不应含 stream 字段");
-			assert.strictEqual((body.generationConfig as Record<string, unknown>).maxOutputTokens, 1100);
+		test("anthropic: extra.thinking 的 budget_tokens 压到最低档 1024（保留思考，不关闭）", () => {
+			// 模拟 glm-5.2 真实配置：extra.thinking.budget_tokens=32000（原样透传会导致深思考吃光预算）
+			const glmLike: HFModelItem = {
+				id: "glm-5.2",
+				owned_by: "libiaorobot",
+				apiMode: "anthropic",
+				max_tokens: 131072,
+				extra: { thinking: { type: "enabled", budget_tokens: 32000 } },
+			};
+			const body = buildTestRequestBody(glmLike, "anthropic");
+			const thinking = body.thinking as Record<string, unknown>;
+			assert.ok(thinking, "thinking 应保留（不关闭思考）");
+			assert.strictEqual(thinking.type, "enabled");
+			assert.strictEqual(thinking.budget_tokens, 1024, "budget_tokens 压到 Anthropic 官方最低档 1024");
 		});
 
-		test("ollama: options.num_predict=1100", () => {
+		test("gemini: 无 stream 字段（URL 控制流式），maxOutputTokens=4096", () => {
+			const body = buildTestRequestBody(model, "gemini");
+			assert.ok(!("stream" in body), "gemini body 不应含 stream 字段");
+			assert.strictEqual((body.generationConfig as Record<string, unknown>).maxOutputTokens, 4096);
+		});
+
+		test("ollama: options.num_predict=4096", () => {
 			const body = buildTestRequestBody(model, "ollama");
 			assert.strictEqual(body.stream, true);
-			assert.strictEqual((body.options as Record<string, unknown>).num_predict, 1100);
+			assert.strictEqual((body.options as Record<string, unknown>).num_predict, 4096);
+		});
+
+		// 临时验证：qwen3.8-max / deepseek-v4-pro 真实配置（package.json）走 openai-responses
+		// 时必须保留 reasoning（真实场景参数化），max_output_tokens 用测试值覆盖
+		test("真实配置透传：qwen3.8-max 思考档强制 low（TPS 测试不测思考深度）", () => {
+			const qwen: HFModelItem = {
+				id: "qwen3.8-max",
+				owned_by: "libiaorobot",
+				apiMode: "openai-responses",
+				max_tokens: 128000,
+				reasoning_effort: "xhigh",
+				reasoning_efforts: ["low", "medium", "xhigh"],
+			};
+			const body = buildTestRequestBody(qwen, "openai-responses");
+			assert.strictEqual(body.max_output_tokens, 4096, "max_output_tokens 应用测试值");
+			assert.strictEqual(body.reasoning_effort, "low", "顶层 reasoning_effort 强制 low（qwen 认顶层）");
+			const reasoning = body.reasoning as Record<string, unknown>;
+			assert.strictEqual(reasoning.effort, "low", "reasoning 强制 low（防深思考吃光预算）");
+		});
+
+		test("真实配置透传：deepseek-v4-pro 思考档强制 low（TPS 测试不测思考深度）", () => {
+			const ds: HFModelItem = {
+				id: "deepseek-v4-pro",
+				owned_by: "libiaorobot",
+				apiMode: "openai-responses",
+				max_tokens: 384000,
+				reasoning_effort: "max",
+				reasoning_efforts: ["low", "high", "xhigh", "max"],
+			};
+			const body = buildTestRequestBody(ds, "openai-responses");
+			assert.strictEqual(body.max_output_tokens, 4096, "max_output_tokens 应用测试值");
+			assert.strictEqual(body.reasoning_effort, "low", "顶层 reasoning_effort 强制 low（与嵌套双保险）");
+			const reasoning = body.reasoning as Record<string, unknown>;
+			assert.strictEqual(reasoning.effort, "low", "reasoning 强制 low（防深思考吃光预算）");
 		});
 	});
 

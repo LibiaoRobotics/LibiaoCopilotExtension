@@ -2,7 +2,15 @@ import * as vscode from "vscode";
 import type { HFApiMode, HFModelItem, TokenUsage } from "./types";
 import { CommonApi } from "./commonApi";
 import { buildEndpointGroups, mergeConfiguredModelWithProviders, resolveGroupApiKey } from "./provideModel";
-import { buildGeminiGenerateContentUrl } from "./gemini/geminiApi";
+// 各 API 类：测试请求体必须与真实请求走同一套参数化逻辑（prepareRequestBody）
+import { OpenaiApi } from "./openai/openaiApi";
+import { OpenaiResponsesApi } from "./openai/openaiResponsesApi";
+import { AnthropicApi } from "./anthropic/anthropicApi";
+import { OllamaApi } from "./ollama/ollamaApi";
+import { GeminiApi, buildGeminiGenerateContentUrl } from "./gemini/geminiApi";
+import type { GeminiGenerateContentRequest } from "./gemini/geminiTypes";
+import type { AnthropicRequestBody } from "./anthropic/anthropicTypes";
+import type { OllamaRequestBody } from "./ollama/ollamaTypes";
 import { normalizeUserModels } from "./utils";
 import { logger } from "./logger";
 
@@ -13,25 +21,27 @@ import { logger } from "./logger";
  * 设计要点：
  * - 有效列表 = mergeConfiguredModelWithProviders 的结果（与模型选择器完全一致），
  *   未验证的配置模型不会被测试。
- * - 每个模型只发一次请求，输出目标约 1000 tokens（max_tokens 限制 1100），
- *   低 token 数测试 TPS 波动大、不够准；1000 tokens 兼顾准确与成本。
+ * - 每个模型只发一次请求，输出目标约 300 tokens（max_tokens 限制 4096），
+ *   300 tokens 足够测出稳定的 TPS，且总耗时可控（避免长输出压到 60s 超时边缘）。
  * - TTFT（首 token 时间）从首个流式事件开始计 —— 包含思考。
  * - TPS = 输出 token 数 / 生成耗时（总耗时 − TTFT）。
- * - 串行执行，避免网关并发限流。
+ * - 并发执行（默认 3 路）：不限并发容易触发网关限流导致假失败，
+ *   3 路并发在速度与网关压力之间取平衡，需要更快可调大。
  */
 
 /** 测试输出目标 token 数 */
-const TARGET_OUTPUT_TOKENS = 1000;
-/** max_tokens 上限（目标 + 余量 100，避免截断） */
-const MAX_OUTPUT_TOKENS = TARGET_OUTPUT_TOKENS + 100;
-/** 单个模型测试超时（毫秒）：1000 tokens 正常 30-60s 内完成，慢网关/挂死会被强杀 */
+const TARGET_OUTPUT_TOKENS = 300;
+/** max_tokens 上限：提示词已限定 ~300，留足余量（代码格式膨胀/标点差异），避免截断 */
+const MAX_OUTPUT_TOKENS = 4096;
+/** 单个模型测试超时（毫秒）：300 tokens 正常 5-25s 内完成，慢网关/挂死会被强杀 */
 const TEST_TIMEOUT_MS = 60_000;
 /** 单次读取超时（毫秒），防止流挂死 */
 const STREAM_READ_TIMEOUT_MS = 30_000;
+/** 默认并发度（可通过 runModelTests 的 concurrency 参数覆盖） */
+const DEFAULT_TEST_CONCURRENCY = 3;
 
-/** 测试请求用的固定 prompt：让模型输出约 1000 tokens 的纯文本 */
-const TEST_PROMPT =
-	"请写一篇关于人工智能发展的科普短文，大约 1000 个汉字，直接输出正文，不要任何开头说明或结尾总结。";
+/** 测试请求用的固定 prompt：明确告知这是 TPS 性能测试并禁止思考（避免思考吃光预算导致 TPS 测不出来），要求输出固定长度便于统计 */ 
+const TEST_PROMPT = "这是一次tps吞吐量测试，直接输出300Token左右的代码";
 
 export interface ModelTestResult {
 	/** 模型标识（含 configId，与选择器一致） */
@@ -208,57 +218,107 @@ export function buildTestUrl(baseUrl: string, apiMode: HFApiMode | string, model
 }
 
 /**
- * 构造测试请求 body（与 provider.ts 各 apiMode 的真实请求体对齐）。
+ * 构造测试请求 body。
+ *
+ * 设计原则（根治“自造格式”漂移）：
+ * - 只搭各协议的最小基体（单 user 消息、流式、测试专用 prompt）；
+ * - 具体参数化（reasoning_effort / temperature / extra / max_tokens 等）
+ *   全部交给各 API 类的真实 prepareRequestBody —— 与真实请求同源，
+ *   网关升级或参数变化时自动同步，不会再出现测试与真实不一致。
+ * - 覆盖 max_tokens 为测试值（真实配置可能是 128000+，测试只需 ~1100）。
  * @internal 仅测试用途导出
  */
 export function buildTestRequestBody(model: HFModelItem, apiMode: HFApiMode | string): Record<string, unknown> {
+	// 用测试值覆盖 max_tokens：真实配置的 max_tokens（128000/384000）与测试目标（1100）冲突
+	// 同时强制 effort=low：测 TPS 的意图是「量吞吐/可用性」，不是测思考深度；
+	// 深思考（deepseek-v4-pro 的 max 档实测思考可达 2500+ 字符）会吃光 max_tokens 预算，
+	// 正文 0 字符 + 流以 incomplete 结束（无 usage）→ 测试误判失败。
+	const testModel: HFModelItem = {
+		...model,
+		max_tokens: MAX_OUTPUT_TOKENS,
+		max_completion_tokens: undefined,
+		reasoning_effort: "low",
+		// anthropic 模式（glm 系列）：extra.thinking 原样透传（budget_tokens: 32000 会吃光
+		// max_tokens 预算导致正文 0/超时）。测试时压到 Anthropic 官方最低档 1024——
+		// 保留思考（不关闭），只是预算最小。
+		extra:
+			model.extra && typeof model.extra === "object" &&
+			(model.extra as Record<string, unknown>).thinking &&
+			typeof (model.extra as Record<string, unknown>).thinking === "object"
+				? {
+						...model.extra,
+						thinking: {
+							...(model.extra as Record<string, unknown>).thinking as Record<string, unknown>,
+							budget_tokens: 1024,
+						},
+					}
+				: model.extra,
+	};
+
 	switch (apiMode) {
 		case "anthropic": {
-			const body: Record<string, unknown> = {
-				model: model.id,
-				messages: [
-					{
-						role: "user",
-						content: TEST_PROMPT,
-					},
-				],
-				stream: true,
-				max_tokens: MAX_OUTPUT_TOKENS,
-			};
-			return body;
-		}
-		case "ollama": {
-			return {
+			// 最小基体：Anthropic 必填 max_tokens（prepareRequestBody 会用测试值覆盖）
+			const body: AnthropicRequestBody = {
 				model: model.id,
 				messages: [{ role: "user", content: TEST_PROMPT }],
 				stream: true,
-				options: { num_predict: MAX_OUTPUT_TOKENS },
+				max_tokens: MAX_OUTPUT_TOKENS,
 			};
+			return new AnthropicApi(model.id).prepareRequestBody(body, testModel, undefined) as unknown as Record<
+				string,
+				unknown
+			>;
+		}
+		case "ollama": {
+			const body: OllamaRequestBody = {
+				model: model.id,
+				messages: [{ role: "user", content: TEST_PROMPT }],
+				stream: true,
+			};
+			return new OllamaApi(model.id).prepareRequestBody(body, testModel, undefined) as unknown as Record<
+				string,
+				unknown
+			>;
 		}
 		case "gemini": {
-			// 与 provider.ts 真实请求体一致：流式由 URL 参数（streamGenerateContent?alt=sse）控制，
-			// body 不需要 stream 字段（Gemini API 会忽略未知字段，但保持最小化、与真实路径对齐）
-			return {
+			// 与 provider.ts 真实请求一致：流式由 URL 参数控制，body 不需要 stream 字段
+			const body: GeminiGenerateContentRequest = {
 				contents: [{ role: "user", parts: [{ text: TEST_PROMPT }] }],
-				generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS },
 			};
+			return new GeminiApi(model.id).prepareRequestBody(body, testModel, undefined) as unknown as Record<
+				string,
+				unknown
+			>;
 		}
 		case "openai-responses": {
-			return {
+			// input 必须是标准数组格式（含 type/id/status）—— 网关（如 new-api）不兼容纯字符串
+			const body: Record<string, unknown> = {
 				model: model.id,
-				input: TEST_PROMPT,
+				// 双保险：qwen 认顶层 reasoning_effort，deepseek 认嵌套 reasoning.effort，
+				// 两个都发（实测 new-api 网关两者兼容，各取所需）
+				reasoning_effort: "low",
+				input: [
+					{
+						role: "user",
+						content: [{ type: "input_text", text: TEST_PROMPT }],
+						type: "message",
+						id: `msg_test_${Date.now()}`,
+						status: "completed",
+					},
+				],
 				stream: true,
-				max_output_tokens: MAX_OUTPUT_TOKENS,
 			};
+			return new OpenaiResponsesApi(model.id).prepareRequestBody(body, testModel, undefined);
 		}
 		default: {
-			return {
+			// openai（及兜底）：与 provider.ts 真实请求一致
+			const body: Record<string, unknown> = {
 				model: model.id,
 				messages: [{ role: "user", content: TEST_PROMPT }],
 				stream: true,
 				stream_options: { include_usage: true },
-				max_tokens: MAX_OUTPUT_TOKENS,
 			};
+			return new OpenaiApi(model.id).prepareRequestBody(body, testModel, undefined);
 		}
 	}
 }
@@ -488,18 +548,62 @@ export function estimateTokens(chars: number): number {
 }
 
 /**
+ * 加载「有效模型列表」的测试标识（含 configId）。
+ * 与 runModelTests 内部使用同一份验证逻辑（mergeConfiguredModelWithProviders），
+ * 保证「界面上看到的 = 实际测试的」。
+ * 加载失败（网关挂/没 key 等）时 reason 携带原因，供前端展示。
+ */
+export async function loadTestModelList(secrets: vscode.SecretStorage): Promise<{
+	modelIds: string[];
+	reason?: string;
+}> {
+	const config = vscode.workspace.getConfiguration();
+	const userModels = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
+	const configuredModels = userModels.filter((m) => !m.id.startsWith("__provider__"));
+	const globalBaseUrl = config.get<string>("libiaoCopilot.baseUrl", "");
+
+	const merged = await mergeConfiguredModelWithProviders({
+		secrets,
+		configuredModels,
+		globalBaseUrl,
+	});
+	if (merged.models.length === 0) {
+		const reason =
+			merged.reason?.kind === "fetchFailed"
+				? merged.reason.error
+				: merged.reason?.kind === "noApiKey"
+					? "未配置 API Key"
+					: merged.reason?.kind === "invalidBaseUrl"
+						? "未配置基础地址"
+						: "供应商未返回任何模型";
+		return { modelIds: [], reason };
+	}
+	return { modelIds: merged.models.map(toTestModelId) };
+}
+
+/**
  * 对有效模型列表执行 TPS 测试：
  * 1. 通过 mergeConfiguredModelWithProviders 获取验证后的模型列表（与选择器一致）
- * 2. 对每个模型串行执行 testSingleModel
- * 3. 结果逐条通过 onResult 回调（前端实时更新）
+ * 2. 通过 onList 一次性回报全部待测模型（前端立即渲染整张表）
+ * 3. 以并发度（默认 3）的 worker 池并发执行测试；每个模型开工前回调
+ *    onRunning，出结果回调 onResult（前端原地刷新对应行）
+ * modelIds 可选：仅测试其中指定的模型（黑名单过滤后勾选的子集）。
  */
 export async function runModelTests(options: {
 	secrets: vscode.SecretStorage;
-	onStart?: (total: number) => void;
+	/** 列表就绪后一次性回报全部待测模型 id（含 configId） */
+	onList?: (modelIds: string[]) => void;
+	/** 单个模型开始测试时回调 */
+	onRunning?: (modelId: string) => void;
 	onResult: (result: ModelTestResult) => void;
 	token?: vscode.CancellationToken;
+	/** 并发度（默认 3；调大会更快，但更容易触发网关限流） */
+	concurrency?: number;
+	/** 仅测试这些模型 id（黑名单过滤后勾选子集）；缺省测全部 */
+	modelIds?: string[];
 }): Promise<{ tested: number; succeeded: number }> {
-	const { secrets, onResult, onStart, token } = options;
+	const { secrets, onList, onRunning, onResult, token } = options;
+	const concurrency = Math.max(1, options.concurrency ?? DEFAULT_TEST_CONCURRENCY);
 	const config = vscode.workspace.getConfiguration();
 	const userModels = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
 	const configuredModels = userModels.filter((m) => !m.id.startsWith("__provider__"));
@@ -511,8 +615,12 @@ export async function runModelTests(options: {
 		configuredModels,
 		globalBaseUrl,
 	});
-	const models = merged.models;
-	onStart?.(models.length);
+	const allModels = merged.models;
+	// 黑名单过滤：只测勾选子集；缺省测全部
+	const selectedSet = options.modelIds ? new Set(options.modelIds) : undefined;
+	const models = selectedSet ? allModels.filter((m) => selectedSet.has(toTestModelId(m))) : allModels;
+	// 一次性回报本次实际要测的模型（过滤后），前端渲染的行数 = 进度分母
+	onList?.(models.map(toTestModelId));
 	if (models.length === 0) {
 		const reason =
 			merged.reason?.kind === "fetchFailed"
@@ -541,6 +649,22 @@ export async function runModelTests(options: {
 		}
 	}
 
+	// merged 模型可能包含 group 没有（如 discovered），此时回退全局/模型级 key
+	const globalApiKey = await secrets.get("libiaoCopilot.apiKey");
+	const plans = await Promise.all(
+		models.map(async (model): Promise<TestPlan> => {
+			const baseUrl = model.baseUrl || globalBaseUrl;
+			const apiMode = (model.apiMode ?? "openai") as HFApiMode | string;
+			const groupInfo = groupKeyMap.get(`${apiMode}|${baseUrl}`);
+			const apiKey =
+				groupInfo?.apiKey ??
+				// 回退：该模型不在已验证组内（极少见），用模型级 provider key 或全局 key
+				(await getModelApiKey(model, secrets)) ??
+				globalApiKey;
+			return { model, apiMode, baseUrl, apiKey };
+		})
+	);
+
 	const overrideSource = token ? null : new vscode.CancellationTokenSource();
 	const effectiveToken = token ?? overrideSource!.token;
 
@@ -548,50 +672,59 @@ export async function runModelTests(options: {
 	let succeeded = 0;
 
 	try {
-		// 模型+端点来源：merged 列表里的模型都来自已验证组，但需要对应组 key。
-		// merged 模型可能包含 group 没有（如 discovered），此时回退全局 key。
-		const globalApiKey = await secrets.get("libiaoCopilot.apiKey");
-
-		for (const model of models) {
-			if (effectiveToken.isCancellationRequested) {
-				break;
-			}
-			const baseUrl = model.baseUrl || globalBaseUrl;
-			const apiMode = (model.apiMode ?? "openai") as HFApiMode | string;
-			const key = `${apiMode}|${baseUrl}`;
-			const groupInfo = groupKeyMap.get(key);
-
-			const apiKey =
-				groupInfo?.apiKey ??
-				// 回退：该模型不在已验证组内（极少见），用模型级 provider key 或全局 key
-				(await getModelApiKey(model, secrets)) ??
-				globalApiKey;
-
-			if (!apiKey) {
-				onResult({
-					modelId: model.configId ? `${model.id}::${model.configId}` : model.id,
-					ok: false,
-					error: "未找到该模型的 API Key（请先在配置中为供应商设置 API Key）",
-				});
+		// 并发游标：每个 worker 取号执行，天然均匀分发任务
+		let cursor = 0;
+		const workerCount = Math.min(concurrency, plans.length);
+		const worker = async () => {
+			while (!effectiveToken.isCancellationRequested) {
+				const i = cursor++;
+				if (i >= plans.length) {
+					break;
+				}
+				const plan = plans[i];
+				const modelId = toTestModelId(plan.model);
+				if (!plan.apiKey) {
+					onResult({
+						modelId,
+						ok: false,
+						error: "未找到该模型的 API Key（请先在配置中为供应商设置 API Key）",
+					});
+					tested++;
+					continue;
+				}
+				onRunning?.(modelId);
+				const result = await testSingleModel(plan.model, plan.apiKey, plan.apiMode, plan.baseUrl, effectiveToken);
+				if (effectiveToken.isCancellationRequested) {
+					// 用户已取消：结果不再回报（前端会显示"已取消"），但计入已测
+					tested++;
+					break;
+				}
+				onResult(result);
 				tested++;
-				continue;
+				if (result.ok) {
+					succeeded++;
+				}
 			}
-
-			const result = await testSingleModel(model, apiKey, apiMode, baseUrl, effectiveToken);
-			onResult(result);
-			tested++;
-			if (result.ok) {
-				succeeded++;
-			}
-			if (effectiveToken.isCancellationRequested) {
-				break;
-			}
-		}
+		};
+		await Promise.all(Array.from({ length: workerCount }, () => worker()));
 	} finally {
 		overrideSource?.dispose();
 	}
 
 	return { tested, succeeded };
+}
+
+/** 模型的测试标识（含 configId，与选择器一致） */
+export function toTestModelId(model: HFModelItem): string {
+	return model.configId ? `${model.id}::${model.configId}` : model.id;
+}
+
+/** 单个模型的测试计划（列表就绪后预先解析好，并发执行时直接用） */
+interface TestPlan {
+	model: HFModelItem;
+	apiMode: HFApiMode | string;
+	baseUrl: string;
+	apiKey: string | undefined;
 }
 
 /** 模型级 API key 解析（provider 专属 key → 全局 key） */

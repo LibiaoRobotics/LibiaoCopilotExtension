@@ -155,25 +155,30 @@
 			<div class="section-header">
 				<h2>模型测试</h2>
 				<div class="section-actions">
-					<button id="startModelTest">测试全部模型 TPS</button>
+					<button id="loadModelTestList">加载模型列表</button>
+					<button id="selectAllModelTest" class="secondary" disabled>全选</button>
+					<button id="selectNoneModelTest" class="secondary" disabled>全不选</button>
+					<button id="startModelTest" disabled>开始测试</button>
 					<button id="cancelModelTest" class="secondary" disabled>取消测试</button>
 				</div>
 			</div>
 			<div class="field">
 				<div class="field-description">
-					对「有效模型列表」逐个实测 TPS（输出 tokens/生成耗时）与 TTFT（首 token 延迟），每模型约输出 1000 tokens，
-					会真实消耗 API 额度。测试串行执行，单模型 60 秒超时。
+					先「加载模型列表」查看全部可选模型，勾选想测的模型（默认全勾，勾选状态自动记忆），
+					再点「开始测试」。测试会真实消耗 API 额度：并发（默认 3 路）实测 TPS（输出 tokens/生成耗时）
+					与 TTFT（首 token 延迟），每模型约输出 1000 tokens，单模型 60 秒超时。
 				</div>
 			</div>
-			<div id="modelTestProgress" class="test-progress">尚未开始</div>
+			<div id="modelTestProgress" class="test-progress">先点击「加载模型列表」查看待测模型。</div>
 			<div class="table-container">
 				<table id="modelTestTable">
 					<thead>
 						<tr>
+							<th class="test-select-col">选择</th>
 							<th>模型</th>
 							<th>状态</th>
 							<th>TTFT (ms)</th>
-							<th>生成耗时 (ms)</th>
+							<th>生成耗时 (s)</th>
 							<th>输出 Tokens</th>
 							<th>TPS</th>
 							<th>错误信息</th>

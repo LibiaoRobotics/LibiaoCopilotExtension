@@ -252,7 +252,9 @@ suite("modelConfiguration", () => {
 			{ modelConfiguration: { reasoningEffort: "max" } } as never
 		);
 
+		// 双写：嵌套（Responses 规范字段）+ 顶层（部分网关只认顶层，如 new-api 对 qwen）
 		assert.deepStrictEqual(requestBody.reasoning, { effort: "max" });
+		assert.strictEqual(requestBody.reasoning_effort, "max");
 	});
 
 	test("keeps the picker out of unsupported native API request bodies", () => {

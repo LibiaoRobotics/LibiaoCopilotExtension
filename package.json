@@ -33,7 +33,7 @@
 		"git-commit",
 		"thinking"
 	],
-	"version": "1.0.8",
+	"version": "1.0.9",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -117,6 +117,15 @@
 					"default": false,
 					"scope": "window",
 					"description": "（隐藏参数）启用模型 TPS 测试功能。默认 false。仅手动编辑 settings.json 启用；保存/导出/导入配置均不会迁移该参数。"
+				},
+				"libiaoCopilot.modelTestExclude": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"scope": "window",
+					"description": "（隐藏参数）模型测试黑名单：不在测试列表勾选的模型 ID（含 configId 时为 id::configId）。默认空数组（全部测试）。保存/导出/导入配置均不会迁移该参数。"
 				},
 				"libiaoCopilot.logLevel": {
 					"type": "string",

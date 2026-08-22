@@ -252,19 +252,30 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 		}
 
 		// OpenAI reasoning configuration
+		// 双写（嵌套 + 顶层）：不同网关对 Responses 端点支持不同。
+		// - 嵌套 `reasoning.effort`：Responses 官方规范字段，new-api 对 deepseek 等认这个；
+		// - 顶层 `reasoning_effort`：部分网关（实测 new-api 对 qwen3.8-max）只认顶层，
+		//   嵌套会被忽略导致用户选择的 effort 不生效；
+		// 两个字段都写，各网关各取所需（实测不冲突）。
 		if (isReasoningEffortPickerEnabled(um)) {
 			const allowedEfforts = um.reasoning_efforts?.filter(isReasoningEffortValue);
+			const effort = getConfiguredReasoningEffort(options, um.reasoning_effort, allowedEfforts);
 			const existing = isPlainObject(rb.reasoning) ? { ...(rb.reasoning as Record<string, unknown>) } : {};
 			rb.reasoning = {
 				...existing,
-				effort: getConfiguredReasoningEffort(options, um.reasoning_effort, allowedEfforts),
+				effort,
 			};
+			rb.reasoning_effort = effort;
 		} else if (um?.reasoning_effort !== undefined) {
 			const existing = isPlainObject(rb.reasoning) ? { ...(rb.reasoning as Record<string, unknown>) } : {};
 			rb.reasoning = {
 				...existing,
 				effort: um.reasoning_effort,
 			};
+			// 非 picker 模型也双写（若模型配置了 reasoning_effort）
+			if (isReasoningEffortValue(um.reasoning_effort)) {
+				rb.reasoning_effort = um.reasoning_effort;
+			}
 		}
 
 		// thinking (Volcengine provider)
