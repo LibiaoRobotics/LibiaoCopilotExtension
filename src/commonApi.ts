@@ -60,7 +60,7 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 	protected _usage: TokenUsage | null = null;
 
 	/**
-	 * 读取本次请求捕获的服务端 token 用量（TpsTracker 结算用）。
+	 * 读取本次请求捕获的服务端 token 用量（会话统计用）。
 	 */
 	getUsage(): TokenUsage | null {
 		return this._usage;

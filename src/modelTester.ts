@@ -29,8 +29,6 @@ import { logger } from "./logger";
  *   3 路并发在速度与网关压力之间取平衡，需要更快可调大。
  */
 
-/** 测试输出目标 token 数 */
-const TARGET_OUTPUT_TOKENS = 300;
 /** max_tokens 上限：提示词已限定 ~300，留足余量（代码格式膨胀/标点差异），避免截断 */
 const MAX_OUTPUT_TOKENS = 4096;
 /** 单个模型测试超时（毫秒）：300 tokens 正常 5-25s 内完成，慢网关/挂死会被强杀 */

@@ -657,6 +657,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 				const usage = event.usage ?? (event.response as Record<string, unknown>)?.usage;
 				if (usage && typeof usage === "object") {
 					const u = usage as Record<string, unknown>;
+					const outputDetails = u.output_tokens_details as Record<string, unknown> | undefined;
 					this._usage = {
 						prompt_tokens: Number(u.input_tokens ?? 0),
 						completion_tokens: Number(u.output_tokens ?? 0),
@@ -664,6 +665,10 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 						prompt_tokens_details: u.input_tokens_details
 							? { cached_tokens: Number((u.input_tokens_details as Record<string, unknown>).cached_tokens ?? 0) }
 							: undefined,
+						completion_tokens_details:
+							outputDetails && typeof outputDetails.reasoning_tokens === "number"
+								? { reasoning_tokens: outputDetails.reasoning_tokens }
+								: undefined,
 					};
 					logger.debug("usage.capture", { modelId: this._modelId, usage: this._usage });
 				}

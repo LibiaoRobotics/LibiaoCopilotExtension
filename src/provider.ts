@@ -19,7 +19,7 @@ import { parseModelId, createRetryConfig, executeWithRetry, normalizeUserModels,
 import { prepareLanguageModelChatInformation, NO_MODELS_PLACEHOLDER_ID } from "./provideModel";
 import { countMessageTokens } from "./provideToken";
 import { updateContextStatusBar } from "./statusBar";
-import { TpsTracker, extractPartText, isContentPart, logRequestTps } from "./tpsStats";
+import { SessionStats, isNewSession } from "./sessionStats";
 import { OllamaApi } from "./ollama/ollamaApi";
 import { OpenaiApi } from "./openai/openaiApi";
 import { OpenaiResponsesApi } from "./openai/openaiResponsesApi";
@@ -37,6 +37,12 @@ import { manageContext, type ContextManagementMode } from "./contextManager";
 export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 	/** Track last request completion time for delay calculation. */
 	private _lastRequestTime: number | null = null;
+
+	/** 会话级生成性能统计（token 用量 tooltip 展示） */
+	private _sessionStats = new SessionStats();
+
+	/** 上次请求的消息条数（会话边界检测：骤降视为新会话） */
+	private _lastMessageCount: number | null = null;
 
 	private readonly _geminiToolCallMetaByCallId = new Map<string, GeminiToolCallMeta>();
 	private readonly _openaiResponsesPreviousResponseIdUnsupportedBaseUrls = new Set<string>();
@@ -96,28 +102,27 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 		options: ProvideLanguageModelChatResponseOptions,
 		progress: Progress<LanguageModelResponsePart2>,
 		token: CancellationToken
-	): Promise<void> {		if (model.id === NO_MODELS_PLACEHOLDER_ID) {
+	): Promise<void> {
+		if (model.id === NO_MODELS_PLACEHOLDER_ID) {
 			// Placeholder entry: no verified models exist, so never send a
 			// request — fail fast with an actionable message.
 			throw new Error("No models available. Please check the base URL and API Key configuration.");
-		}		// TPS 统计：状态栏实时显示开关（配置项 libiaoCopilot.tpsStatusBar）
-		const tpsStatusBarEnabled = vscode.workspace
-			.getConfiguration()
-			.get<boolean>("libiaoCopilot.tpsStatusBar", true);
-		const tpsTracker: TpsTracker | null = tpsStatusBarEnabled
-			? new TpsTracker(model.id, Date.now())
-			: null;
-		// 记录请求开始前的状态栏文本，流式结束后恢复（进度条由 updateContextStatusBar 维护）
-		const originalStatusText = this.statusBarItem.text;
+		}
+		// 会话统计：跟踪本次请求的首/末非空输出时刻（流式耗时用，含思考）
+		let streamFirstMs: number | null = null;
+		let streamLastMs: number | null = null;
 		const trackingProgress: Progress<LanguageModelResponsePart2> = {
 			report: (part) => {
 				try {
-					// TPS 统计：统一出口拦截所有 part（五种 apiMode 全覆盖）
-					if (tpsTracker && isContentPart(part)) {
-						const text = extractPartText(part);
-						if (text) {
-							tpsTracker.recordDelta(text);
+					// 记录首/末非空输出时刻：任何 TextPart/ThinkingPart 都算（生成已开始）
+					const isOutput = typeof part === "object" && part !== null &&
+						("value" in part || "id" in part);
+					if (isOutput) {
+						const now = Date.now();
+						if (streamFirstMs === null) {
+							streamFirstMs = now;
 						}
+						streamLastMs = now;
 					}
 					progress.report(part);
 				} catch (e) {
@@ -128,19 +133,10 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				}
 			},
 		};
-		// 实时估算显示：流式期间状态栏显示 `$(zap) N t/s`
-		if (tpsTracker) {
-			tpsTracker.onEstimate((tps) => {
-				if (tps !== null && tps > 0) {
-					this.statusBarItem.text = `$(zap) ${tps.toFixed(0)} t/s`;
-				}
-			});
-			tpsTracker.onStall(() => {
-				this.statusBarItem.text = `$(circle-slash) 停滞`;
-			});
-		}
 		// 各 apiMode 实例的 usage 出口（finally 结算用）
 		let currentApi: { getUsage(): TokenUsage | null } | null = null;
+		// 模型配置（try 内解析 um 后赋值；finally 刷新 tooltip 时需要）
+		let modelConfig: { includeReasoningInRequest: boolean } = { includeReasoningInRequest: false };
 		const requestStartTime = Date.now();
 		try {
 			// get model config from user settings
@@ -185,12 +181,24 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			});
 
 			// Prepare model configuration
-			const modelConfig = {
+			modelConfig = {
 				includeReasoningInRequest: um?.include_reasoning_in_request ?? false,
 			};
 
 			// Update Token Usage
-			updateContextStatusBar(messages, options.tools, model, this.statusBarItem, modelConfig);
+			try {
+				// await 保证状态栏已是本次请求的进度条；计数失败仅告警、不影响请求本身
+				// 会话统计检测：消息条数骤降视为新会话，清零统计
+				if (this._lastMessageCount !== null && isNewSession(this._lastMessageCount, messages.length)) {
+					this._sessionStats.reset();
+				}
+				this._lastMessageCount = messages.length;
+				await updateContextStatusBar(messages, options.tools, model, this.statusBarItem, modelConfig, this._sessionStats);
+			} catch (e) {
+				logger.warn("statusBar.update", {
+					error: e instanceof Error ? e.message : String(e),
+				});
+			}
 
 			// Apply delay between consecutive requests
 			const modelDelay = um?.delay;
@@ -608,13 +616,24 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 		} finally {
 			const durationMs = Date.now() - requestStartTime;
 			logger.info("request.end", { modelId: model.id, durationMs });
-			// TPS 结算：读取服务端 usage（可能为空），产出结算值并触发状态栏定格
-			if (tpsTracker) {
-				const usage = currentApi?.getUsage() ?? null;
-				const result = tpsTracker.finalize(usage);
-				logRequestTps(result);
-				// 定格：恢复状态栏为请求前文本（后续由 updateContextStatusBar/手动恢复）
-				this.statusBarItem.text = originalStatusText;
+			// 会话统计：读取服务端 usage（可能为空），记录本次请求的 token 数与流式耗时
+			const usage = currentApi?.getUsage() ?? null;
+			const streamMs =
+				streamFirstMs !== null && streamLastMs !== null
+					? streamLastMs - streamFirstMs
+					: 0;
+			if (streamMs > 0) {
+				this._sessionStats.recordRequest(model.id, usage, streamMs);
+			} else {
+				logger.debug("sessionStats.skip", { modelId: model.id, reason: "no_delta" });
+			}
+			// 刷新状态栏 tooltip：会话统计已更新（token 段不变、统计段刷新）
+			try {
+				await updateContextStatusBar(messages, options.tools, model, this.statusBarItem, modelConfig, this._sessionStats);
+			} catch (e) {
+				logger.warn("statusBar.update", {
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 			// Update last request time after successful completion
 			this._lastRequestTime = Date.now();

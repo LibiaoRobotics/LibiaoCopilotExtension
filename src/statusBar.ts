@@ -1,13 +1,14 @@
 import * as vscode from "vscode";
 import { LanguageModelChatInformation, LanguageModelChatRequestMessage, LanguageModelChatTool } from "vscode";
 import { countMessageTokens, countToolTokens } from "./provideToken";
+import type { SessionStats } from "./sessionStats";
 
 export function initStatusBar(context: vscode.ExtensionContext): vscode.StatusBarItem {
 	// Create status bar item for token count display
 	const tokenCountStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
 	tokenCountStatusBarItem.name = "Token Count";
 	tokenCountStatusBarItem.text = "$(symbol-numeric) Ready";
-	tokenCountStatusBarItem.tooltip = "Current model token usage - Click to Open Configuration UI";
+	tokenCountStatusBarItem.tooltip = "当前模型 Token 用量 - 点击打开配置界面";
 	tokenCountStatusBarItem.command = "libiaoCopilot.openConfig";
 	context.subscriptions.push(tokenCountStatusBarItem);
 	// Show the status bar item initially
@@ -58,7 +59,8 @@ export async function updateContextStatusBar(
 	tools: readonly LanguageModelChatTool[] | undefined,
 	model: LanguageModelChatInformation,
 	statusBarItem: vscode.StatusBarItem,
-	modelConfig: { includeReasoningInRequest: boolean }
+	modelConfig: { includeReasoningInRequest: boolean },
+	sessionStats?: SessionStats
 ): Promise<void> {
 	// Calculate tokens for all messages in parallel
 	const tokenCountPromises = messages.map((message) => countMessageTokens(message, modelConfig));
@@ -80,11 +82,16 @@ export async function updateContextStatusBar(
 	const progressBar = createProgressBar(totalTokenCount, maxTokens);
 	const displayText = `$(symbol-parameter) ${progressBar}`;
 	statusBarItem.text = displayText;
-	statusBarItem.tooltip = `Token Usage: ${formatTokenCount(totalTokenCount)} / ${formatTokenCount(maxTokens)}\n
+	// 会话统计附加段落（有多条记录才显示）
+	let statsText = "";
+	if (sessionStats) {
+		statsText = sessionStats.formatTooltip();
+	}
+	statusBarItem.tooltip = `Token 用量: ${formatTokenCount(totalTokenCount)} / ${formatTokenCount(maxTokens)}\n
 ${progressBar}\n
-  - Messages: ${formatTokenCount(messagesTokens)}  (${Math.min((messagesTokens / maxTokens) * 100, 100).toFixed(1)}%)
-  - Tools: ${formatTokenCount(toolTokens)}  (${Math.min((toolTokens / maxTokens) * 100, 100).toFixed(1)}%) \n
-Click to Open Configuration UI`;
+  - 消息: ${formatTokenCount(messagesTokens)}  (${Math.min((messagesTokens / maxTokens) * 100, 100).toFixed(1)}%)
+  - 工具: ${formatTokenCount(toolTokens)}  (${Math.min((toolTokens / maxTokens) * 100, 100).toFixed(1)}%) \n
+${statsText ? statsText + "\n\n" : ""}点击打开配置界面`;
 
 	// Add color coding based on token usage
 	const usagePercentage = (totalTokenCount / maxTokens) * 100;

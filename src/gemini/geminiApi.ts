@@ -832,6 +832,10 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 							prompt_tokens_details: um.cachedContentTokenCount
 								? { cached_tokens: um.cachedContentTokenCount }
 								: undefined,
+							completion_tokens_details:
+								typeof um.thoughtsTokenCount === "number"
+									? { reasoning_tokens: um.thoughtsTokenCount }
+									: undefined,
 						};
 						logger.debug("usage.capture", { modelId: this._modelId, usage: this._usage });
 					}

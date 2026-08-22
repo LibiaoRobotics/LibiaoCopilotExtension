@@ -110,7 +110,7 @@ for (const m of models) {
 	// 判定用「不」字（U+4E0D）：不推荐 = 含不字；推荐 = 不含不字
 	const expected = note.includes("\u4E0D") ? NOT_POINTS : REC_POINTS;
 	const ok = JSON.stringify(points) === JSON.stringify(expected);
-	if (!ok) failed++;
+	if (!ok) { failed++; }
 	console.log(
 		"  " + (ok ? OK_MARK : BAD_MARK) + " " + m.id.padEnd(32) + " " +
 		points.map((p) => "U+" + p.toString(16).toUpperCase()).join(" ")

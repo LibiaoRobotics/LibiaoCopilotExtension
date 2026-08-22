@@ -86,6 +86,8 @@ export interface GeminiUsageMetadata {
 	cachedContentTokenCount?: number;
 	candidatesTokenCount?: number;
 	totalTokenCount?: number;
+	/** 思考 token 数（Gemini 2.5+ 返回） */
+	thoughtsTokenCount?: number;
 }
 
 export interface GeminiModelListResponse {

@@ -185,4 +185,13 @@ export interface TokenUsage {
 	completion_tokens: number;
 	total_tokens: number;
 	prompt_tokens_details?: TokenUsageDetails;
+	/**
+	 * completion 明细（各网关/模式字段不同，可选）：
+	 * - OpenAI chat: completion_tokens_details.reasoning_tokens
+	 * - Responses: output_tokens_details.reasoning_tokens（本字段由 openaiResponsesApi 归一化到此处）
+	 * 拿不到时 undefined，会话统计仅显示总输出 token。
+	 */
+	completion_tokens_details?: {
+		reasoning_tokens?: number;
+	};
 }
