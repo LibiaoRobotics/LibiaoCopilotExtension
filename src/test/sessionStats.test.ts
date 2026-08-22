@@ -118,8 +118,9 @@ suite("sessionStats", () => {
 		const tip = stats.formatTooltip();
 		assert.ok(tip.includes("会话统计 qwen3.8-max"), `应包含模型标题, got: ${tip}`);
 		assert.ok(tip.includes("请求次数: 1"), `应包含请求数, got: ${tip}`);
-		assert.ok(tip.includes("输出 token 数: 181"), `应包含输出 token 数, got: ${tip}`);
+		assert.ok(tip.includes("总输出: 181"), `应包含总输出, got: ${tip}`);
 		assert.ok(tip.includes("思考 token 数: 150（83%）"), `应包含思考 token 数与占比, got: ${tip}`);
+		assert.ok(tip.includes("正文 token 数: 31（17%）"), `应包含正文 token 数与占比, got: ${tip}`);
 		assert.ok(tip.includes("流式耗时: 4 秒"), `应包含流式耗时, got: ${tip}`);
 		assert.ok(tip.includes("平均速度: 45 token/秒"), `应包含平均速度, got: ${tip}`);
 	});

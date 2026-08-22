@@ -106,9 +106,11 @@ export class SessionStats {
 		const lines: string[] = [];
 		lines.push(`会话统计 ${entry.modelId}`);
 		lines.push(`  请求次数: ${this._formatNumber(entry.requests)}`);
-		lines.push(`  输出 token 数: ${this._formatNumber(entry.outputTokens)}`);
+		lines.push(`  总输出: ${this._formatNumber(entry.outputTokens)}`);
 		if (entry.reasoningTokens > 0) {
+			const visibleTokens = entry.outputTokens - entry.reasoningTokens;
 			lines.push(`  思考 token 数: ${this._formatNumber(entry.reasoningTokens)}（${reasoningPct}%）`);
+			lines.push(`  正文 token 数: ${this._formatNumber(visibleTokens)}（${100 - reasoningPct}%）`);
 		}
 		lines.push(`  流式耗时: ${this._formatDuration(entry.totalStreamMs)}`);
 		lines.push(`  平均速度: ${avgTps} token/秒`);
