@@ -367,14 +367,17 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 		input: string,
 		progress: Progress<LanguageModelResponsePart2>
 	): { emittedAny: boolean } {
-		// 已发射真实正文后停止找 think 标签（之后的 <think> 更可能是字面内容）；
-		// think 块激活期间始终继续解析。
+		// 已发射真实正文、或已经过原生思考缓冲（reasoning_content / reasoning_details /
+		// thinking 字段 / Responses reasoning_text.delta）后，停止找 think 标签——
+		// 此时的 content 是干净正文，里面的  是字面内容（如提示词示例），
+		// 若继续解析会被误判为思考开始、吞掉其后全部正文（回放实证：吞 37 字符）。
+		// think 块激活期间（_xmlThinkActive）始终继续解析，不受此门控影响。
 		// 取代旧的一次性 _xmlThinkDetectionAttempted：旧逻辑在首个无标签 chunk
 		// （如前导空白）后就永久禁用解析，导致大段思考被当正文显示（2026-08-22 修复）。
 		// 门控命中前先冲刷挂起缓冲：正文跨块时（如 "Array" + "<" + "string>"），
 		// 上一块的截断标签前缀会卡在 pending 里——若不冲刷，这部分字符永久丢失。
-		// 一旦正文已开始发射，pending 不可能再拼成思考开始标签，按正文发射即可。
-		if (this._hasEmittedAssistantText && !this._xmlThinkActive) {
+		// 一旦命中门控，pending 不可能再拼成思考开始标签，按正文发射即可。
+		if ((this._hasEmittedAssistantText || this._everBufferedThinking) && !this._xmlThinkActive) {
 			if (this._xmlThinkPending) {
 				const pending = this._xmlThinkPending;
 				this._xmlThinkPending = "";
