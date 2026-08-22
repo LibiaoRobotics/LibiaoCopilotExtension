@@ -365,8 +365,18 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 	 * Returns which parts were emitted for logging/flow control.
 	 */
 	protected processTextContent(input: string, progress: Progress<LanguageModelResponsePart2>): { emittedAny: boolean } {
-		// 跳过纯空白块：不发射、也不计入"已发射正文"（否则前导空白会永久关闭 think 标签探测）
-		if (!input || input.trim().length === 0) {
+		if (!input) {
+			return { emittedAny: false };
+		}
+		// ⚠️ [2026-08-23 换行丢失事故修复] 纯空白块【照常发射】，但【不计入】"已发射真实正文"：
+		// - 发射：网关（new-api→qwen 等）会把段落分隔的 `\n\n` 作为独立 delta 发送，
+		//   吞掉它 = Markdown 段落结构塌缩（"## 标题\n\n1." 黏成 "## 标题1."，列表/加粗全废）。
+		// - 不计入标志：前导空白若置位 _hasEmittedAssistantText，会永久关闭
+		//   XML think 标签探测（2026-08-22 门控的本意），导致思考被当正文显示。
+		// 两个行为必须拆开——旧实现把"不置标志"做成了"整块吞掉"，是本次事故根因。
+		// emittedAny 语义保持"发射了非空白正文"不变，调用方零改动。
+		if (input.trim().length === 0) {
+			progress.report(new vscode.LanguageModelTextPart(input));
 			return { emittedAny: false };
 		}
 		progress.report(new vscode.LanguageModelTextPart(input));

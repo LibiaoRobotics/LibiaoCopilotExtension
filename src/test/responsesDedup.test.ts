@@ -209,4 +209,49 @@ suite("openaiResponsesApi output text dedup", () => {
 		assert.strictEqual(collectThinking(parts), "lone reasoning");
 		assert.strictEqual(collectText(parts), "lone answer");
 	});
+
+	// 2026-08-23 换行丢失事故：网关把段落分隔 `\n\n` 作为独立纯空白 delta 发送，
+	// 旧 processTextContent 整块吞掉（把"不置标志"做成了"不发射"），Markdown 段落
+	// 结构塌缩（"## 标题\n\n1." 黏成 "## 标题1."）。修复后空白照常发射、字节级保真。
+	test("preserves standalone whitespace deltas (paragraph separators) byte-for-byte", async () => {
+		const api = new OpenaiResponsesApi("test-model");
+		const { progress, parts } = recordingProgress();
+		const token = new vscode.CancellationTokenSource().token;
+		const raw = "## 两件等你拍板的事\n\n1. **第一件**——内容\n2. `第二件` 内容";
+		await api.processStreamingResponse(
+			sseStream([
+				{ type: "response.output_text.delta", delta: "## 两件等你拍板的事" },
+				{ type: "response.output_text.delta", delta: "\n\n" },
+				{ type: "response.output_text.delta", delta: "1. **第一件**——内容" },
+				{ type: "response.output_text.delta", delta: "\n2. `第二件` 内容" },
+				{ type: "response.output_text.done", text: raw },
+				{ type: "response.completed" },
+			]),
+			progress,
+			token
+		);
+		assert.strictEqual(collectText(parts), raw);
+	});
+
+	// 不变量守护：纯空白 delta 不得置位"已发射真实正文"标志，否则 XML think 门控
+	// 被永久关闭、思考被当正文显示（2026-08-22 门控本意）。今日修复把"发射"与
+	// "置标志"拆开，此测试防止未来有人把两者再合并回吞空白。
+	test("leading whitespace delta does not close the XML think gate", async () => {
+		const api = new OpenaiResponsesApi("test-model");
+		const { progress, parts } = recordingProgress();
+		const token = new vscode.CancellationTokenSource().token;
+		await api.processStreamingResponse(
+			sseStream([
+				{ type: "response.output_text.delta", delta: "  \n" },
+				{ type: "response.output_text.delta", delta: "<think>secret</think>" },
+				{ type: "response.output_text.delta", delta: "visible body" },
+				{ type: "response.completed" },
+			]),
+			progress,
+			token
+		);
+		assert.strictEqual(collectThinking(parts), "secret");
+		assert.strictEqual(collectText(parts).trim(), "visible body");
+		assert.ok(!collectText(parts).includes("<think>"), "think tag must not leak into visible text");
+	});
 });
