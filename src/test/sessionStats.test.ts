@@ -103,10 +103,10 @@ suite("sessionStats", () => {
 		);
 		const tip = stats.formatTooltip();
 		assert.ok(tip.includes("模型统计 · qwen3.8-max"), `应包含模型标题, got: ${tip}`);
-		assert.ok(tip.includes("请求次数：\`1\`"), `应包含请求数, got: ${tip}`);
-		assert.ok(tip.includes("输出 token：\`181\`"), `应包含总输出 token 数, got: ${tip}`);
-		assert.ok(tip.includes("├ 思考（83%）：\`150\`"), `应包含思考 token 数与占比, got: ${tip}`);
-		assert.ok(tip.includes("└ 正文（17%）：\`31\`"), `应包含正文 token 数与占比, got: ${tip}`);
+		assert.ok(tip.includes("请求次数：`1`"), `应包含请求数, got: ${tip}`);
+		assert.ok(tip.includes("输出 token：`181`"), `应包含总输出 token 数, got: ${tip}`);
+		assert.ok(tip.includes("├ 思考（83%）：`150`"), `应包含思考 token 数与占比, got: ${tip}`);
+		assert.ok(tip.includes("└ 正文（17%）：`31`"), `应包含正文 token 数与占比, got: ${tip}`);
 		assert.ok(tip.includes("流式耗时：4 秒"), `应包含流式耗时, got: ${tip}`);
 		assert.ok(tip.includes("$(info) 平均速度：**45** token/秒"), `应包含蓝色图标的平均速度行, got: ${tip}`);
 	});
