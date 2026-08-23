@@ -260,8 +260,9 @@ suite("modelTester", () => {
 			assert.strictEqual(extractDeltaChars({ type: "response.output_text.delta", delta: "hello" }), 5);
 		});
 
-		test("Anthropic content_block_delta.delta.text 不重复计数", () => {
+		test("Anthropic content_block_delta.delta.text 和 delta.thinking 提取", () => {
 			assert.strictEqual(extractDeltaChars({ type: "content_block_delta", delta: { text: "世界" } }), 2);
+			assert.strictEqual(extractDeltaChars({ type: "content_block_delta", delta: { type: "thinking_delta", thinking: "正在思考" } }), 4);
 		});
 
 		test("Gemini candidates parts text (仅统计正文，排除 thought 块)", () => {

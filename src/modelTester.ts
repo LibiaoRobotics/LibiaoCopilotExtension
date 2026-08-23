@@ -517,11 +517,16 @@ export function extractDeltaChars(parsed: Record<string, unknown>): number {
 		chars += parsed.delta.length;
 	}
 
-	// Anthropic: content_block_delta.delta.text
+	// Anthropic: content_block_delta.delta.text 和 delta.thinking（全流式文本提取）
 	if (parsed.type === "content_block_delta") {
 		const cbDelta = parsed.delta as Record<string, unknown> | undefined;
-		if (cbDelta && typeof cbDelta === "object" && typeof cbDelta.text === "string") {
-			chars += cbDelta.text.length;
+		if (cbDelta && typeof cbDelta === "object") {
+			if (typeof cbDelta.text === "string") {
+				chars += cbDelta.text.length;
+			}
+			if (typeof cbDelta.thinking === "string") {
+				chars += cbDelta.thinking.length;
+			}
 		}
 	}
 
