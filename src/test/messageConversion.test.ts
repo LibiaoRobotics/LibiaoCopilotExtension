@@ -292,7 +292,10 @@ suite("Multi-protocol message conversion & request builder", () => {
 			assert.strictEqual(result.tools?.[0].type, "function");
 			assert.strictEqual(result.tools?.[0].name, "read_file");
 			assert.strictEqual(result.tools?.[0].description, "Read file content");
-			assert.ok(!("function" in (result.tools?.[0] as Record<string, unknown>)), "Responses 模式下不应有嵌套 function 包装");
+			assert.ok(
+				!("function" in (result.tools?.[0] as unknown as Record<string, unknown>)),
+				"Responses 模式下不应有嵌套 function 包装"
+			);
 		});
 	});
 });
