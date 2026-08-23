@@ -83,6 +83,8 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 	private _sawTextDelta = false;
 	/** Same fuse for reasoning/thinking deltas vs their done events. */
 	private _sawReasoningDelta = false;
+	/** 本请求是否已发过服务端工具转换提示（每请求至多一次） */
+	private _serverToolNotified = false;
 
 	constructor(modelId: string) {
 		super(modelId);
@@ -445,7 +447,58 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			}
 		}
 	}
+	/** OpenAI Responses 服务端工具 item 类型（服务端执行、结果不回客户端） */
+	private static readonly SERVER_SIDE_TOOL_TYPES = new Set([
+		"file_search_call",
+		"web_search_call",
+		"code_interpreter_call",
+		"image_generation_call",
+	]);
 
+	/**
+	 * 把服务端工具 item 转成同名 function call：
+	 * - queries 等意图参数在 added item 上携带，转换发生在 added；
+	 *   done 事件复用 _completedToolCallIndices / 缓冲去重防双发；
+	 * - 客户端尝试执行后会把「不可用」错误回传模型，促其下轮改用可用工具（自愈闭环）；
+	 * - 向 UI 发一条可见提示说明这张工具卡的来历（每请求至多一次）。
+	 */
+	private async handleServerSideToolItem(
+		item: Record<string, unknown>,
+		event: Record<string, unknown>,
+		progress: Progress<vscode.LanguageModelResponsePart2>
+	): Promise<void> {
+		const toolType = String(item.type);
+		const idx = typeof event.output_index === "number" ? event.output_index : 0;
+		logger.warn("responses.serverTool.converted", {
+			modelId: this._modelId,
+			toolType,
+			outputIndex: idx,
+			itemId: item.id,
+		});
+
+		if (!this._serverToolNotified) {
+			this._serverToolNotified = true;
+			// ⚠️ 用码点转义写入（U+26A0 U+FE0F），防编辑工具损坏 emoji
+			progress.report(
+				new vscode.LanguageModelTextPart(
+					"\n\n\u26A0\uFE0F 模型尝试调用不受支持的服务端工具 " +
+						toolType +
+						"，已自动转为错误结果，模型将改用可用工具。\n\n"
+				)
+			);
+		}
+
+		if (this._completedToolCallIndices.has(idx) || this._toolCallBuffers.has(idx)) {
+			return;
+		}
+		const args = JSON.stringify({ queries: Array.isArray(item.queries) ? item.queries : [] });
+		this._toolCallBuffers.set(idx, {
+			id: typeof item.id === "string" ? item.id : undefined,
+			name: toolType,
+			args,
+		});
+		await this.tryEmitBufferedToolCall(idx, progress);
+	}
 	private async processEvent(
 		event: Record<string, unknown>,
 		progress: Progress<LanguageModelResponsePart2>
@@ -597,7 +650,18 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			case "response.output_item.added":
 			case "response.output_item.done": {
 				const item = event.item && typeof event.item === "object" ? (event.item as Record<string, unknown>) : null;
-				if (!item || item.type !== "function_call") {
+				if (!item) {
+					return;
+				}
+				// 服务端工具（file_search_call/web_search_call 等）：客户端无法执行，
+				// 网关执行结果也不回客户端，模型拿它当回合产出 → 空响应或中途截断
+				// （2026-08-23 qwen3.8-max 事故）。转成同名 function call 后，客户端
+				// 报「不可用」错误回传模型，下轮自动改用真实工具，形成自愈闭环。
+				if (typeof item.type === "string" && OpenaiResponsesApi.SERVER_SIDE_TOOL_TYPES.has(item.type)) {
+					await this.handleServerSideToolItem(item, event, progress);
+					return;
+				}
+				if (item.type !== "function_call") {
 					return;
 				}
 
