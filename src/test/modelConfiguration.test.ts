@@ -282,6 +282,10 @@ suite("modelConfiguration", () => {
 			options
 		) as Record<string, unknown>;
 
+		assert.strictEqual(anthropicBody.reasoning_effort, undefined);
+		assert.strictEqual(anthropicBody.thinking, undefined);
+		assert.strictEqual(ollamaBody.reasoning_effort, undefined);
+		assert.strictEqual(ollamaBody.think, undefined);
 		assert.deepStrictEqual(geminiBodyWithEffort.generationConfig, {
 			thinkingConfig: { thinkingLevel: "HIGH" },
 		});

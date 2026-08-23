@@ -219,8 +219,12 @@ export function convertToolsToOpenAIResponses(options?: vscode.ProvideLanguageMo
 /**
  * 检查是否为图片MIME类型
  */
-export function isImageMimeType(mimeType: string): boolean {
-	return mimeType.startsWith("image/") && ["image/jpeg", "image/png", "image/gif", "image/webp"].includes(mimeType);
+export function isImageMimeType(mimeType: unknown): boolean {
+	return (
+		typeof mimeType === "string" &&
+		mimeType.startsWith("image/") &&
+		["image/jpeg", "image/png", "image/gif", "image/webp"].includes(mimeType)
+	);
 }
 
 /**
