@@ -106,21 +106,34 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			// request — fail fast with an actionable message.
 			throw new Error("No models available. Please check the base URL and API Key configuration.");
 		}
-		// 会话统计：跟踪本次请求的首/末非空输出时刻（流式耗时用，含思考）
+		// 会话统计：跟踪本次请求的首/末非空输出时刻（流式耗时用）
 		let streamFirstMs: number | null = null;
 		let streamLastMs: number | null = null;
+		let textFirstMs: number | null = null;
+		let textLastMs: number | null = null;
 		const trackingProgress: Progress<LanguageModelResponsePart2> = {
 			report: (part) => {
 				try {
+					const now = Date.now();
 					// 记录首/末非空输出时刻：任何 TextPart/ThinkingPart 都算（生成已开始）
 					const isOutput = typeof part === "object" && part !== null &&
 						("value" in part || "id" in part);
 					if (isOutput) {
-						const now = Date.now();
 						if (streamFirstMs === null) {
 							streamFirstMs = now;
 						}
 						streamLastMs = now;
+					}
+					// 记录纯正文（TextPart）输出时刻（供 Gemini 模式独立统计正文流式耗时）
+					const isTextOutput =
+						part instanceof vscode.LanguageModelTextPart &&
+						typeof part.value === "string" &&
+						part.value.length > 0;
+					if (isTextOutput) {
+						if (textFirstMs === null) {
+							textFirstMs = now;
+						}
+						textLastMs = now;
 					}
 					progress.report(part);
 				} catch (e) {
@@ -133,6 +146,8 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 		};
 		// 各 apiMode 实例的 usage 出口（finally 结算用）
 		let currentApi: { getUsage(): TokenUsage | null } | null = null;
+		// 协议模式（供 finally 结算区分 Gemini 独立正文统计）
+		let actualApiMode: string = "openai";
 		// 模型配置（try 内解析 um 后赋值；finally 刷新 tooltip 时需要）
 		let modelConfig: { includeReasoningInRequest: boolean } = { includeReasoningInRequest: false };
 		const requestStartTime = Date.now();
@@ -169,6 +184,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 
 			// Check if using Ollama native API mode
 			const apiMode = um?.apiMode ?? "openai";
+			actualApiMode = apiMode;
 			const baseUrl = um?.baseUrl || config.get<string>("libiaoCopilot.baseUrl", "");
 
 			logger.info("request.start", {
@@ -612,14 +628,19 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			const durationMs = Date.now() - requestStartTime;
 			logger.info("request.end", { modelId: model.id, durationMs });
 			// 会话统计：读取服务端 usage（可能为空），记录本次请求的 token 数与流式耗时
+			// 仅对 Gemini 模型：由于 Gemini 存在静默思考/思考摘要机制，流式耗时取纯正文耗时（textFirstMs -> textLastMs）；
+			// 其余模型（OpenAI, Anthropic 等）保持原有的首末 delta 流式耗时（streamFirstMs -> streamLastMs）。
 			const usage = currentApi?.getUsage() ?? null;
+			const isGemini = actualApiMode === "gemini";
 			const streamMs =
-				streamFirstMs !== null && streamLastMs !== null
-					? streamLastMs - streamFirstMs
-					: 0;
+				isGemini && textFirstMs !== null && textLastMs !== null
+					? textLastMs - textFirstMs
+					: streamFirstMs !== null && streamLastMs !== null
+						? streamLastMs - streamFirstMs
+						: 0;
 			if (streamMs > 0) {
 				// model.id = 组合 ID（id::configId）作统计键；model.name = displayName（带视觉图标）作显示名
-				this._sessionStats.recordRequest(model.id, usage, streamMs, model.name);
+				this._sessionStats.recordRequest(model.id, usage, streamMs, model.name, actualApiMode);
 			} else {
 				logger.debug("sessionStats.skip", { modelId: model.id, reason: "no_delta" });
 			}

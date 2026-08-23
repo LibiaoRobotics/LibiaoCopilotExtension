@@ -39,7 +39,7 @@ suite("modelConfiguration", () => {
 		const reasoningEffort = REASONING_EFFORT_CONFIGURATION_SCHEMA.properties.reasoningEffort;
 		assert.strictEqual(reasoningEffort.title, "Reasoning Effort");
 		assert.strictEqual(reasoningEffort.default, "medium");
-		assert.deepStrictEqual(reasoningEffort.enum, ["minimal", "low", "medium", "high", "xhigh", "max"]);
+		assert.deepStrictEqual(reasoningEffort.enum, ["auto", "minimal", "low", "medium", "high", "xhigh", "max"]);
 		const modelSchema = createModelConfigurationSchema({ id: "m", owned_by: "p", reasoning_effort: "high" });
 		const configuredEffort = modelSchema?.properties.reasoningEffort as { default: string };
 		assert.strictEqual(configuredEffort.default, "high");
@@ -273,21 +273,29 @@ suite("modelConfiguration", () => {
 			id: "gemini-3.7-flash",
 			owned_by: "libiaorobot",
 			apiMode: "gemini" as const,
-			reasoning_effort: "high" as const,
-			reasoning_efforts: ["low", "medium", "high"],
+			reasoning_effort: "auto" as const,
+			reasoning_efforts: ["auto", "low", "medium", "high"],
 		};
-		const geminiBodyWithEffort = new GeminiApi("gemini-3.7-flash").prepareRequestBody(
+		const geminiBodyWithAuto = new GeminiApi("gemini-3.7-flash").prepareRequestBody(
 			{ contents: [] },
 			geminiModel,
-			options
+			undefined
+		) as Record<string, unknown>;
+		const geminiBodyWithHigh = new GeminiApi("gemini-3.7-flash").prepareRequestBody(
+			{ contents: [] },
+			geminiModel,
+			{ modelConfiguration: { reasoningEffort: "high" } } as never
 		) as Record<string, unknown>;
 
 		assert.strictEqual(anthropicBody.reasoning_effort, undefined);
 		assert.strictEqual(anthropicBody.thinking, undefined);
 		assert.strictEqual(ollamaBody.reasoning_effort, undefined);
 		assert.strictEqual(ollamaBody.think, undefined);
-		assert.deepStrictEqual(geminiBodyWithEffort.generationConfig, {
-			thinkingConfig: { thinkingLevel: "HIGH" },
+		assert.deepStrictEqual(geminiBodyWithAuto.generationConfig, {
+			thinkingConfig: { includeThoughts: true },
+		});
+		assert.deepStrictEqual(geminiBodyWithHigh.generationConfig, {
+			thinkingConfig: { thinkingLevel: "HIGH", includeThoughts: true },
 		});
 	});
 

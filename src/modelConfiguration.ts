@@ -1,9 +1,10 @@
 import type * as vscode from "vscode";
 import type { HFModelItem } from "./types";
 
-export type ReasoningEffortPickerValue = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+export type ReasoningEffortPickerValue = "auto" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 const REASONING_EFFORT_VALUES: readonly ReasoningEffortPickerValue[] = [
+	"auto",
 	"minimal",
 	"low",
 	"medium",
@@ -18,8 +19,9 @@ export const REASONING_EFFORT_CONFIGURATION_SCHEMA = {
 			type: "string",
 			title: "Reasoning Effort",
 			enum: REASONING_EFFORT_VALUES,
-			enumItemLabels: ["Minimal", "Low", "Medium", "High", "XHigh", "Max"],
+			enumItemLabels: ["Auto", "Minimal", "Low", "Medium", "High", "XHigh", "Max"],
 			enumDescriptions: [
+				"Automatic / dynamic reasoning budget",
 				"Smallest reasoning budget",
 				"Low reasoning budget",
 				"Balanced reasoning budget",
@@ -34,6 +36,7 @@ export const REASONING_EFFORT_CONFIGURATION_SCHEMA = {
 } as const;
 
 const REASONING_EFFORT_LABELS: Record<ReasoningEffortPickerValue, string> = {
+	auto: "Auto",
 	minimal: "Minimal",
 	low: "Low",
 	medium: "Medium",
@@ -43,6 +46,7 @@ const REASONING_EFFORT_LABELS: Record<ReasoningEffortPickerValue, string> = {
 };
 
 const REASONING_EFFORT_DESCRIPTIONS: Record<ReasoningEffortPickerValue, string> = {
+	auto: "Automatic / dynamic reasoning budget",
 	minimal: "Smallest reasoning budget",
 	low: "Low reasoning budget",
 	medium: "Balanced reasoning budget",

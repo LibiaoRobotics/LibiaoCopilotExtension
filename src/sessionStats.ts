@@ -18,13 +18,15 @@ export interface SessionStatsEntry {
 	modelId: string;
 	/** 显示名（displayName，可能带视觉图标 emoji 前缀；未记录时回退 modelId） */
 	displayName?: string;
+	/** 协议模式（例如 "gemini" / "openai" / "anthropic" 等） */
+	apiMode?: string;
 	/** 成功计入统计的请求数 */
 	requests: number;
 	/** 总输出 token（思考 + 正文，服务端精确值） */
 	outputTokens: number;
 	/** 思考 token（服务端 reasoning_tokens，可能拿不到） */
 	reasoningTokens: number;
-	/** 累计流式耗时（ms，首 delta → 末 delta） */
+	/** 累计流式耗时（ms，首 delta → 末 delta；Gemini 模式下为正文流式耗时） */
 	totalStreamMs: number;
 }
 
@@ -41,8 +43,15 @@ export class SessionStats {
 	 * @param usage 服务端 usage（completion_tokens 为 0 或缺失时忽略）
 	 * @param streamMs 流式耗时（首 delta → 末 delta，毫秒；<=0 或缺失时不算入累计耗时）
 	 * @param displayName 显示名（displayName 优先，可能带视觉图标；配置改名后以最新为准）
+	 * @param apiMode 协议模式（例如 "gemini"，用于区别纯正文速度统计逻辑）
 	 */
-	recordRequest(modelId: string, usage: { completion_tokens: number; completion_tokens_details?: { reasoning_tokens?: number } } | null | undefined, streamMs: number | null | undefined, displayName?: string): void {
+	recordRequest(
+		modelId: string,
+		usage: { completion_tokens: number; completion_tokens_details?: { reasoning_tokens?: number } } | null | undefined,
+		streamMs: number | null | undefined,
+		displayName?: string,
+		apiMode?: string
+	): void {
 		if (!usage || !usage.completion_tokens || usage.completion_tokens <= 0) {
 			// 网关未回 usage 或 token 为 0：本次请求无法精确统计，跳过
 			logger.debug("sessionStats.skip", { modelId, reason: "no_usage" });
@@ -53,15 +62,21 @@ export class SessionStats {
 			entry = {
 				modelId,
 				displayName,
+				apiMode,
 				requests: 0,
 				outputTokens: 0,
 				reasoningTokens: 0,
 				totalStreamMs: 0,
 			};
 			this._byModel.set(modelId, entry);
-		} else if (displayName !== undefined && displayName !== entry.displayName) {
-			// 用户改了 displayName 配置：保持显示最新名字
-			entry.displayName = displayName;
+		} else {
+			if (displayName !== undefined && displayName !== entry.displayName) {
+				// 用户改了 displayName 配置：保持显示最新名字
+				entry.displayName = displayName;
+			}
+			if (apiMode !== undefined && apiMode !== entry.apiMode) {
+				entry.apiMode = apiMode;
+			}
 		}
 		entry.requests += 1;
 		entry.outputTokens += usage.completion_tokens;
@@ -109,9 +124,19 @@ export class SessionStats {
 	 * 每行都被撑开导致行距松散；文本行行距即普通正文行距，紧凑许多。
 	 */
 	private _formatEntry(entry: SessionStatsEntry): string {
-		const avgTps = entry.totalStreamMs > 0
-			? ((entry.outputTokens / entry.totalStreamMs) * 1000).toFixed(0)
-			: "N/A";
+		// 计算平均 TPS：
+		// 仅对 Gemini 模型：由于 Gemini 采用 Thought Summaries 机制且常走静默思考，
+		// 速度严格只以正文 Token（outputTokens - reasoningTokens）和正文流式耗时为依据；
+		// 其余所有模型（OpenAI, Anthropic 等）保持原有算法（总 outputTokens / 流式耗时）不变。
+		const tpsTokens =
+			entry.apiMode === "gemini"
+				? entry.outputTokens - entry.reasoningTokens
+				: entry.outputTokens;
+		const avgTps = entry.totalStreamMs > 0 && tpsTokens > 0
+			? ((tpsTokens / entry.totalStreamMs) * 1000).toFixed(0)
+			: entry.totalStreamMs > 0 && entry.outputTokens > 0
+				? ((entry.outputTokens / entry.totalStreamMs) * 1000).toFixed(0)
+				: "N/A";
 		const reasoningPct = entry.outputTokens > 0
 			? Math.round((entry.reasoningTokens / entry.outputTokens) * 100)
 			: 0;

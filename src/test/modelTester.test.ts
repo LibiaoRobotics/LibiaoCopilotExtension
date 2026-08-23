@@ -145,10 +145,15 @@ suite("modelTester", () => {
 			assert.strictEqual(thinking.budget_tokens, 1024, "budget_tokens 压到 Anthropic 官方最低档 1024");
 		});
 
-		test("gemini: 无 stream 字段（URL 控制流式），maxOutputTokens=4096", () => {
+		test("gemini: 无 stream 字段（URL 控制流式），maxOutputTokens=4096，TPS 测试关闭思考 (thinkingBudget: 0 + includeThoughts: false)", () => {
 			const body = buildTestRequestBody(model, "gemini");
 			assert.ok(!("stream" in body), "gemini body 不应含 stream 字段");
-			assert.strictEqual((body.generationConfig as Record<string, unknown>).maxOutputTokens, 4096);
+			const genConfig = body.generationConfig as Record<string, unknown>;
+			assert.strictEqual(genConfig.maxOutputTokens, 4096);
+			assert.deepStrictEqual(genConfig.thinkingConfig, {
+				thinkingBudget: 0,
+				includeThoughts: false,
+			});
 		});
 
 		test("ollama: options.num_predict=4096", () => {
@@ -221,11 +226,11 @@ suite("modelTester", () => {
 			assert.deepStrictEqual(usage, { prompt_tokens: 18, completion_tokens: 999, total_tokens: 1017 });
 		});
 
-		test("Gemini: usageMetadata (含思考 token 自动合并到 completion_tokens)", () => {
+		test("Gemini: usageMetadata (仅按纯正文 candidatesTokenCount 统计 TPS)", () => {
 			const usage = extractUsage({
 				usageMetadata: { promptTokenCount: 30, candidatesTokenCount: 900, thoughtsTokenCount: 500, totalTokenCount: 1430 },
 			});
-			assert.deepStrictEqual(usage, { prompt_tokens: 30, completion_tokens: 1400, total_tokens: 1430 });
+			assert.deepStrictEqual(usage, { prompt_tokens: 30, completion_tokens: 900, total_tokens: 1430 });
 		});
 
 		test("Ollama: done 事件的 eval_count", () => {
@@ -259,9 +264,21 @@ suite("modelTester", () => {
 			assert.strictEqual(extractDeltaChars({ type: "content_block_delta", delta: { text: "世界" } }), 2);
 		});
 
-		test("Gemini candidates parts text", () => {
+		test("Gemini candidates parts text (仅统计正文，排除 thought 块)", () => {
 			assert.strictEqual(
-				extractDeltaChars({ candidates: [{ content: { parts: [{ text: "ab" }, { text: "cd" }] } }] }),
+				extractDeltaChars({
+					candidates: [
+						{
+							content: {
+								parts: [
+									{ text: "思考中...", thought: true },
+									{ text: "ab" },
+									{ text: "cd" },
+								],
+							},
+						},
+					],
+				}),
 				4
 			);
 		});

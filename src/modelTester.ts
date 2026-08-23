@@ -288,13 +288,26 @@ export function buildTestRequestBody(model: HFModelItem, apiMode: HFApiMode | st
 		}
 		case "gemini": {
 			// 与 provider.ts 真实请求一致：流式由 URL 参数控制，body 不需要 stream 字段
+			// 仅针对 Gemini 模型：TPS 测试双重保障——预算归零 (thinkingBudget: 0) + 关闭思考回传 (includeThoughts: false)，只测纯正文输出吞吐量
+			const geminiTestModel: HFModelItem = {
+				...testModel,
+				reasoning_effort: undefined,
+				reasoning_efforts: undefined,
+			};
 			const body: GeminiGenerateContentRequest = {
 				contents: [{ role: "user", parts: [{ text: TEST_PROMPT }] }],
 			};
-			return new GeminiApi(model.id).prepareRequestBody(body, testModel, undefined) as unknown as Record<
+			const reqBody = new GeminiApi(model.id).prepareRequestBody(body, geminiTestModel, undefined) as unknown as Record<
 				string,
 				unknown
 			>;
+			const genConfig = (reqBody.generationConfig as Record<string, unknown> | undefined) ?? {};
+			genConfig.thinkingConfig = {
+				thinkingBudget: 0,
+				includeThoughts: false,
+			};
+			reqBody.generationConfig = genConfig;
+			return reqBody;
 		}
 		case "openai-responses": {
 			// input 必须是标准数组格式（含 type/id/status）—— 网关（如 new-api）不兼容纯字符串
@@ -451,18 +464,16 @@ export function extractUsage(parsed: Record<string, unknown>): TokenUsage | unde
 		}
 	}
 
-	// ---- Gemini: 顶层 usageMetadata ----
+	// ---- Gemini: 顶层 usageMetadata（仅按纯正文 candidatesTokenCount 统计 TPS）----
 	const um = parsed.usageMetadata as Record<string, unknown> | undefined;
 	if (um && typeof um === "object") {
-		const thoughts = toNumber(um.thoughtsTokenCount);
 		const candidates = toNumber(um.candidatesTokenCount);
-		const completionTokens = candidates + thoughts;
 		const promptTokens = toNumber(um.promptTokenCount);
-		if (completionTokens > 0 || promptTokens > 0) {
+		if (candidates > 0 || promptTokens > 0) {
 			return {
 				prompt_tokens: promptTokens,
-				completion_tokens: completionTokens,
-				total_tokens: toNumber(um.totalTokenCount) || promptTokens + completionTokens,
+				completion_tokens: candidates,
+				total_tokens: toNumber(um.totalTokenCount) || promptTokens + candidates,
 			};
 		}
 	}
@@ -514,7 +525,7 @@ export function extractDeltaChars(parsed: Record<string, unknown>): number {
 		}
 	}
 
-	// Gemini: candidates[].content.parts[].text
+	// Gemini: candidates[].content.parts[].text（仅正文，排除 thought 块）
 	const candidates = parsed.candidates as Array<Record<string, unknown>> | undefined;
 	if (Array.isArray(candidates)) {
 		for (const c of candidates) {
@@ -522,7 +533,7 @@ export function extractDeltaChars(parsed: Record<string, unknown>): number {
 			const parts = content?.parts as Array<Record<string, unknown>> | undefined;
 			if (Array.isArray(parts)) {
 				for (const p of parts) {
-					if (typeof p.text === "string") {
+					if (typeof p.text === "string" && !p.thought) {
 						chars += p.text.length;
 					}
 				}

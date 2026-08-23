@@ -33,7 +33,7 @@
 		"git-commit",
 		"thinking"
 	],
-	"version": "1.0.10",
+	"version": "1.1.0",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -161,13 +161,17 @@
 							"default_context_size": 524288,
 							"max_tokens": 128000,
 							"reasoning_effort": "xhigh",
-							"reasoning_efforts": ["low", "medium", "xhigh"],
+							"reasoning_efforts": [
+								"low",
+								"medium",
+								"xhigh"
+							],
 							"vision": true
 						},
 						{
 							"id": "qwen3.8-max",
 							"displayName": "Qwen 3.8 Max",
-							"priceNote": "\u2B50\uFE0F推荐\u2B50\uFE0F",
+							"priceNote": "⭐️推荐⭐️",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
@@ -179,13 +183,17 @@
 							"default_context_size": 524288,
 							"max_tokens": 128000,
 							"reasoning_effort": "xhigh",
-							"reasoning_efforts": ["low", "medium", "xhigh"],
+							"reasoning_efforts": [
+								"low",
+								"medium",
+								"xhigh"
+							],
 							"vision": true
 						},
 						{
 							"id": "deepseek-v4-pro",
 							"displayName": "DeepSeek Pro",
-							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
+							"priceNote": "❌️不推荐❌️",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
@@ -197,7 +205,12 @@
 							"default_context_size": 524288,
 							"max_tokens": 384000,
 							"reasoning_effort": "max",
-							"reasoning_efforts": ["low", "high", "xhigh", "max"],
+							"reasoning_efforts": [
+								"low",
+								"high",
+								"xhigh",
+								"max"
+							],
 							"include_reasoning_in_request": true
 						},
 						{
@@ -214,13 +227,18 @@
 							"default_context_size": 524288,
 							"max_tokens": 384000,
 							"reasoning_effort": "max",
-							"reasoning_efforts": ["low", "high", "xhigh", "max"],
+							"reasoning_efforts": [
+								"low",
+								"high",
+								"xhigh",
+								"max"
+							],
 							"include_reasoning_in_request": true
 						},
 						{
 							"id": "deepseek-v4-flash-vision-exp",
 							"displayName": "Deepseek Flash 识图版",
-							"priceNote": "\u2B50\uFE0F推荐\u2B50\uFE0F",
+							"priceNote": "⭐️推荐⭐️",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
@@ -232,7 +250,12 @@
 							"default_context_size": 524288,
 							"max_tokens": 384000,
 							"reasoning_effort": "max",
-							"reasoning_efforts": ["low", "high", "xhigh", "max"],
+							"reasoning_efforts": [
+								"low",
+								"high",
+								"xhigh",
+								"max"
+							],
 							"include_reasoning_in_request": true,
 							"vision": true
 						},
@@ -250,13 +273,17 @@
 							"default_context_size": 524288,
 							"max_tokens": 65536,
 							"reasoning_effort": "high",
-							"reasoning_efforts": ["low", "medium", "high"],
+							"reasoning_efforts": [
+								"low",
+								"medium",
+								"high"
+							],
 							"vision": true
 						},
 						{
 							"id": "gemini-3.1-flash-image",
 							"displayName": "Gemini 3.1 Flash",
-							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
+							"priceNote": "❌️不推荐❌️",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 131072,
@@ -271,7 +298,7 @@
 						{
 							"id": "gemini-3.5-flash",
 							"displayName": "Gemini 3.5 Flash",
-							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
+							"priceNote": "❌️不推荐❌️",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1048576,
@@ -283,7 +310,11 @@
 							"default_context_size": 524288,
 							"max_tokens": 65536,
 							"reasoning_effort": "high",
-							"reasoning_efforts": ["low", "medium", "high"],
+							"reasoning_efforts": [
+								"low",
+								"medium",
+								"high"
+							],
 							"vision": true
 						},
 						{
@@ -300,13 +331,17 @@
 							"default_context_size": 524288,
 							"max_tokens": 65536,
 							"reasoning_effort": "high",
-							"reasoning_efforts": ["low", "medium", "high"],
+							"reasoning_efforts": [
+								"low",
+								"medium",
+								"high"
+							],
 							"vision": true
 						},
 						{
 							"id": "gemini-3.7-flash",
 							"displayName": "Gemini 3.7 Flash",
-							"priceNote": "\u2B50\uFE0F推荐\u2B50\uFE0F",
+							"priceNote": "⭐️推荐⭐️快！太快了！比特哥前女友变心还快！",
 							"owned_by": "libiaorobot",
 							"apiMode": "gemini",
 							"context_length": 1048576,
@@ -317,14 +352,19 @@
 							],
 							"default_context_size": 524288,
 							"max_tokens": 65536,
-							"reasoning_effort": "high",
-							"reasoning_efforts": ["low", "medium", "high"],
+							"reasoning_effort": "auto",
+							"reasoning_efforts": [
+								"auto",
+								"low",
+								"medium",
+								"high"
+							],
 							"vision": true
 						},
 						{
 							"id": "gpt-5.6-luna",
 							"displayName": "GPT-5.6 Luna",
-							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
+							"priceNote": "❌️不推荐❌️",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1050000,
@@ -336,7 +376,13 @@
 							"default_context_size": 524288,
 							"max_tokens": 128000,
 							"reasoning_effort": "medium",
-							"reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
+							"reasoning_efforts": [
+								"low",
+								"medium",
+								"high",
+								"xhigh",
+								"max"
+							],
 							"vision": true
 						},
 						{
@@ -353,13 +399,19 @@
 							"default_context_size": 524288,
 							"max_tokens": 128000,
 							"reasoning_effort": "medium",
-							"reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
+							"reasoning_efforts": [
+								"low",
+								"medium",
+								"high",
+								"xhigh",
+								"max"
+							],
 							"vision": true
 						},
 						{
 							"id": "gpt-5.6-terra",
 							"displayName": "GPT-5.6 Terra",
-							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
+							"priceNote": "❌️不推荐❌️",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1050000,
@@ -371,13 +423,19 @@
 							"default_context_size": 524288,
 							"max_tokens": 128000,
 							"reasoning_effort": "medium",
-							"reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
+							"reasoning_efforts": [
+								"low",
+								"medium",
+								"high",
+								"xhigh",
+								"max"
+							],
 							"vision": true
 						},
 						{
 							"id": "gpt-5.5",
 							"displayName": "GPT-5.5",
-							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
+							"priceNote": "❌️不推荐❌️",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1050000,
@@ -389,13 +447,18 @@
 							"default_context_size": 524288,
 							"max_tokens": 128000,
 							"reasoning_effort": "xhigh",
-							"reasoning_efforts": ["low", "medium", "high", "xhigh"],
+							"reasoning_efforts": [
+								"low",
+								"medium",
+								"high",
+								"xhigh"
+							],
 							"vision": true
 						},
 						{
 							"id": "claude-opus-4-8",
 							"displayName": "Claude Opus 4.8",
-							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
+							"priceNote": "❌️不推荐❌️",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1000000,
@@ -407,7 +470,13 @@
 							"default_context_size": 524288,
 							"max_tokens": 128000,
 							"reasoning_effort": "medium",
-							"reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
+							"reasoning_efforts": [
+								"low",
+								"medium",
+								"high",
+								"xhigh",
+								"max"
+							],
 							"vision": true
 						},
 						{
@@ -424,7 +493,13 @@
 							"default_context_size": 524288,
 							"max_tokens": 128000,
 							"reasoning_effort": "medium",
-							"reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
+							"reasoning_efforts": [
+								"low",
+								"medium",
+								"high",
+								"xhigh",
+								"max"
+							],
 							"vision": true
 						},
 						{
@@ -441,13 +516,19 @@
 							"default_context_size": 524288,
 							"max_tokens": 128000,
 							"reasoning_effort": "medium",
-							"reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
+							"reasoning_efforts": [
+								"low",
+								"medium",
+								"high",
+								"xhigh",
+								"max"
+							],
 							"vision": true
 						},
 						{
 							"id": "MiniMax-M3",
 							"displayName": "MiniMax M3",
-							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
+							"priceNote": "❌️不推荐❌️",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai",
 							"context_length": 1000000,
@@ -463,7 +544,7 @@
 						{
 							"id": "glm-5.2",
 							"displayName": "GLM 5.2",
-							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
+							"priceNote": "❌️不推荐❌️",
 							"owned_by": "libiaorobot",
 							"apiMode": "anthropic",
 							"context_length": 1048576,
@@ -486,7 +567,7 @@
 						{
 							"id": "glm-5.3",
 							"displayName": "GLM 5.3",
-							"priceNote": "\u2B50\uFE0F推荐\u2B50\uFE0F",
+							"priceNote": "⭐️推荐⭐️",
 							"owned_by": "libiaorobot",
 							"apiMode": "anthropic",
 							"context_length": 1048576,
@@ -509,7 +590,7 @@
 						{
 							"id": "qwen3.7-plus",
 							"displayName": "Qwen 3.7 Plus",
-							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
+							"priceNote": "❌️不推荐❌️",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
@@ -521,14 +602,19 @@
 							"default_context_size": 524288,
 							"max_tokens": 131072,
 							"reasoning_effort": "high",
-							"reasoning_efforts": ["minimal", "low", "medium", "high"],
+							"reasoning_efforts": [
+								"minimal",
+								"low",
+								"medium",
+								"high"
+							],
 							"include_reasoning_in_request": true,
 							"vision": true
 						},
 						{
 							"id": "qwen3.7-max",
 							"displayName": "Qwen 3.7 Max",
-							"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F",
+							"priceNote": "❌️不推荐❌️",
 							"owned_by": "libiaorobot",
 							"apiMode": "openai-responses",
 							"context_length": 1000000,
@@ -540,7 +626,12 @@
 							"default_context_size": 524288,
 							"max_tokens": 65536,
 							"reasoning_effort": "high",
-							"reasoning_efforts": ["minimal", "low", "medium", "high"],
+							"reasoning_efforts": [
+								"minimal",
+								"low",
+								"medium",
+								"high"
+							],
 							"include_reasoning_in_request": true,
 							"vision": false
 						}
@@ -916,8 +1007,8 @@
 						"picture"
 					],
 					"enumDescriptions": [
-						"\uD83D\uDC41\uFE0F 眼睛",
-						"\uD83D\uDDBC\uFE0F 图片（默认）"
+						"👁️ 眼睛",
+						"🖼️ 图片（默认）"
 					],
 					"default": "picture",
 					"description": "视觉模型图标：突出模型视觉能力时使用的 emoji。默认图片。"

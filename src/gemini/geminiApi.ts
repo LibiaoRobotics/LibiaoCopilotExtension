@@ -754,20 +754,31 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 			generationConfig.frequencyPenalty = um.frequency_penalty;
 		}
 
-		// reasoning_effort -> thinkingConfig (thinkingLevel)
+		// reasoning_effort -> thinkingConfig (thinkingLevel + includeThoughts)
+		// 注意：Google Gemini API 默认 includeThoughts 为 false（静默思考，不回传思考过程文本，只在 usage 计入 token）；
+		// 必须显式置 includeThoughts: true，客户端才能收到思考流分片并实时渲染思考框。
+		// 当 effort 为 "auto" 时，不设置 thinkingLevel（走 Google 官方默认的动态自适应思考 Dynamic Thinking）。
 		if (um?.reasoning_efforts && um.reasoning_efforts.length > 0) {
 			const allowedEfforts = um.reasoning_efforts.filter(isReasoningEffortValue);
 			const defaultEffort = isReasoningEffortValue(um.reasoning_effort) ? um.reasoning_effort : undefined;
 			const effort = getConfiguredReasoningEffort(options, defaultEffort, allowedEfforts);
 			if (effort) {
-				generationConfig.thinkingConfig = {
-					thinkingLevel: effort.toUpperCase(),
+				const thinkingConfig: Record<string, unknown> = {
+					includeThoughts: true,
 				};
+				if (effort !== "auto") {
+					thinkingConfig.thinkingLevel = effort.toUpperCase();
+				}
+				generationConfig.thinkingConfig = thinkingConfig;
 			}
 		} else if (um?.reasoning_effort !== undefined && isReasoningEffortValue(um.reasoning_effort)) {
-			generationConfig.thinkingConfig = {
-				thinkingLevel: um.reasoning_effort.toUpperCase(),
+			const thinkingConfig: Record<string, unknown> = {
+				includeThoughts: true,
 			};
+			if (um.reasoning_effort !== "auto") {
+				thinkingConfig.thinkingLevel = um.reasoning_effort.toUpperCase();
+			}
+			generationConfig.thinkingConfig = thinkingConfig;
 		}
 
 		if (Object.keys(generationConfig).length > 0) {

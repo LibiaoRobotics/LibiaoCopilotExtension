@@ -155,4 +155,41 @@ suite("sessionStats", () => {
 		const tip = stats.formatTooltip();
 		assert.ok(!tip.includes("思考"), `无思考信息不应显示占比, got: ${tip}`);
 	});
+
+	test("formatTooltip：Gemini 模式仅按正文 token 计算平均速度", () => {
+		const stats = new SessionStats();
+		stats.recordRequest(
+			"gemini-3.7-flash",
+			{
+				completion_tokens: 1000,
+				completion_tokens_details: { reasoning_tokens: 700 }, // 正文 300
+			},
+			1000, // 正文耗时 1000ms
+			"Gemini 3.7 Flash",
+			"gemini"
+		);
+		const tip = stats.formatTooltip();
+		assert.ok(tip.includes("输出 token：`1,000`"), `总输出仍应显示精确账单 1000, got: ${tip}`);
+		assert.ok(tip.includes("├ 思考（70%）：`700`"), `应包含思考 token, got: ${tip}`);
+		assert.ok(tip.includes("└ 正文（30%）：`300`"), `应包含正文 token, got: ${tip}`);
+		// Gemini 速度仅按正文 300 / 1s = 300 t/s（而非 1000 t/s）
+		assert.ok(tip.includes("$(info) 平均速度：**300** token/秒"), `Gemini 应按正文速度 300 计算, got: ${tip}`);
+	});
+
+	test("formatTooltip：非 Gemini 模式保持按总 token 计算平均速度", () => {
+		const stats = new SessionStats();
+		stats.recordRequest(
+			"qwen-max",
+			{
+				completion_tokens: 1000,
+				completion_tokens_details: { reasoning_tokens: 700 },
+			},
+			1000,
+			"Qwen Max",
+			"openai"
+		);
+		const tip = stats.formatTooltip();
+		// 非 Gemini 模型保持原有逻辑：1000 / 1s = 1000 t/s
+		assert.ok(tip.includes("$(info) 平均速度：**1000** token/秒"), `非 Gemini 保持原算法, got: ${tip}`);
+	});
 });
