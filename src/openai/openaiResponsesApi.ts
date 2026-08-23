@@ -640,7 +640,12 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 				}
 				this._toolCallBuffers.set(idx, buf);
 
-				await this.tryEmitBufferedToolCall(idx, progress);
+				// ⚠️ delta 阶段只累积、不发射（2026-08-23 重复工具卡事故修复）：
+				// new-api→qwen 会把上一个调用的完整参数作为 delta 路由到下一个
+				// item_id（delta 累积 ≠ done 权威，日志统计为慢性病）。污染 delta
+				// 恰是完整 JSON 时，旧写法在 delta 阶段抢跑发射 → UI 出现上一调用
+				// 的重复卡。发射统一收敛到 done/flush：done 携带权威完整参数，
+				// 污染 delta 被整体覆盖后不留痕迹；无 done 的调用由 [DONE] 冲刷兜底。
 				if (eventType === "response.function_call_arguments.done") {
 					await this.flushToolCallBuffers(progress, true);
 				}

@@ -56,6 +56,27 @@ suite("openaiResponsesApi output text dedup", () => {
 		assert.strictEqual(collectText(parts), "Hello world");
 	});
 
+	test("contaminated delta (full args of previous call) is not emitted early; done wins", async () => {
+		// 2026-08-23 事故同构：网关把上一调用的完整参数作为 delta 路由到下一个
+		// item_id。delta 阶段不发射，done 权威参数整体覆盖 → 只发一张正确的卡。
+		const api = new OpenaiResponsesApi("test-model");
+		const { progress, parts } = recordingProgress();
+		const token = new vscode.CancellationTokenSource().token;
+		await api.processStreamingResponse(
+			sseStream([
+				{ type: "response.created", response: { id: "resp_dup1" } },
+				{ type: "response.function_call_arguments.delta", delta: "{\"query\": \"supportThemeIcons\"}", item_id: "msg_b", output_index: 1 },
+				{ type: "response.function_call_arguments.done", arguments: "{\"query\": \"codicon-error\"}", item_id: "msg_b", name: "grep_search", output_index: 1 },
+				{ type: "response.completed", response: { id: "resp_dup1" } },
+		]),
+			progress,
+			token
+		);
+		const calls = parts.filter((p): p is vscode.LanguageModelToolCallPart => p instanceof vscode.LanguageModelToolCallPart);
+		assert.strictEqual(calls.length, 1, "污染 delta 不应抢跑发射重复卡");
+		assert.deepStrictEqual(calls[0].input, { query: "codicon-error" }, "done 权威参数应胜出");
+	});
+
 	test("still emits text when gateway only sends a done payload without deltas", async () => {
 		const api = new OpenaiResponsesApi("test-model");
 		const { progress, parts } = recordingProgress();
