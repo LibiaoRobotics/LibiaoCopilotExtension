@@ -186,7 +186,7 @@ export function buildResult(
 			totalMs,
 			generateMs,
 			outputTokens,
-			tps: Math.round((outputTokens / generateMs) * 1000 * 10) / 10,
+			tps: Math.round((outputTokens / generateMs) * 1000),
 		};
 	}
 	return {

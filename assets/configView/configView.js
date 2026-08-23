@@ -613,6 +613,7 @@ window.addEventListener("message", (event) => {
 			return;
 		}
 		if (result.ok) {
+			const tpsDisplay = result.tps !== undefined && result.tps !== null ? Math.round(result.tps) : "";
 			tr.innerHTML = `
 				<td class="test-select-col"></td>
 				<td>${escapeHtml(result.name || result.modelId)}</td>
@@ -620,7 +621,7 @@ window.addEventListener("message", (event) => {
 				<td>${result.ttftMs ?? ""}</td>
 				<td>${formatSeconds(result.generateMs)}</td>
 				<td>${result.outputTokens ?? ""}</td>
-				<td class="test-tps">${result.tps ?? ""}</td>
+				<td class="test-tps">${tpsDisplay}</td>
 				<td></td>`;
 		} else {
 			tr.innerHTML = `
@@ -639,6 +640,7 @@ window.addEventListener("message", (event) => {
 	function appendModelTestRow(result) {
 		const tr = document.createElement("tr");
 		if (result.ok) {
+			const tpsDisplay = result.tps !== undefined && result.tps !== null ? Math.round(result.tps) : "";
 			tr.innerHTML = `
 				<td class="test-select-col"></td>
 				<td>${escapeHtml(result.name || result.modelId)}</td>
@@ -646,7 +648,7 @@ window.addEventListener("message", (event) => {
 				<td>${result.ttftMs ?? ""}</td>
 				<td>${formatSeconds(result.generateMs)}</td>
 				<td>${result.outputTokens ?? ""}</td>
-				<td class="test-tps">${result.tps ?? ""}</td>
+				<td class="test-tps">${tpsDisplay}</td>
 				<td></td>`;
 		} else {
 			tr.innerHTML = `

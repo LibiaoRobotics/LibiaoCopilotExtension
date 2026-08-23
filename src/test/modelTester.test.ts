@@ -321,6 +321,7 @@ suite("modelTester", () => {
 			// generateMs ≈ 500~600ms（受 Date.now() 时序波动），TPS ≈ 200/0.5s
 			assert.ok((r.generateMs ?? 0) >= 450 && (r.generateMs ?? 0) <= 700);
 			assert.ok((r.tps ?? 0) >= 250 && (r.tps ?? 0) <= 450);
+			assert.strictEqual(Number.isInteger(r.tps), true);
 		});
 
 		test("成功：无 usage 时按字符估算", () => {
