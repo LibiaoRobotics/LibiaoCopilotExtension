@@ -52,9 +52,11 @@ const ERROR_THRESHOLD = 90;
 
 /**
  * 构建状态栏 tooltip（Markdown 排版）：
- * - 上下文用量表：消息/工具/合计三行，数字列右对齐 + 等宽 code 字体；
+ * - 上下文用量：消息/工具/合计三行紧凑文本（行尾双空格强制换行，数字等宽 code）；
  * - 合计行按占比加严重度图标（≥70% $(warning)、≥90% $(error)，<70% 无标记）；
- * - 会话统计段追加在空行之后（见 sessionStats.formatTooltip，紧凑文本行）；
+ * - 会话统计段追加在空行之后（见 sessionStats.formatTooltip，同为紧凑文本行）；
+ * - 说明：不用 Markdown 表格——hover 渲染表格单元格带固定 padding，
+ *   每行都被撑开导致行距松散；文本行行距即普通正文行距，紧凑许多；
  * - supportThemeIcons 让 codicon 按主题渲染语义色。
  */
 export function buildContextTooltip(
@@ -73,24 +75,24 @@ export function buildContextTooltip(
 		severity = "$(warning) ";
 	}
 
-	const lines: string[] = [
+	// 上下文用量块：行尾双空格强制换行（与 sessionStats 紧凑文本风格一致），
+	// 不用 Markdown 表格——hover 渲染表格单元格带固定 padding，行距松散
+	const contextLines: string[] = [
 		"**$(symbol-parameter) 上下文用量**",
-		"",
-		"| 组成 | Token | 占比 |",
-		"| :-- | --: | --: |",
-		`| 消息 | \`${formatTokenCount(messagesTokens)}\` | ${pct(messagesTokens)} |`,
-		`| 工具 | \`${formatTokenCount(toolTokens)}\` | ${pct(toolTokens)} |`,
-		`| ${severity}**合计** | **\`${formatTokenCount(totalTokenCount)}\`** / \`${formatTokenCount(maxTokens)}\` | **${pct(totalTokenCount)}** |`,
+		`消息：\`${formatTokenCount(messagesTokens)}\` · ${pct(messagesTokens)}`,
+		`工具：\`${formatTokenCount(toolTokens)}\` · ${pct(toolTokens)}`,
+		`${severity}合计：**\`${formatTokenCount(totalTokenCount)}\`** / \`${formatTokenCount(maxTokens)}\` · **${pct(totalTokenCount)}**`,
 	];
 
+	// 各块（上下文用量 / 模型统计 / 分隔线）之间用空行分隔
+	const parts: string[] = [contextLines.join("  \n")];
 	const statsText = sessionStats ? sessionStats.formatTooltip() : "";
 	if (statsText) {
-		lines.push("", statsText);
+		parts.push(statsText);
 	}
+	parts.push("---", "$(gear) 点击打开配置界面");
 
-	lines.push("", "---", "$(gear) 点击打开配置界面");
-
-	const md = new vscode.MarkdownString(lines.join("\n"));
+	const md = new vscode.MarkdownString(parts.join("\n\n"));
 	md.supportThemeIcons = true;
 	return md;
 }

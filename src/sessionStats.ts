@@ -119,7 +119,7 @@ export class SessionStats {
 		const label = entry.displayName || entry.modelId;
 		const lines: string[] = [
 			`**$(graph) 模型统计 · ${label}**`,
-			`请求次数：\`${this._formatNumber(entry.requests)}\``,
+			`请求次数：\`${this._formatNumber(entry.requests)}\` 次`,
 			`输出 token：\`${this._formatNumber(entry.outputTokens)}\``,
 		];
 		if (entry.reasoningTokens > 0) {

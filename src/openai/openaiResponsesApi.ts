@@ -576,9 +576,9 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			// ⚠️ 用码点转义写入（U+26A0 U+FE0F），防编辑工具损坏 emoji
 			progress.report(
 				new vscode.LanguageModelTextPart(
-					"\n\n\u26A0\uFE0F 模型尝试调用不受支持的服务端工具 " +
+					"\n\n\u26A0\uFE0F 模型发生幻觉，调用了不存在的服务端工具 " +
 						toolType +
-						"，已自动转为错误结果，模型将改用可用工具。\n\n"
+						"；已自动转为错误结果回传，提醒模型改用本次请求提供的可用工具。\n\n"
 				)
 			);
 		}
