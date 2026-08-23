@@ -4,7 +4,7 @@ import { normalizeUserModels, parseModelId, getBuiltInModels } from "../utils";
 import { fetchModels, clearModelListCache } from "../provideModel";
 import { ensureModelContextDefaults } from "../modelConfiguration";
 import { VersionManager } from "../versionManager";
-import { loadTestModelList, runModelTests, type ModelTestResult } from "../modelTester";
+import { loadTestModelList, runModelTests, type ModelTestResult, type TestModelInfo } from "../modelTester";
 
 interface InitPayload {
 	baseUrl: string;
@@ -91,10 +91,10 @@ type IncomingMessage =
 type OutgoingMessage =
 	| { type: "init"; payload: InitPayload }
 	| { type: "modelsFetched"; models: HFModelItem[] }
-	| { type: "modelTestListLoaded"; modelIds: string[]; exclude: string[] }
+	| { type: "modelTestListLoaded"; models: TestModelInfo[]; exclude: string[] }
 	| { type: "modelTestListError"; error: string }
 	| { type: "confirmResponse"; id: string; confirmed: boolean }
-	| { type: "modelTestStarted"; modelIds: string[] }
+	| { type: "modelTestStarted"; models: TestModelInfo[] }
 	| { type: "modelTestRowRunning"; modelId: string }
 	| {
 			type: "modelTestResult";
@@ -280,12 +280,12 @@ export class ConfigViewPanel {
 	 */
 	private async fetchTestModelList() {
 		try {
-			const { modelIds, reason } = await loadTestModelList(this.secrets);
+			const { models, reason } = await loadTestModelList(this.secrets);
 			const exclude = this.readModelTestExclude();
-			if (modelIds.length === 0) {
+			if (models.length === 0) {
 				this.panel.webview.postMessage({
 					type: "modelTestListLoaded",
-					modelIds: [],
+					models: [],
 					exclude: [],
 				} as OutgoingMessage);
 				if (reason) {
@@ -295,7 +295,7 @@ export class ConfigViewPanel {
 			}
 			this.panel.webview.postMessage({
 				type: "modelTestListLoaded",
-				modelIds,
+				models,
 				exclude,
 			} as OutgoingMessage);
 		} catch (error) {
@@ -353,9 +353,9 @@ export class ConfigViewPanel {
 			const { tested, succeeded } = await runModelTests({
 				secrets: this.secrets,
 				// 列表就绪：一次性把全部待测模型发给前端，立即渲染整张表（等待态）
-				onList: (modelIds) => {
-					total = modelIds.length;
-					this.panel.webview.postMessage({ type: "modelTestStarted", modelIds } as OutgoingMessage);
+				onList: (models) => {
+					total = models.length;
+					this.panel.webview.postMessage({ type: "modelTestStarted", models } as OutgoingMessage);
 				},
 				// 单个模型开工：前端把对应行从"等待"切到"测试中"
 				onRunning: (modelId) => {

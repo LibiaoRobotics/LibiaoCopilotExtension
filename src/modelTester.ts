@@ -1,7 +1,13 @@
 import * as vscode from "vscode";
 import type { HFApiMode, HFModelItem, TokenUsage } from "./types";
 import { CommonApi } from "./commonApi";
-import { buildEndpointGroups, mergeConfiguredModelWithProviders, resolveGroupApiKey } from "./provideModel";
+import {
+	buildEndpointGroups,
+	formatModelDisplayName,
+	mergeConfiguredModelWithProviders,
+	resolveGroupApiKey,
+	type VisionIcon,
+} from "./provideModel";
 // 各 API 类：测试请求体必须与真实请求走同一套参数化逻辑（prepareRequestBody）
 import { OpenaiApi } from "./openai/openaiApi";
 import { OpenaiResponsesApi } from "./openai/openaiResponsesApi";
@@ -11,7 +17,7 @@ import { GeminiApi, buildGeminiGenerateContentUrl } from "./gemini/geminiApi";
 import type { GeminiGenerateContentRequest } from "./gemini/geminiTypes";
 import type { AnthropicRequestBody } from "./anthropic/anthropicTypes";
 import type { OllamaRequestBody } from "./ollama/ollamaTypes";
-import { normalizeUserModels } from "./utils";
+import { getBuiltInModel, normalizeUserModels } from "./utils";
 import { logger } from "./logger";
 
 /**
@@ -44,6 +50,8 @@ const TEST_PROMPT = "这是一次tps吞吐量测试，直接输出300Token左右
 export interface ModelTestResult {
 	/** 模型标识（含 configId，与选择器一致） */
 	modelId: string;
+	/** 格式化显示名（带视觉图标；前端渲染优先，缺失时回退 modelId） */
+	name?: string;
 	/** 测试是否成功 */
 	ok: boolean;
 	/** 首 token 时间（毫秒，从请求发出到首个流式事件，含思考） */
@@ -552,7 +560,7 @@ export function estimateTokens(chars: number): number {
  * 加载失败（网关挂/没 key 等）时 reason 携带原因，供前端展示。
  */
 export async function loadTestModelList(secrets: vscode.SecretStorage): Promise<{
-	modelIds: string[];
+	models: TestModelInfo[];
 	reason?: string;
 }> {
 	const config = vscode.workspace.getConfiguration();
@@ -574,9 +582,9 @@ export async function loadTestModelList(secrets: vscode.SecretStorage): Promise<
 					: merged.reason?.kind === "invalidBaseUrl"
 						? "未配置基础地址"
 						: "供应商未返回任何模型";
-		return { modelIds: [], reason };
+		return { models: [], reason };
 	}
-	return { modelIds: merged.models.map(toTestModelId) };
+	return { models: merged.models.map((m) => toTestModelInfo(m, readVisionIcon())) };
 }
 
 /**
@@ -589,8 +597,8 @@ export async function loadTestModelList(secrets: vscode.SecretStorage): Promise<
  */
 export async function runModelTests(options: {
 	secrets: vscode.SecretStorage;
-	/** 列表就绪后一次性回报全部待测模型 id（含 configId） */
-	onList?: (modelIds: string[]) => void;
+	/** 列表就绪后一次性回报全部待测模型（id + 显示名） */
+	onList?: (models: TestModelInfo[]) => void;
 	/** 单个模型开始测试时回调 */
 	onRunning?: (modelId: string) => void;
 	onResult: (result: ModelTestResult) => void;
@@ -602,6 +610,7 @@ export async function runModelTests(options: {
 }): Promise<{ tested: number; succeeded: number }> {
 	const { secrets, onList, onRunning, onResult, token } = options;
 	const concurrency = Math.max(1, options.concurrency ?? DEFAULT_TEST_CONCURRENCY);
+	const icon = readVisionIcon();
 	const config = vscode.workspace.getConfiguration();
 	const userModels = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
 	const configuredModels = userModels.filter((m) => !m.id.startsWith("__provider__"));
@@ -618,7 +627,7 @@ export async function runModelTests(options: {
 	const selectedSet = options.modelIds ? new Set(options.modelIds) : undefined;
 	const models = selectedSet ? allModels.filter((m) => selectedSet.has(toTestModelId(m))) : allModels;
 	// 一次性回报本次实际要测的模型（过滤后），前端渲染的行数 = 进度分母
-	onList?.(models.map(toTestModelId));
+	onList?.(models.map((m) => toTestModelInfo(m, icon)));
 	if (models.length === 0) {
 		const reason =
 			merged.reason?.kind === "fetchFailed"
@@ -684,6 +693,7 @@ export async function runModelTests(options: {
 				if (!plan.apiKey) {
 					onResult({
 						modelId,
+						name: toTestModelName(plan.model, icon),
 						ok: false,
 						error: "未找到该模型的 API Key（请先在配置中为供应商设置 API Key）",
 					});
@@ -697,7 +707,7 @@ export async function runModelTests(options: {
 					tested++;
 					break;
 				}
-				onResult(result);
+				onResult({ ...result, name: toTestModelName(plan.model, icon) });
 				tested++;
 				if (result.ok) {
 					succeeded++;
@@ -715,6 +725,35 @@ export async function runModelTests(options: {
 /** 模型的测试标识（含 configId，与选择器一致） */
 export function toTestModelId(model: HFModelItem): string {
 	return model.configId ? `${model.id}::${model.configId}` : model.id;
+}
+
+/** 待测模型的基础信息（列表与结果行共用）：id 定位行、name 展示 */
+export interface TestModelInfo {
+	/** 模型组合 ID（id::configId，与选择器一致） */
+	id: string;
+	/** 格式化显示名（displayName 优先、内置表兜底、vision 驱动图标；兜底 id） */
+	name: string;
+}
+
+/** 模型显示名：与模型选择器用同一套规则（displayName → 内置表 → 组合 ID，vision 驱动图标） */
+export function toTestModelName(model: HFModelItem, icon: VisionIcon = "picture"): string {
+	const builtIn = getBuiltInModel(model.id);
+	const vision = model.vision ?? builtIn?.vision ?? false;
+	return formatModelDisplayName(
+		model.displayName || builtIn?.displayName || toTestModelId(model),
+		vision,
+		icon
+	);
+}
+
+function toTestModelInfo(model: HFModelItem, icon: VisionIcon): TestModelInfo {
+	return { id: toTestModelId(model), name: toTestModelName(model, icon) };
+}
+
+/** 读取视觉图标配置（picture 默认 / eye） */
+function readVisionIcon(): VisionIcon {
+	const v = vscode.workspace.getConfiguration().get<string>("libiaoCopilot.visionIcon", "picture");
+	return v === "picture" ? "picture" : "eye";
 }
 
 /** 单个模型的测试计划（列表就绪后预先解析好，并发执行时直接用） */

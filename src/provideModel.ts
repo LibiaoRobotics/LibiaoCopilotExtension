@@ -40,8 +40,9 @@ function resolvePriceNote(m: HFModelItem): string | undefined {
  * 为模型显示名添加视觉图标前缀，由 vision 字段驱动（displayName 不再手工维护 emoji）。
  * 先剥离旧版图标前缀（👁️/🖼️ 都剥），避免切换图标后出现双前缀；
  * 兼容存量配置中已含 emoji 的 displayName。
+ * 导出供 modelTester（TPS 测试列表）复用，保证各处显示名规则一致。
  */
-function formatModelDisplayName(name: string, vision?: boolean, icon: VisionIcon = "picture"): string {
+export function formatModelDisplayName(name: string, vision?: boolean, icon: VisionIcon = "picture"): string {
 	if (vision) {
 		const emoji = getVisionEmoji(icon);
 		for (const old of [VISION_EMOJI_EYE, VISION_EMOJI_PICTURE]) {

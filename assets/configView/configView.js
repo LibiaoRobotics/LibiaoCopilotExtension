@@ -43,8 +43,10 @@ const state = {
 	providerInfo: {},
 	modelTestEnabled: false,
 	modelTestTesting: false,
-	// 模型测试：列表就绪后的全部模型 id + 黑名单（未勾选集合）
+	// 模型测试：列表就绪后的全部待测模型（id + 显示名 name）+ 黑名单（未勾选集合）
 	modelTestModelIds: [],
+	// modelId → 显示名（含视觉图标），测试结果行渲染用
+	modelTestNames: {},
 	modelTestExclude: [],
 	modelTestListLoaded: false,
 	// 表格当前是否为可勾选态（加载列表后 true，测试渲染后 false）
@@ -430,7 +432,11 @@ window.addEventListener("message", (event) => {
 			break;
 		case "modelTestListLoaded":
 			// 列表就绪：渲染全部待测模型（可勾选），黑名单里的默认不勾选
-			state.modelTestModelIds = Array.isArray(message.modelIds) ? message.modelIds : [];
+			state.modelTestModelIds = Array.isArray(message.models) ? message.models.map((m) => m.id) : [];
+			state.modelTestNames = {};
+			for (const m of Array.isArray(message.models) ? message.models : []) {
+				state.modelTestNames[m.id] = m.name;
+			}
 			state.modelTestExclude = Array.isArray(message.exclude) ? message.exclude : [];
 			state.modelTestListLoaded = true;
 			state.modelTestListEditable = true;
@@ -452,11 +458,11 @@ window.addEventListener("message", (event) => {
 			break;
 		case "modelTestStarted":
 			// 本次实际测试的模型（勾选子集）：一次性渲染行（等待态）
-			state.modelTestTotal = message.modelIds.length;
+			state.modelTestTotal = message.models.length;
 			state.modelTestDone = 0;
 			state.modelTestListEditable = false;
-			renderModelTestRows(message.modelIds);
-			modelTestProgress.textContent = `开始测试 ${message.modelIds.length} 个模型…`;
+			renderModelTestRows(message.models);
+			modelTestProgress.textContent = `开始测试 ${message.models.length} 个模型…`;
 			updateModelTestUi();
 			break;
 		case "modelTestRowRunning":
@@ -488,7 +494,7 @@ window.addEventListener("message", (event) => {
 			tr.dataset.modelId = modelId;
 			tr.innerHTML = `
 				<td class="test-select-col"><input type="checkbox" class="model-test-checkbox" ${excluded ? "" : "checked"}></td>
-				<td>${escapeHtml(modelId)}</td>
+				<td>${escapeHtml(state.modelTestNames[modelId] || modelId)}</td>
 				<td class="test-waiting">${excluded ? "— 已排除" : "⏳ 待测"}</td>
 				<td></td>
 				<td></td>
@@ -555,14 +561,14 @@ window.addEventListener("message", (event) => {
 	}
 
 	/** 点击测试后：一次性渲染实际待测模型行（等待态），让用户立刻看到待测清单 */
-	function renderModelTestRows(modelIds) {
+	function renderModelTestRows(models) {
 		modelTestTableBody.innerHTML = "";
-		for (const modelId of modelIds) {
+		for (const m of models) {
 			const tr = document.createElement("tr");
-			tr.dataset.modelId = modelId;
+			tr.dataset.modelId = m.id;
 			tr.innerHTML = `
 				<td class="test-select-col"><input type="checkbox" class="model-test-checkbox" checked disabled></td>
-				<td>${escapeHtml(modelId)}</td>
+				<td>${escapeHtml(m.name || m.id)}</td>
 				<td class="test-waiting">⏳ 等待</td>
 				<td></td>
 				<td></td>
@@ -609,7 +615,7 @@ window.addEventListener("message", (event) => {
 		if (result.ok) {
 			tr.innerHTML = `
 				<td class="test-select-col"></td>
-				<td>${escapeHtml(result.modelId)}</td>
+				<td>${escapeHtml(result.name || result.modelId)}</td>
 				<td class="test-ok">✓ 可用</td>
 				<td>${result.ttftMs ?? ""}</td>
 				<td>${formatSeconds(result.generateMs)}</td>
@@ -619,7 +625,7 @@ window.addEventListener("message", (event) => {
 		} else {
 			tr.innerHTML = `
 				<td class="test-select-col"></td>
-				<td>${escapeHtml(result.modelId)}</td>
+				<td>${escapeHtml(result.name || result.modelId)}</td>
 				<td class="test-fail">✗ 失败</td>
 				<td></td>
 				<td></td>
@@ -635,7 +641,7 @@ window.addEventListener("message", (event) => {
 		if (result.ok) {
 			tr.innerHTML = `
 				<td class="test-select-col"></td>
-				<td>${escapeHtml(result.modelId)}</td>
+				<td>${escapeHtml(result.name || result.modelId)}</td>
 				<td class="test-ok">✓ 可用</td>
 				<td>${result.ttftMs ?? ""}</td>
 				<td>${formatSeconds(result.generateMs)}</td>
@@ -645,7 +651,7 @@ window.addEventListener("message", (event) => {
 		} else {
 			tr.innerHTML = `
 				<td class="test-select-col"></td>
-				<td>${escapeHtml(result.modelId)}</td>
+				<td>${escapeHtml(result.name || result.modelId)}</td>
 				<td class="test-fail">✗ 失败</td>
 				<td></td>
 				<td></td>

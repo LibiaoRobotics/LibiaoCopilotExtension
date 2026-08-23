@@ -19,7 +19,7 @@ import { parseModelId, createRetryConfig, executeWithRetry, normalizeUserModels,
 import { prepareLanguageModelChatInformation, NO_MODELS_PLACEHOLDER_ID } from "./provideModel";
 import { countMessageTokens } from "./provideToken";
 import { updateContextStatusBar } from "./statusBar";
-import { SessionStats, isNewSession } from "./sessionStats";
+import { SessionStats } from "./sessionStats";
 import { OllamaApi } from "./ollama/ollamaApi";
 import { OpenaiApi } from "./openai/openaiApi";
 import { OpenaiResponsesApi } from "./openai/openaiResponsesApi";
@@ -39,11 +39,8 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 	/** Track last request completion time for delay calculation. */
 	private _lastRequestTime: number | null = null;
 
-	/** 会话级生成性能统计（token 用量 tooltip 展示） */
+	/** 模型级生成性能统计（按组合 ID 独立累计，不随会话切换重置） */
 	private _sessionStats = new SessionStats();
-
-	/** 上次请求的消息条数（会话边界检测：骤降视为新会话） */
-	private _lastMessageCount: number | null = null;
 
 	private readonly _geminiToolCallMetaByCallId = new Map<string, GeminiToolCallMeta>();
 	private readonly _openaiResponsesPreviousResponseIdUnsupportedBaseUrls = new Set<string>();
@@ -189,11 +186,8 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			// Update Token Usage
 			try {
 				// await 保证状态栏已是本次请求的进度条；计数失败仅告警、不影响请求本身
-				// 会话统计检测：消息条数骤降视为新会话，清零统计
-				if (this._lastMessageCount !== null && isNewSession(this._lastMessageCount, messages.length)) {
-					this._sessionStats.reset();
-				}
-				this._lastMessageCount = messages.length;
+				// 统计按模型累计（不随会话切换重置）——原“消息条数骤降”会话检测在
+				// 多会话并存时会误清空/混计，2026-08-23 移除
 				await updateContextStatusBar(messages, options.tools, model, this.statusBarItem, modelConfig, this._sessionStats, getConfiguredContextSize(options));
 			} catch (e) {
 				logger.warn("statusBar.update", {
@@ -624,7 +618,8 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 					? streamLastMs - streamFirstMs
 					: 0;
 			if (streamMs > 0) {
-				this._sessionStats.recordRequest(model.id, usage, streamMs);
+				// model.id = 组合 ID（id::configId）作统计键；model.name = displayName（带视觉图标）作显示名
+				this._sessionStats.recordRequest(model.id, usage, streamMs, model.name);
 			} else {
 				logger.debug("sessionStats.skip", { modelId: model.id, reason: "no_delta" });
 			}

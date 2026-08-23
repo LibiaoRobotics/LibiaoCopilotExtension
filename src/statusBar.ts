@@ -51,10 +51,10 @@ const WARNING_THRESHOLD = 70;
 const ERROR_THRESHOLD = 90;
 
 /**
- * 构建状态栏 tooltip（Markdown 表格排版）：
+ * 构建状态栏 tooltip（Markdown 排版）：
  * - 上下文用量表：消息/工具/合计三行，数字列右对齐 + 等宽 code 字体；
  * - 合计行按占比加严重度图标（≥70% $(warning)、≥90% $(error)，<70% 无标记）；
- * - 会话统计段追加在空行之后（见 sessionStats.formatTooltip）；
+ * - 会话统计段追加在空行之后（见 sessionStats.formatTooltip，紧凑文本行）；
  * - supportThemeIcons 让 codicon 按主题渲染语义色。
  */
 export function buildContextTooltip(
