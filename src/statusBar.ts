@@ -7,7 +7,7 @@ export function initStatusBar(context: vscode.ExtensionContext): vscode.StatusBa
 	// Create status bar item for token count display
 	const tokenCountStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
 	tokenCountStatusBarItem.name = "Token Count";
-	tokenCountStatusBarItem.text = "$(symbol-numeric) Ready";
+	tokenCountStatusBarItem.text = "$(pass-filled) Libiao Copilot 已加载";
 	tokenCountStatusBarItem.tooltip = "当前模型 Token 用量 - 点击打开配置界面";
 	tokenCountStatusBarItem.command = "libiaoCopilot.openConfig";
 	context.subscriptions.push(tokenCountStatusBarItem);
