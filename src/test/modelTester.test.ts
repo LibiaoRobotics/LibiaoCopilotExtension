@@ -221,11 +221,11 @@ suite("modelTester", () => {
 			assert.deepStrictEqual(usage, { prompt_tokens: 18, completion_tokens: 999, total_tokens: 1017 });
 		});
 
-		test("Gemini: usageMetadata", () => {
+		test("Gemini: usageMetadata (含思考 token 自动合并到 completion_tokens)", () => {
 			const usage = extractUsage({
-				usageMetadata: { promptTokenCount: 30, candidatesTokenCount: 900, totalTokenCount: 930 },
+				usageMetadata: { promptTokenCount: 30, candidatesTokenCount: 900, thoughtsTokenCount: 500, totalTokenCount: 1430 },
 			});
-			assert.deepStrictEqual(usage, { prompt_tokens: 30, completion_tokens: 900, total_tokens: 930 });
+			assert.deepStrictEqual(usage, { prompt_tokens: 30, completion_tokens: 1400, total_tokens: 1430 });
 		});
 
 		test("Ollama: done 事件的 eval_count", () => {

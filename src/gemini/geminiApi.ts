@@ -12,6 +12,10 @@ import type { OpenAIFunctionToolDef } from "../openai/openaiTypes";
 
 import { CommonApi } from "../commonApi";
 import { logger } from "../logger";
+import {
+	getConfiguredReasoningEffort,
+	isReasoningEffortValue,
+} from "../modelConfiguration";
 
 import {
 	isImageMimeType,
@@ -41,10 +45,35 @@ export interface GeminiToolCallMeta {
 	createdAt: number;
 }
 
-const UNSUPPORTED_GEMINI_SCHEMA_KEYS = new Set(["exclusiveMinimum", "exclusiveMaximum", "enumDescriptions"]);
+/**
+ * 严格白名单：仅允许 Google Gemini OpenAPI 3.0 Schema 规范明确支持的合法字段。
+ * 彻底废除脆弱的黑名单机制：未来无论 VS Code、Copilot 或 MCP 引入任何新的
+ * JSON Schema 关键字（如 propertyNames, prefixItems, unevaluatedProperties, if/else 等），
+ * 都会在转换时被自动安全过滤，从根源上杜绝 protojson 解析时的 400 Bad Request 报错。
+ */
+export const ALLOWED_GEMINI_SCHEMA_KEYS = new Set([
+	"type",
+	"format",
+	"description",
+	"nullable",
+	"enum",
+	"maxItems",
+	"minItems",
+	"properties",
+	"required",
+	"minProperties",
+	"maxProperties",
+	"minLength",
+	"maxLength",
+	"pattern",
+	"anyOf",
+	"items",
+	"minimum",
+	"maximum",
+]);
 
-function stripUnsupportedGeminiSchemaKeys(value: unknown): number {
-	if (!value) {
+export function stripUnsupportedGeminiSchemaKeys(value: unknown): number {
+	if (!value || typeof value !== "object") {
 		return 0;
 	}
 
@@ -56,17 +85,26 @@ function stripUnsupportedGeminiSchemaKeys(value: unknown): number {
 		return removed;
 	}
 
-	if (typeof value !== "object") {
-		return 0;
-	}
-
 	const obj = value as Record<string, unknown>;
 	let removed = 0;
 
 	for (const key of Object.keys(obj)) {
-		if (UNSUPPORTED_GEMINI_SCHEMA_KEYS.has(key)) {
+		if (!ALLOWED_GEMINI_SCHEMA_KEYS.has(key)) {
 			delete obj[key];
 			removed++;
+			continue;
+		}
+		// properties 是"属性名 -> schema"的映射：key 是用户自定义属性名（如 dirPath），
+		// 绝不能按关键字白名单过滤掉，否则 properties 变空而 required 仍在，
+		// Gemini protojson 会报 `required[N]: property is not defined`。
+		// 正确做法：只递归过滤每个属性的 value（它本身是 schema 对象）。
+		if (key === "properties") {
+			const props = obj[key];
+			if (props && typeof props === "object" && !Array.isArray(props)) {
+				for (const pk of Object.keys(props)) {
+					removed += stripUnsupportedGeminiSchemaKeys((props as Record<string, unknown>)[pk]);
+				}
+			}
 			continue;
 		}
 		removed += stripUnsupportedGeminiSchemaKeys(obj[key]);
@@ -105,7 +143,7 @@ function joinPathPrefix(basePath: string, nextPath: string): string {
 
 /**
  * Build the Gemini models list endpoint URL from a base URL.
- * Handles various baseUrl formats: bare domain, /v1beta, or /v1beta/models.
+ * Handles various baseUrl formats: bare domain, /v1, /v1beta, or /v1beta/models.
  * @param baseUrl The base URL to normalize.
  * @returns The full models list endpoint URL.
  */
@@ -116,6 +154,11 @@ function buildGeminiModelsUrl(baseUrl: string): string {
 	}
 	if (trimmed.endsWith("/v1beta")) {
 		return `${trimmed}/models`;
+	}
+	// 把 /v1、/v1alpha、/v1beta/models 等版本段（含可选 /models）归一化为 /v1beta/models
+	const versionSegmentRe = /\/v\d+[a-z0-9]*(\/models)?$/i;
+	if (versionSegmentRe.test(trimmed)) {
+		return `${trimmed.replace(versionSegmentRe, "")}/v1beta/models`;
 	}
 	return `${trimmed}/v1beta/models`;
 }
@@ -182,10 +225,15 @@ export function buildGeminiGenerateContentUrl(rawBaseUrl: string, modelId: strin
 			return "";
 		}
 
-		// If base already contains a version segment, don't append again.
-		if (!/\/v1beta$/i.test(basePath) && !/\/v1beta\//i.test(`${basePath}/`)) {
-			basePath = joinPathPrefix(basePath, "/v1beta");
+		// basePath 语义：基础路径（不含版本段与 models 前缀）。若配置的是
+		// /v1beta、/v1beta/models、/v1、/v1alpha 等，统一截掉版本段及其后的
+		// /models 段，最终归一化为 /v1beta。这样裸域名、/v1、/v1beta、
+		// /v1beta/models 配置都得到正确的 /v1beta/models/<model>:... 路径。
+		const versionSegmentRe = /\/v\d+[a-z0-9]*(\/models)?(\/|$)/i;
+		if (versionSegmentRe.test(`${basePath}/`)) {
+			basePath = basePath.replace(versionSegmentRe, "") || "/";
 		}
+		basePath = joinPathPrefix(basePath, "/v1beta");
 
 		const method = stream ? "streamGenerateContent" : "generateContent";
 		u0.pathname = joinPathPrefix(basePath, `/${modelPath}:${method}`);
@@ -329,56 +377,27 @@ function jsonSchemaToGeminiSchema(
 		}
 	}
 
+	// 专门处理 Draft-07 exclusiveMinimum/exclusiveMaximum
+	if (typeof input.exclusiveMinimum === "number" && input.minimum === undefined) {
+		out.minimum = input.exclusiveMinimum;
+	}
+	if (typeof input.exclusiveMaximum === "number" && input.maximum === undefined) {
+		out.maximum = input.exclusiveMaximum;
+	}
+
+	// 专门处理 const -> enum
+	if (input.const !== undefined && input.enum === undefined) {
+		out.enum = [input.const];
+	}
+
 	for (const [k, v] of Object.entries(input)) {
 		if (v == null) {
 			continue;
 		}
-		if (k.startsWith("$")) {
-			continue;
-		}
-		if (
-			k === "additionalProperties" ||
-			k === "definitions" ||
-			k === "$defs" ||
-			k === "title" ||
-			k === "examples" ||
-			k === "default"
-		) {
-			continue;
-		}
-
-		// Gemini Schema doesn't support Draft-07 exclusive bounds fields.
-		// Best-effort: map numeric exclusive bounds to inclusive ones.
-		if (k === "exclusiveMinimum") {
-			if (typeof v === "number" && !("minimum" in out)) {
-				out.minimum = v;
-			}
-			continue;
-		}
-		if (k === "exclusiveMaximum") {
-			if (typeof v === "number" && !("maximum" in out)) {
-				out.maximum = v;
-			}
-			continue;
-		}
-		if (k === "allOf") {
-			continue;
-		}
 
 		if (k === "type") {
-			if (typeof v !== "string") {
-				continue;
-			}
-			if (v === "null") {
-				continue;
-			}
-			out.type = String(v).toUpperCase();
-			continue;
-		}
-
-		if (k === "const") {
-			if (!("enum" in out)) {
-				out.enum = [v];
+			if (typeof v === "string" && v !== "null") {
+				out.type = String(v).toUpperCase();
 			}
 			continue;
 		}
@@ -416,7 +435,11 @@ function jsonSchemaToGeminiSchema(
 			continue;
 		}
 
-		(out as Record<string, unknown>)[k] = v;
+		// 严格白名单过滤：只收录 Google Gemini 官方 Schema 规范支持的合法字段，
+		// 其余所有未知的、非标准的、未来的 JSON Schema 关键字（如 propertyNames, if/else, $schema 等）一律自动丢弃！
+		if (ALLOWED_GEMINI_SCHEMA_KEYS.has(k)) {
+			out[k] = v;
+		}
 	}
 
 	// Gemini Schema types are enum-like uppercase strings; if absent but properties exist, treat as OBJECT.
@@ -731,6 +754,22 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 			generationConfig.frequencyPenalty = um.frequency_penalty;
 		}
 
+		// reasoning_effort -> thinkingConfig (thinkingLevel)
+		if (um?.reasoning_efforts && um.reasoning_efforts.length > 0) {
+			const allowedEfforts = um.reasoning_efforts.filter(isReasoningEffortValue);
+			const defaultEffort = isReasoningEffortValue(um.reasoning_effort) ? um.reasoning_effort : undefined;
+			const effort = getConfiguredReasoningEffort(options, defaultEffort, allowedEfforts);
+			if (effort) {
+				generationConfig.thinkingConfig = {
+					thinkingLevel: effort.toUpperCase(),
+				};
+			}
+		} else if (um?.reasoning_effort !== undefined && isReasoningEffortValue(um.reasoning_effort)) {
+			generationConfig.thinkingConfig = {
+				thinkingLevel: um.reasoning_effort.toUpperCase(),
+			};
+		}
+
 		if (Object.keys(generationConfig).length > 0) {
 			rb.generationConfig = generationConfig;
 		}
@@ -825,16 +864,19 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 					// Capture usage metadata from Gemini response
 					if (payload.usageMetadata) {
 						const um = payload.usageMetadata;
+						const thoughts = typeof um.thoughtsTokenCount === "number" ? um.thoughtsTokenCount : 0;
+						const candidates = typeof um.candidatesTokenCount === "number" ? um.candidatesTokenCount : 0;
+						const totalOutput = candidates + thoughts;
 						this._usage = {
 							prompt_tokens: um.promptTokenCount ?? 0,
-							completion_tokens: um.candidatesTokenCount ?? 0,
-							total_tokens: um.totalTokenCount ?? 0,
+							completion_tokens: totalOutput,
+							total_tokens: um.totalTokenCount ?? (um.promptTokenCount ?? 0) + totalOutput,
 							prompt_tokens_details: um.cachedContentTokenCount
 								? { cached_tokens: um.cachedContentTokenCount }
 								: undefined,
 							completion_tokens_details:
-								typeof um.thoughtsTokenCount === "number"
-									? { reasoning_tokens: um.thoughtsTokenCount }
+								thoughts > 0
+									? { reasoning_tokens: thoughts }
 									: undefined,
 						};
 						logger.debug("usage.capture", { modelId: this._modelId, usage: this._usage });

@@ -454,7 +454,9 @@ export function extractUsage(parsed: Record<string, unknown>): TokenUsage | unde
 	// ---- Gemini: 顶层 usageMetadata ----
 	const um = parsed.usageMetadata as Record<string, unknown> | undefined;
 	if (um && typeof um === "object") {
-		const completionTokens = toNumber(um.candidatesTokenCount);
+		const thoughts = toNumber(um.thoughtsTokenCount);
+		const candidates = toNumber(um.candidatesTokenCount);
+		const completionTokens = candidates + thoughts;
 		const promptTokens = toNumber(um.promptTokenCount);
 		if (completionTokens > 0 || promptTokens > 0) {
 			return {

@@ -308,7 +308,7 @@
 							"displayName": "Gemini 3.7 Flash",
 							"priceNote": "\u2B50\uFE0F推荐\u2B50\uFE0F",
 							"owned_by": "libiaorobot",
-							"apiMode": "openai-responses",
+							"apiMode": "gemini",
 							"context_length": 1048576,
 							"context_sizes": [
 								262144,

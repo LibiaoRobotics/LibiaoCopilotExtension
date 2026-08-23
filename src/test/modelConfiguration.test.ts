@@ -269,18 +269,22 @@ suite("modelConfiguration", () => {
 			{ ...deepSeekModel, apiMode: "ollama" },
 			options
 		) as unknown as Record<string, unknown>;
-		const geminiBody = new GeminiApi("gemini").prepareRequestBody(
+		const geminiModel = {
+			id: "gemini-3.7-flash",
+			owned_by: "libiaorobot",
+			apiMode: "gemini" as const,
+			reasoning_effort: "high" as const,
+			reasoning_efforts: ["low", "medium", "high"],
+		};
+		const geminiBodyWithEffort = new GeminiApi("gemini-3.7-flash").prepareRequestBody(
 			{ contents: [] },
-			{ ...deepSeekModel, apiMode: "gemini" },
+			geminiModel,
 			options
 		) as Record<string, unknown>;
 
-		assert.strictEqual(anthropicBody.reasoning_effort, undefined);
-		assert.strictEqual(anthropicBody.thinking, undefined);
-		assert.strictEqual(ollamaBody.reasoning_effort, undefined);
-		assert.strictEqual(ollamaBody.think, undefined);
-		assert.strictEqual(geminiBody.reasoning_effort, undefined);
-		assert.strictEqual(geminiBody.thinkingConfig, undefined);
+		assert.deepStrictEqual(geminiBodyWithEffort.generationConfig, {
+			thinkingConfig: { thinkingLevel: "HIGH" },
+		});
 	});
 
 	test("reads the context size selected in the Configure menu", () => {
