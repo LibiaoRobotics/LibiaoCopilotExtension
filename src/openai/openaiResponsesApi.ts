@@ -85,6 +85,13 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 	private _sawReasoningDelta = false;
 	/** 本请求是否已发过服务端工具转换提示（每请求至多一次） */
 	private _serverToolNotified = false;
+	/** reasoning 通道累积文本（泄漏守卫的判别信号来源） */
+	private _reasoningAccum = "";
+	/** 泄漏守卫是否已评估（首个正文 chunk 时一次性评估） */
+	private _leakGuardEvaluated = false;
+	/** 泄漏守卫激活中：正文先缓冲，待孤儿 </think> 确认或超上限flush */
+	private _leakGuardActive = false;
+	private _leakGuardBuffer = "";
 
 	constructor(modelId: string) {
 		super(modelId);
@@ -383,6 +390,13 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			throw e;
 		} finally {
 			reader.releaseLock();
+			// 泄漏守卫未决收尾：流结束仍无孤儿闭标签，缓冲按正文发射（不丢内容）
+			if (this._leakGuardActive && this._leakGuardBuffer) {
+				const flushed = this._leakGuardBuffer;
+				this._leakGuardActive = false;
+				this._leakGuardBuffer = "";
+				this.processTextContent(flushed, progress);
+			}
 			// 冲刷 XML think 挂起缓冲（先于收尾：激活时挂起归入思考缓冲，随收尾同步冲刷）
 			this.flushXmlThinkPending(progress);
 			this.reportEndThinking(progress);
@@ -430,10 +444,91 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 		);
 	}
 
-	private processOutputTextChunk(text: string, progress: Progress<LanguageModelResponsePart2>): void {
+	/** 泄漏守卫缓冲上限（字符）：超上限仍无孤儿闭标签判误报，flush 为正文 */
+	private static readonly LEAK_GUARD_CAP = 2000;
+
+	/** reasoning 以未完成代码跨度收尾（反引号奇数）= 思考被拦腰切断的信号 */
+	private hasUnbalancedCodeSpan(text: string): boolean {
+		let count = 0;
+		for (let i = 0; i < text.length; i++) {
+			if (text.charCodeAt(i) === 96) {
+				count++;
+			}
+		}
+		return count % 2 === 1;
+	}
+
+	/**
+	 * 思考跨通道泄漏守卫（2026-08-23，qwen3.8-max 第四慢性病）：
+	 * 模型有时把思考后半续写到正文通道（无 <think> 开标签、以 </think> 自闭），
+	 * processXmlThinkBlocks 认不出无开标签的块 → 思考尾巴 + 闭标签漏进正文。
+	 * 判别信号（日志实证 5/5 命中、误报 4.8%）：reasoning 以失衡反引号收尾。
+	 * 守卫模式：正文先缓冲；见孤儿 </think> → 缓冲转思考 part、丢标签；
+	 * 超上限或见 <think> → 判误报，flush 为正文。代价：误报回合正文开头延迟。
+	 */
+	private runLeakGuard(text: string, progress: Progress<vscode.LanguageModelResponsePart2>): string | null {
+		if (!this._leakGuardEvaluated) {
+			this._leakGuardEvaluated = true;
+			if (this._sawReasoningDelta && this.hasUnbalancedCodeSpan(this._reasoningAccum)) {
+				this._leakGuardActive = true;
+				logger.debug("responses.thinkLeak.guardArmed", { modelId: this._modelId });
+			}
+		}
+		if (!this._leakGuardActive) {
+			return text;
+		}
+		this._leakGuardBuffer += text;
+		const buf = this._leakGuardBuffer;
+
+		// 见开标签：正常 XML think 流，非泄漏，flush 后走常规解析
+		if (buf.includes("<think>") || buf.includes("<thinking>")) {
+			this._leakGuardActive = false;
+			this._leakGuardBuffer = "";
+			return buf;
+		}
+
+		// 孤儿闭标签：确认泄漏。标签前转思考 part 补进折叠区，标签丢弃，标签后按正文
+		const closeIdx = buf.search(/<\/think(ing)?>/);
+		if (closeIdx !== -1) {
+			const match = buf.slice(closeIdx).match(/^<\/think(ing)?>/);
+			const tagLen = match ? match[0].length : 8;
+			const leaked = buf.slice(0, closeIdx);
+			const rest = buf.slice(closeIdx + tagLen);
+			this._leakGuardActive = false;
+			this._leakGuardBuffer = "";
+			if (leaked) {
+				this.bufferThinkingContent(leaked, progress);
+			}
+			this.reportEndThinking(progress);
+			logger.warn("responses.thinkLeak.dropped", { modelId: this._modelId, leakedChars: leaked.length });
+			// 剩余正文递归走常规路径（守卫已评估且退出，不会重入缓冲）
+			if (rest) {
+				this.processOutputTextChunk(rest, progress);
+			}
+			return null;
+		}
+
+		// 超上限：判误报，flush 为正文（延迟但正确）
+		if (buf.length > OpenaiResponsesApi.LEAK_GUARD_CAP) {
+			this._leakGuardActive = false;
+			this._leakGuardBuffer = "";
+			logger.warn("responses.thinkLeak.falsePositiveFlush", { modelId: this._modelId, bufferedChars: buf.length });
+			return buf;
+		}
+
+		// 继续缓冲
+		return null;
+	}
+
+	private processOutputTextChunk(text: string, progress: Progress<vscode.LanguageModelResponsePart2>): void {
 		if (!text) {
 			return;
 		}
+		const guarded = this.runLeakGuard(text, progress);
+		if (guarded === null) {
+			return;
+		}
+		text = guarded;
 		// Process XML think blocks or text content (mutually exclusive)
 		const xmlRes = this.processXmlThinkBlocks(text, progress);
 		if (!xmlRes.emittedAny) {
@@ -797,6 +892,8 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			if (this.looksLikeReasoningConfigValue(chunk)) {
 				continue;
 			}
+			// 累积 reasoning 全文供泄漏守卫判别（反引号奇偶）
+			this._reasoningAccum += chunk;
 			this.bufferThinkingContent(chunk, progress);
 			break;
 		}
