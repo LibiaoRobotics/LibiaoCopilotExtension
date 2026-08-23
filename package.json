@@ -33,7 +33,7 @@
 		"git-commit",
 		"thinking"
 	],
-	"version": "1.0.9",
+	"version": "1.0.10",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -296,6 +296,23 @@
 								262144,
 								524288,
 								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 65536,
+							"reasoning_effort": "high",
+							"reasoning_efforts": ["low", "medium", "high"],
+							"vision": true
+						},
+						{
+							"id": "gemini-3.7-flash",
+							"displayName": "Gemini 3.7 Flash",
+							"owned_by": "libiaorobot",
+							"apiMode": "openai-responses",
+							"context_length": 1048576,
+							"context_sizes": [
+								262144,
+								524288,
+								1048576
 							],
 							"default_context_size": 524288,
 							"max_tokens": 65536,
