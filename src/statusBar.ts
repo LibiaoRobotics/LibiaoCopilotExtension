@@ -137,7 +137,7 @@ export async function updateContextStatusBar(
 
 	// Create visual progress bar with single progressive block
 	const progressBar = createProgressBar(totalTokenCount, maxTokens);
-	const displayText = `$(pass-filled) Libiao Copilot${progressBar}`;
+	const displayText = `$(pass-filled) Libiao Copilot ${progressBar}`;
 	statusBarItem.text = displayText;
 	statusBarItem.tooltip = buildContextTooltip(messagesTokens, toolTokens, totalTokenCount, maxTokens, sessionStats);
 
