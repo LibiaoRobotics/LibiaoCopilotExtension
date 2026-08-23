@@ -105,7 +105,7 @@ suite("sessionStats", () => {
 		assert.strictEqual(stats.formatTooltip(), "");
 	});
 
-	test("formatTooltip：单模型显示统计信息（多行格式）", () => {
+	test("formatTooltip：单模型显示统计表格（含表头与各行）", () => {
 		const stats = new SessionStats();
 		stats.recordRequest(
 			"qwen3.8-max",
@@ -116,20 +116,21 @@ suite("sessionStats", () => {
 			4000
 		);
 		const tip = stats.formatTooltip();
-		assert.ok(tip.includes("会话统计 qwen3.8-max"), `应包含模型标题, got: ${tip}`);
-		assert.ok(tip.includes("请求次数: 1"), `应包含请求数, got: ${tip}`);
-		assert.ok(tip.includes("总输出 token 数: 181"), `应包含总输出 token 数, got: ${tip}`);
-		assert.ok(tip.includes("思考 token 数: 150（83%）"), `应包含思考 token 数与占比, got: ${tip}`);
-		assert.ok(tip.includes("正文 token 数: 31（17%）"), `应包含正文 token 数与占比, got: ${tip}`);
-		assert.ok(tip.includes("流式耗时: 4 秒"), `应包含流式耗时, got: ${tip}`);
-		assert.ok(tip.includes("平均速度: 45 token/秒"), `应包含平均速度, got: ${tip}`);
+		assert.ok(tip.includes("会话统计 · qwen3.8-max"), `应包含模型标题, got: ${tip}`);
+		assert.ok(tip.includes("| 指标 | 数值 |"), `应包含表头, got: ${tip}`);
+		assert.ok(tip.includes("| 请求次数 | `1` |"), `应包含请求数, got: ${tip}`);
+		assert.ok(tip.includes("| 输出 token | `181` |"), `应包含总输出 token 数, got: ${tip}`);
+		assert.ok(tip.includes("| ├ 思考（83%） | `150` |"), `应包含思考 token 数与占比, got: ${tip}`);
+		assert.ok(tip.includes("| └ 正文（17%） | `31` |"), `应包含正文 token 数与占比, got: ${tip}`);
+		assert.ok(tip.includes("| 流式耗时 | 4 秒 |"), `应包含流式耗时, got: ${tip}`);
+		assert.ok(tip.includes("| $(info) 平均速度 | **45** token/秒 |"), `应包含蓝色图标的平均速度行, got: ${tip}`);
 	});
 
 	test("formatTooltip：长时间累计格式化为分秒", () => {
 		const stats = new SessionStats();
 		stats.recordRequest("m1", { completion_tokens: 200 }, 125000); // 125 秒
 		const tip = stats.formatTooltip();
-		assert.ok(tip.includes("流式耗时: 2 分 5 秒"), `应包含分秒格式, got: ${tip}`);
+		assert.ok(tip.includes("| 流式耗时 | 2 分 5 秒 |"), `应包含分秒格式, got: ${tip}`);
 	});
 
 	test("formatTooltip：无思考信息时不显示思考占比", () => {

@@ -46,6 +46,55 @@ export function createProgressBar(usedTokens: number, maxTokens: number): string
 	return `${blocks[blockIndex]} ${usagePercentage.toFixed(1)}%`;
 }
 
+/** 用量告警阈值（与状态栏底色阈值一致） */
+const WARNING_THRESHOLD = 70;
+const ERROR_THRESHOLD = 90;
+
+/**
+ * 构建状态栏 tooltip（Markdown 表格排版）：
+ * - 上下文用量表：消息/工具/合计三行，数字列右对齐 + 等宽 code 字体；
+ * - 合计行按占比加严重度图标（≥70% $(warning)、≥90% $(error)，<70% 无标记）；
+ * - 会话统计段追加在空行之后（见 sessionStats.formatTooltip）；
+ * - supportThemeIcons 让 codicon 按主题渲染语义色。
+ */
+export function buildContextTooltip(
+	messagesTokens: number,
+	toolTokens: number,
+	totalTokenCount: number,
+	maxTokens: number,
+	sessionStats?: SessionStats
+): vscode.MarkdownString {
+	const pct = (value: number): string => Math.min((value / maxTokens) * 100, 100).toFixed(1) + "%";
+	const usagePercentage = (totalTokenCount / maxTokens) * 100;
+	let severity = "";
+	if (usagePercentage >= ERROR_THRESHOLD) {
+		severity = "$(error) ";
+	} else if (usagePercentage >= WARNING_THRESHOLD) {
+		severity = "$(warning) ";
+	}
+
+	const lines: string[] = [
+		"**$(symbol-parameter) 上下文用量**",
+		"",
+		"| 组成 | Token | 占比 |",
+		"| :-- | --: | --: |",
+		`| 消息 | \`${formatTokenCount(messagesTokens)}\` | ${pct(messagesTokens)} |`,
+		`| 工具 | \`${formatTokenCount(toolTokens)}\` | ${pct(toolTokens)} |`,
+		`| ${severity}**合计** | **\`${formatTokenCount(totalTokenCount)}\`** / \`${formatTokenCount(maxTokens)}\` | **${pct(totalTokenCount)}** |`,
+	];
+
+	const statsText = sessionStats ? sessionStats.formatTooltip() : "";
+	if (statsText) {
+		lines.push("", statsText);
+	}
+
+	lines.push("", "---", "$(gear) 点击打开配置界面");
+
+	const md = new vscode.MarkdownString(lines.join("\n"));
+	md.supportThemeIcons = true;
+	return md;
+}
+
 /**
  * Update the status bar with token usage information
  * @param messages The chat messages to count tokens for
@@ -60,7 +109,8 @@ export async function updateContextStatusBar(
 	model: LanguageModelChatInformation,
 	statusBarItem: vscode.StatusBarItem,
 	modelConfig: { includeReasoningInRequest: boolean },
-	sessionStats?: SessionStats
+	sessionStats?: SessionStats,
+	configuredInputTokens?: number
 ): Promise<void> {
 	// Calculate tokens for all messages in parallel
 	const tokenCountPromises = messages.map((message) => countMessageTokens(message, modelConfig));
@@ -76,22 +126,18 @@ export async function updateContextStatusBar(
 
 	// Total tokens: messages + tool definitions + reserved output
 	const totalTokenCount = messagesTokens + toolTokens;
-	const maxTokens = model.maxInputTokens + model.maxOutputTokens;
+	// 上限口径：用户选的上下文大小（输入预算 + 输出预留）优先，
+	// 未选择时用模型满血上下文兜底。与 contextManager 裁剪预算对齐，
+	// 避免用户选了小上下文后百分比被理论最大值稀释、红黄告警永不触发。
+	const maxTokens = configuredInputTokens !== undefined
+		? configuredInputTokens + model.maxOutputTokens
+		: model.maxInputTokens + model.maxOutputTokens;
 
 	// Create visual progress bar with single progressive block
 	const progressBar = createProgressBar(totalTokenCount, maxTokens);
 	const displayText = `$(symbol-parameter) ${progressBar}`;
 	statusBarItem.text = displayText;
-	// 会话统计附加段落（有多条记录才显示）
-	let statsText = "";
-	if (sessionStats) {
-		statsText = sessionStats.formatTooltip();
-	}
-	statusBarItem.tooltip = `Token 用量: ${formatTokenCount(totalTokenCount)} / ${formatTokenCount(maxTokens)}\n
-${progressBar}\n
-  - 消息: ${formatTokenCount(messagesTokens)}  (${Math.min((messagesTokens / maxTokens) * 100, 100).toFixed(1)}%)
-  - 工具: ${formatTokenCount(toolTokens)}  (${Math.min((toolTokens / maxTokens) * 100, 100).toFixed(1)}%) \n
-${statsText ? statsText + "\n\n" : ""}点击打开配置界面`;
+	statusBarItem.tooltip = buildContextTooltip(messagesTokens, toolTokens, totalTokenCount, maxTokens, sessionStats);
 
 	// Add color coding based on token usage
 	const usagePercentage = (totalTokenCount / maxTokens) * 100;

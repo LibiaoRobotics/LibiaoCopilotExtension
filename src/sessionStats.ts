@@ -80,7 +80,8 @@ export class SessionStats {
 	}
 
 	/**
-	 * 生成 tooltip 追加段落（多模型时按各自统计展示，块间空一行）。
+	 * 生成 tooltip 追加段落（Markdown 表格；多模型时按各自统计展示，块间空一行）。
+	 * 消费方（statusBar.buildContextTooltip）会将结果包进 MarkdownString。
 	 */
 	formatTooltip(): string {
 		if (this._byModel.size === 0) {
@@ -94,7 +95,8 @@ export class SessionStats {
 	}
 
 	/**
-	 * 格式化单个模型的多行统计。
+	 * 格式化单个模型的统计表格。
+	 * 数值列用 code span（等宽对齐）；平均速度行用 $(info) 蓝色主题图标突出展示。
 	 */
 	private _formatEntry(entry: SessionStatsEntry): string {
 		const avgTps = entry.totalStreamMs > 0
@@ -103,17 +105,21 @@ export class SessionStats {
 		const reasoningPct = entry.outputTokens > 0
 			? Math.round((entry.reasoningTokens / entry.outputTokens) * 100)
 			: 0;
-		const lines: string[] = [];
-		lines.push(`会话统计 ${entry.modelId}`);
-		lines.push(`  请求次数: ${this._formatNumber(entry.requests)}`);
-		lines.push(`  总输出 token 数: ${this._formatNumber(entry.outputTokens)}`);
+		const lines: string[] = [
+			`**$(graph) 会话统计 · ${entry.modelId}**`,
+			"",
+			"| 指标 | 数值 |",
+			"| :-- | --: |",
+			`| 请求次数 | \`${this._formatNumber(entry.requests)}\` |`,
+			`| 输出 token | \`${this._formatNumber(entry.outputTokens)}\` |`,
+		];
 		if (entry.reasoningTokens > 0) {
 			const visibleTokens = entry.outputTokens - entry.reasoningTokens;
-			lines.push(`  思考 token 数: ${this._formatNumber(entry.reasoningTokens)}（${reasoningPct}%）`);
-			lines.push(`  正文 token 数: ${this._formatNumber(visibleTokens)}（${100 - reasoningPct}%）`);
+			lines.push(`| ├ 思考（${reasoningPct}%） | \`${this._formatNumber(entry.reasoningTokens)}\` |`);
+			lines.push(`| └ 正文（${100 - reasoningPct}%） | \`${this._formatNumber(visibleTokens)}\` |`);
 		}
-		lines.push(`  流式耗时: ${this._formatDuration(entry.totalStreamMs)}`);
-		lines.push(`  平均速度: ${avgTps} token/秒`);
+		lines.push(`| 流式耗时 | ${this._formatDuration(entry.totalStreamMs)} |`);
+		lines.push(`| $(info) 平均速度 | **${avgTps}** token/秒 |`);
 		return lines.join("\n");
 	}
 

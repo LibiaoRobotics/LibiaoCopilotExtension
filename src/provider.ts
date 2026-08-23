@@ -30,6 +30,7 @@ import type { GeminiGenerateContentRequest } from "./gemini/geminiTypes";
 import { CommonApi } from "./commonApi";
 import { logger } from "./logger";
 import { manageContext, type ContextManagementMode } from "./contextManager";
+import { getConfiguredContextSize } from "./modelConfiguration";
 
 /**
  * VS Code Chat provider backed by Hugging Face Inference Providers.
@@ -193,7 +194,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 					this._sessionStats.reset();
 				}
 				this._lastMessageCount = messages.length;
-				await updateContextStatusBar(messages, options.tools, model, this.statusBarItem, modelConfig, this._sessionStats);
+				await updateContextStatusBar(messages, options.tools, model, this.statusBarItem, modelConfig, this._sessionStats, getConfiguredContextSize(options));
 			} catch (e) {
 				logger.warn("statusBar.update", {
 					error: e instanceof Error ? e.message : String(e),
@@ -629,7 +630,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			}
 			// 刷新状态栏 tooltip：会话统计已更新（token 段不变、统计段刷新）
 			try {
-				await updateContextStatusBar(messages, options.tools, model, this.statusBarItem, modelConfig, this._sessionStats);
+				await updateContextStatusBar(messages, options.tools, model, this.statusBarItem, modelConfig, this._sessionStats, getConfiguredContextSize(options));
 			} catch (e) {
 				logger.warn("statusBar.update", {
 					error: e instanceof Error ? e.message : String(e),
