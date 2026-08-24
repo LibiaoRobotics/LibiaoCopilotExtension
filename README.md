@@ -155,6 +155,14 @@ A：修改设置会自动清空模型缓存；如仍无变化，重新加载 VS 
 **Q：模型选择器是空的？**
 A：查看错误提示信息，检查 `libiaoCopilot.baseUrl` 与 API Key 是否已配置。未配置时扩展静默不拉取模型。
 
+## 📚 开发者文档与架构指南
+
+针对二次开发与维护同学，我们提供了深度技术解析与实操指南：
+
+- **[架构全景与开发者指南](docs/developer-handbook.md)**：包含 VS Code 插件加载原理、多进程 IPC 互动流、编译/打包/发布全链路、流式去重与抗击打设计、长会话上下文管理等。
+- **[内置模型目录与参数表](docs/model-catalog.md)**：所有 21 款内置网关模型的上下文、输出上限与 Thinking 挡位参数。
+- **[新增内置模型指南](docs/add-builtin-model.md)**：如何为扩展添加新的官方内置模型定义。
+
 ## 致谢
 
 - [OAI Compatible Provider for Copilot](https://github.com/JohnnyZ93/oai-compatible-copilot)（上游项目）
