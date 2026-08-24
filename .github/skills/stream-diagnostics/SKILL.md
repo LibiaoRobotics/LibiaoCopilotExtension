@@ -13,10 +13,10 @@ description: Libiao Copilot 插件的流式协议抓包调试与日志故障诊�
 
 插件的真实运行日志自动保存在用户本地目录：
 * **日志路径**：`C:\Users\<用户名>\.copilot\libiao-copilot\logs\`
-* **快速过滤命令（PowerShell）**：
+* **快速过滤报错命令（PowerShell）**：
   ```powershell
   $logDir = "$env:USERPROFILE\.copilot\libiao-copilot\logs"
-  # 查找最新日志中的报错
+  # 查找最新日志中的报错与异常请求
   Get-ChildItem $logDir -Filter "*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | Get-Content | Select-String "error|400|401|429|required\["
   ```
 
@@ -34,14 +34,32 @@ description: Libiao Copilot 插件的流式协议抓包调试与日志故障诊�
 
 ---
 
-## 🛠️ 现场抓包探针运行方法
+## 🛠️ 现成探针与分析器工具箱（在 libiao-copilot 目录运行）
 
-当需要绕过 VS Code 界面、直接抓取网关底层吐出的原始 SSE 事件流时，运行 Node 探针：
-
+### 1. 抓取网关底层原始 SSE 流事件
 ```powershell
-node -e '
-const https = require("https");
-// 构造向网关发起流式请求并逐行打印原始 SSE 事件
-'
+# 多协议通用流式探针
+node scripts/probes/probe-stream-events.js
+
+# Responses 协议工具调用流探针
+node scripts/probes/probe-responses-with-tools.js
+
+# Anthropic 协议原生思考块探针
+node scripts/probes/probe-anthropic-glm52.js
 ```
-* **取证核心准则**：**拿实测证据说话，严禁凭常理脑补**。遇到反常流式行为，先抓包看原始 chunk，再下定论。
+
+### 2. 日志慢性病量化分析
+```powershell
+# 分析最新日志中的思考泄漏与反引号失衡
+$latestLog = (Get-ChildItem "$env:USERPROFILE\.copilot\libiao-copilot\logs" -Filter "*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+node scripts/analyzers/analyze-backtick-balance.js "$latestLog"
+
+# 统计日志中 delta 污染 vs done 权威发射样本
+node scripts/analyzers/analyze-delta-vs-done.js "$latestLog"
+```
+
+### 3. 离线重放真实样本验证解析器
+```powershell
+# 灌入真实抓包样本回放验证修复逻辑
+node scripts/replay/verify-fix-replay.js
+```

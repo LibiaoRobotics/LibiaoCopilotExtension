@@ -1,8 +1,44 @@
-// See https://go.microsoft.com/fwlink/?LinkId=733558
-// for the documentation about the tasks.json format
 {
 	"version": "2.0.0",
 	"tasks": [
+		{
+			"label": "🚀 [一键安装] 编译+测试+打包+自动安全安装到本地",
+			"type": "shell",
+			"command": "npm run compile && npm test && npm run build && powershell -ExecutionPolicy Bypass -File .\\scripts\\Install-LibiaoCopilot.ps1",
+			"problemMatcher": ["$tsc"],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared",
+				"clear": true
+			}
+		},
+		{
+			"label": "🧪 [运行测试] 执行全量自动化单元测试",
+			"type": "shell",
+			"command": "npm test",
+			"problemMatcher": ["$tsc"],
+			"group": "test",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared",
+				"clear": true
+			}
+		},
+		{
+			"label": "📦 [仅打包] 生成 extension.vsix",
+			"type": "shell",
+			"command": "npm run build",
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared",
+				"clear": true
+			}
+		},
 		{
 			"type": "npm",
 			"script": "watch",
@@ -11,30 +47,7 @@
 			"presentation": {
 				"reveal": "never",
 				"group": "watchers"
-			},
-			"group": {
-				"kind": "build",
-				"isDefault": true
 			}
-		},
-		{
-			"type": "npm",
-			"script": "watch-tests",
-			"problemMatcher": "$tsc-watch",
-			"isBackground": true,
-			"presentation": {
-				"reveal": "never",
-				"group": "watchers"
-			},
-			"group": "build"
-		},
-		{
-			"label": "tasks: watch-tests",
-			"dependsOn": [
-				"npm: watch",
-				"npm: watch-tests"
-			],
-			"problemMatcher": []
 		}
 	]
 }

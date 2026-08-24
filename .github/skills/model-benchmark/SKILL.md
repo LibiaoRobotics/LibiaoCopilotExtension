@@ -29,12 +29,20 @@ description: Libiao Copilot 模型的连通性探测、首字延迟 (TTFT)、生
 | 模型 ID | 显示名称 | 协议模式 | TTFT (ms) | 总耗时 | 输出 Token (正文/思考) | 实际 TPS | 状态 |
 |---|---|---|---|---|---|---|---|
 | `qwen3.8-max` | 👁️ Qwen 3.8 Max | responses | 850ms | 4.2s | 1,050 (320 / 730) | **250 T/s** | ✅ 正常 |
-| `deepseek-v4-pro` | DeepSeek V4 Pro | responses | 1,200ms | 5.8s | 1,120 (450 / 670) | **193 T/s** | ✅ 正常 |
+| `deepseek-v4-pro` | DeepSeek Pro | responses | 1,200ms | 5.8s | 1,120 (450 / 670) | **193 T/s** | ✅ 正常 |
 | `glm-5.2` | GLM-5.2 | anthropic | 620ms | 3.5s | 980 (0 / 980) | **280 T/s** | ✅ 正常 |
 | `claude-opus-5` | 👁️ Claude Opus 5 | openai | 1,500ms | 8.1s | 1,020 (0 / 1,020) | **126 T/s** | ✅ 正常 |
 
 ---
 
-## 🛠️ 自动化体检指令
+## 🛠️ 自动化压测命令（在 libiao-copilot 目录运行）
 
-当用户要求体检时，可调用 `src/modelTester.ts` 对应逻辑或执行测试脚本，捕获超时、401/404/429 报错，并给出明确的网关渠道优化建议。
+```powershell
+# 1. 单模型 TPS 快速探测探针
+node scripts/probes/probe-tps-qwen38.js
+node scripts/probes/probe-tps-glm52.js
+
+# 2. GLM-5.3 专项思考与连通性测试
+node scripts/probes/glm53-effort-test.js
+```
+* 若在 VS Code 界面中执行，可通过命令面板调起 `Libiao Copilot: 打开配置界面`，在“模型测试”板块勾选目标模型后点击“开始测试”。
