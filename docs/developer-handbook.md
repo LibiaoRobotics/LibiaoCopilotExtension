@@ -342,6 +342,14 @@ flowchart TD
 
 ```text
 libiao-copilot/                  ★ 插件主仓库目录（Git 根目录）
+├── .github/                     # GitHub 与 Copilot 扩展配置
+│   ├── workflows/release.yml    # CI/CD 发布工作流
+│   └── skills/                  # ★ Copilot 专属 AI 技能武器库
+│       ├── extension-lifecycle/ # 编译、测试、打包与安装技能
+│       ├── add-builtin-model/   # 新增与维护内置模型技能
+│       ├── stream-diagnostics/  # 流式抓包与日志排障技能
+│       ├── model-benchmark/     # 模型性能与 TPS 压测技能
+│       └── safe-unicode-edit/   # Emoji 与编码防损技能
 ├── package.json                 # 插件清单、模型内置元数据、命令、配置项 Schema
 ├── tsconfig.json                # TypeScript 编译配置
 ├── assets/                      # 图标、Logo 等资源
