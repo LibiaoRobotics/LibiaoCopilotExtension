@@ -1,11 +1,11 @@
 ---
 name: safe-unicode-edit
-description: 在 Libiao Copilot 代码库中安全处理 Emoji、Unicode 码点与 PowerShell 脚本编码的专项防损技能。当需要编辑包含 Emoji (👁️/🖼️ 等)、修改 package.json、处理特殊字符、或保存 PowerShell .ps1 脚本时使用。
+description: 在 Libiao Copilot 代码库中安全处理 Emoji、Unicode 码点、PowerShell 脚本编码以及 Windows 复杂中文路径下文件移动/重命名的专项防损技能。当需要编辑包含 Emoji (👁️/🖼️ 等)、修改 package.json、处理特殊字符、保存 PowerShell .ps1 脚本、或执行跨目录文件移动/重命名/清理时使用。
 ---
 
-# Unicode 与 Emoji 安全编辑技能 (Safe Unicode Edit Skill)
+# Unicode、编码与文件安全操作技能 (Safe File & Unicode Skill)
 
-本技能用于防止在编辑包含 Emoji、特殊字符、以及 Windows PowerShell 脚本时发生编码损坏与语法爆炸。
+本技能用于防止在编辑包含 Emoji、特殊字符、Windows PowerShell 脚本、以及跨目录移动/重命名文件时发生编码损坏、路径截断或旧副本残留事故。
 
 ---
 
@@ -17,6 +17,10 @@ description: 在 Libiao Copilot 代码库中安全处理 Emoji、Unicode 码点�
 2. **PowerShell 5.1 编码爆炸**：
    - Windows PowerShell 5.1 默认按系统 GBK 编码读取无 BOM 的 `.ps1` 脚本，导致中文注释和中文提示词解析爆炸。
    - **铁律**：所有 `.ps1` 脚本保存时**必须添加 UTF-8 BOM 头（`0xEF, 0xBB, 0xBF`）**。
+3. **文件移动“真假移动”与旧副本残留陷阱**：
+   - **血泪教训**：把文件“移动”到新目录时，若只复制未删除源文件，会导致工程内多处保留旧副本（曾发生过安装脚本装了旧包、改了没生效的问题）。
+   - **Windows 复杂路径保护**：工作区路径包含中文与特殊括号（如 `【08】AI`），直接在 PowerShell 敲 `mv` 或 `del` 易因转义截断或锁文件静默失败。
+   - **铁律**：跨目录移动文件必须使用 Node.js 的 `fs.copyFileSync` + `fs.unlinkSync` 闭环执行，并验证源文件已物理销毁。
 
 ---
 
@@ -38,9 +42,7 @@ description: 在 Libiao Copilot 代码库中安全处理 Emoji、Unicode 码点�
 node -e '
 const fs = require("fs");
 let content = fs.readFileSync("package.json", "utf8");
-// 替换逻辑，使用 \uD83D\uDC41\uFE0F
 content = content.replace("...", "...");
-// 校验 JSON 合法性
 JSON.parse(content);
 fs.writeFileSync("package.json", content, "utf8");
 '
@@ -60,3 +62,19 @@ fs.writeFileSync("script.ps1", buf);
   ```powershell
   $errs = @(); [System.Management.Automation.Language.Parser]::ParseFile('.\script.ps1', [ref]$null, [ref]$errs) | Out-Null; if ($errs.Count -eq 0) { Write-Host 'Syntax OK' } else { $errs }
   ```
+
+### 3. 跨目录安全移动文件（防残留 SOP）
+```powershell
+node -e '
+const fs = require("fs");
+const path = require("path");
+
+function safeMoveFile(src, dest) {
+  const destDir = path.dirname(dest);
+  if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+  fs.copyFileSync(src, dest);
+  fs.unlinkSync(src); // 必须物理删除源文件，严防旧副本残留
+  console.log("Moved successfully:", src, "->", dest);
+}
+'
+```
