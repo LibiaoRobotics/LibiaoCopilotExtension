@@ -1,7 +1,7 @@
 // TPS 测试功能实弹验证（qwen3.8-max openai-responses 链路）
 // 复刻 modelTester.ts buildTestRequestBody(openai-responses) + prepareRequestBody 最终产物
-const BASE = "https://newapi.libiaorobot.com/v1";
-const KEY = "sk-wI5qUOGVWL3sWGvcE3qM40f3BzLHM9kOimo2QXnobRJ9lzZ6";
+const BASE = process.env.LIBIAO_BASE_URL || "https://newapi.libiaorobot.com/v1";
+const KEY = process.env.LIBIAO_API_KEY || "sk-wI5qUOGVWL3sWGvcE3qM40f3BzLHM9kOimo2QXnobRJ9lzZ6";
 
 const body = {
 	model: "qwen3.8-max",

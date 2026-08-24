@@ -49,7 +49,19 @@ Write-Host ''
 # 唯一来源：libiao-copilot\extension.vsix（npm run build 的打包产物）。
 # 脚本目录（scripts）不再维护任何 vsix 副本，避免装了旧包、改了没生效的问题。
 if (-not $VsixPath) {
-    $VsixPath = Join-Path $PSScriptRoot '..\libiao-copilot\extension.vsix'
+    $candidates = @(
+        (Join-Path $PSScriptRoot '..\extension.vsix'),
+        (Join-Path $PSScriptRoot '..\libiao-copilot\extension.vsix')
+    )
+    foreach ($cand in $candidates) {
+        if (Test-Path -LiteralPath $cand) {
+            $VsixPath = $cand
+            break
+        }
+    }
+    if (-not $VsixPath) {
+        $VsixPath = Join-Path $PSScriptRoot '..\extension.vsix'
+    }
 }
 $VsixPath = [System.IO.Path]::GetFullPath($VsixPath)
 if (-not (Test-Path -LiteralPath $VsixPath)) {

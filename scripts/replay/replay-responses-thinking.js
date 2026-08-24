@@ -50,12 +50,29 @@ Module._load = function (request, parent, isMain) {
 	return origLoad.apply(this, arguments);
 };
 
-const OUT = path.join(__dirname, "..", "libiao-copilot", "out");
+const outCandidates = [
+	path.join(__dirname, "..", "..", "out"),
+	path.join(__dirname, "..", "libiao-copilot", "out"),
+];
+const OUT = outCandidates.find((p) => fs.existsSync(p)) || outCandidates[0];
 const { OpenaiResponsesApi } = require(path.join(OUT, "openai", "openaiResponsesApi.js"));
 
-// ---- 取 key（不落盘，运行时从现有脚本提取）----
-const src = fs.readFileSync(path.join(__dirname, "glm53-effort-test.js"), "utf8");
-const KEY = src.match(/const KEY = "([^"]+)"/)[1];
+function resolveApiKey() {
+	if (process.env.LIBIAO_API_KEY) return process.env.LIBIAO_API_KEY;
+	if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
+	const probeCandidates = [
+		path.join(__dirname, "..", "probes", "glm53-effort-test.js"),
+		path.join(__dirname, "glm53-effort-test.js"),
+	];
+	for (const p of probeCandidates) {
+		if (fs.existsSync(p)) {
+			const m = fs.readFileSync(p, "utf8").match(/const KEY = "([^"]+)"/);
+			if (m) return m[1];
+		}
+	}
+	throw new Error("未找到 API Key，请设置环境变量 LIBIAO_API_KEY");
+}
+const KEY = resolveApiKey();
 const BASE = "https://newapi.libiaorobot.com/v1";
 const PROMPT = "一步一步推理：23 乘 47 等于多少？最后只给答案。";
 

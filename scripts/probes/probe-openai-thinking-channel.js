@@ -1,9 +1,25 @@
 // 取证:openai 模式(chat completions)模型经网关时,思考走哪个通道?
 // 原生字段(reasoning_content/thinking)还是 content 内联 <think> 标签?
 const fs = require("fs");
-const src = fs.readFileSync(__dirname + "/glm53-effort-test.js", "utf8");
-const KEY = src.match(/const KEY = "([^"]+)"/)[1];
-const BASE = "https://newapi.libiaorobot.com/v1";
+const path = require("path");
+
+function resolveApiKey() {
+	if (process.env.LIBIAO_API_KEY) return process.env.LIBIAO_API_KEY;
+	if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
+	const probeCandidates = [
+		path.join(__dirname, "glm53-effort-test.js"),
+		path.join(__dirname, "..", "probes", "glm53-effort-test.js"),
+	];
+	for (const p of probeCandidates) {
+		if (fs.existsSync(p)) {
+			const m = fs.readFileSync(p, "utf8").match(/const KEY = "([^"]+)"/);
+			if (m) return m[1];
+		}
+	}
+	throw new Error("未找到 API Key，请设置环境变量 LIBIAO_API_KEY");
+}
+const KEY = resolveApiKey();
+const BASE = process.env.LIBIAO_BASE_URL || "https://newapi.libiaorobot.com/v1";
 
 const MODELS = ["gemini-3.1-pro-preview", "claude-sonnet-5", "MiniMax-M3"];
 

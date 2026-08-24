@@ -2,6 +2,7 @@
 // 1) 真实捕获流:正文无损
 // 2) 字面量开标签场景:不再吞正文
 const fs = require("fs");
+const path = require("path");
 const LT = String.fromCharCode(60);
 const GT = String.fromCharCode(62);
 const T_OPEN = LT + "think" + GT;
@@ -92,7 +93,8 @@ class FixedAnthropicHandler {
 }
 
 // ---- 验证1:真实捕获流 ----
-const events = JSON.parse(fs.readFileSync("scripts/glm52-stream-events.json", "utf8"));
+const eventsPath = path.join(__dirname, "glm52-stream-events.json");
+const events = JSON.parse(fs.readFileSync(eventsPath, "utf8"));
 const h = new FixedAnthropicHandler();
 let rawText = "";
 for (const ev of events) {

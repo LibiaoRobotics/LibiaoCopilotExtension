@@ -3,8 +3,8 @@
 // 目标: 验证 OpenAI 协议 reasoning_effort 与 Anthropic 协议 effort 通道是否生效
 // 判定方式: 对比不同档位下 reasoning_content 长度 + completion_tokens 用量
 
-const BASE = "https://newapi.libiaorobot.com/v1";
-const KEY = "sk-wI5qUOGVWL3sWGvcE3qM40f3BzLHM9kOimo2QXnobRJ9lzZ6";
+const BASE = process.env.LIBIAO_BASE_URL || "https://newapi.libiaorobot.com/v1";
+const KEY = process.env.LIBIAO_API_KEY || "sk-wI5qUOGVWL3sWGvcE3qM40f3BzLHM9kOimo2QXnobRJ9lzZ6";
 const MODEL = "glm-5.3";
 const PROMPT = "用一句话说明斐波那契数列的定义，然后给出第 30 项的值。";
 

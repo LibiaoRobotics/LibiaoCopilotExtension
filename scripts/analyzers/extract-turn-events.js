@@ -2,8 +2,12 @@
 // 用法: node scripts/extract-turn-events.js <logfile> <startLine> <endLine>
 const fs = require("fs");
 const file = process.argv[2];
-const start = parseInt(process.argv[3], 10) - 1;
-const end = parseInt(process.argv[4], 10);
+if (!file || !fs.existsSync(file)) {
+	console.error("用法: node scripts/analyzers/extract-turn-events.js <logfile> <startLine> <endLine>");
+	process.exit(1);
+}
+const start = parseInt(process.argv[3] || "1", 10) - 1;
+const end = parseInt(process.argv[4] || "1000000", 10);
 const lines = fs.readFileSync(file, "utf8").split(/\r?\n/).slice(start, end);
 
 for (const line of lines) {

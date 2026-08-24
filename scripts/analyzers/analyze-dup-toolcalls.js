@@ -5,6 +5,10 @@ const fs = require("fs");
 const readline = require("readline");
 
 const file = process.argv[2];
+if (!file || !fs.existsSync(file)) {
+	console.error("用法: node scripts/analyzers/analyze-dup-toolcalls.js <logfile>");
+	process.exit(1);
+}
 const rl = readline.createInterface({ input: fs.createReadStream(file), crlfDelay: Infinity });
 
 let curId = null;

@@ -1,9 +1,24 @@
 // 探针 2：带 tools 的 Responses 流，验证 agent 场景下思考是否仍走 reasoning 事件
 // （对比无 tools 探针：reasoning_text.delta 独立、output_text 干净）
 const fs = require("fs");
-const src = fs.readFileSync(__dirname + "/glm53-effort-test.js", "utf8");
-const KEY = src.match(/const KEY = "([^"]+)"/)[1];
-const BASE = "https://newapi.libiaorobot.com/v1";
+const path = require("path");
+
+function resolveApiKey() {
+	if (process.env.LIBIAO_API_KEY) return process.env.LIBIAO_API_KEY;
+	const probeCandidates = [
+		path.join(__dirname, "glm53-effort-test.js"),
+		path.join(__dirname, "..", "probes", "glm53-effort-test.js"),
+	];
+	for (const p of probeCandidates) {
+		if (fs.existsSync(p)) {
+			const m = fs.readFileSync(p, "utf8").match(/const KEY = "([^"]+)"/);
+			if (m) return m[1];
+		}
+	}
+	throw new Error("未找到 API Key，请设置环境变量 LIBIAO_API_KEY");
+}
+const KEY = resolveApiKey();
+const BASE = process.env.LIBIAO_BASE_URL || "https://newapi.libiaorobot.com/v1";
 
 async function probe(model) {
 	console.log(`\n########## RESPONSES+TOOLS ${model} ##########`);
@@ -71,7 +86,7 @@ async function probe(model) {
 	}
 	console.log("--- 事件计数 ---");
 	for (const [t, c] of counts) console.log(`  ${t}: ${c}`);
-	console.log(`output_text 长=${outputText.length} 含 <think>=${outputText.includes("<think>")} 含 <think>=${outputText.includes("<think>")}`);
+	console.log(`output_text 长=${outputText.length} 含 <think>=${outputText.includes("<think>")} 含 </think>=${outputText.includes("</think>")}`);
 	console.log("output_text 前 400:", JSON.stringify(outputText.slice(0, 400)));
 	console.log(`reasoning 长=${reasoningText.length} 前 150:`, JSON.stringify(reasoningText.slice(0, 150)));
 }

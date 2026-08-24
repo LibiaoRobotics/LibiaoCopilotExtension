@@ -1,7 +1,7 @@
 // TPS 测试功能实弹验证（glm-5.2 anthropic 链路）
 // 完全复刻 modelTester.ts 的 testSingleModel + buildTestRequestBody 参数
-const BASE = "https://newapi.libiaorobot.com/v1";
-const KEY = "sk-wI5qUOGVWL3sWGvcE3qM40f3BzLHM9kOimo2QXnobRJ9lzZ6";
+const BASE = process.env.LIBIAO_BASE_URL || "https://newapi.libiaorobot.com/v1";
+const KEY = process.env.LIBIAO_API_KEY || "sk-wI5qUOGVWL3sWGvcE3qM40f3BzLHM9kOimo2QXnobRJ9lzZ6";
 
 // buildTestRequestBody(anthropic) 的输出：max_tokens=4096, thinking budget 压到 1024
 const body = {

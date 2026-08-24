@@ -45,7 +45,19 @@ Write-Host "==> 目标仓库: $Repo"
 
 # ---------- 3. 从 CHANGELOG 提取版本段落 ----------
 if (-not $ChangelogPath) {
-    $ChangelogPath = Join-Path $PSScriptRoot '..\libiao-copilot\CHANGELOG.md'
+    $changelogCandidates = @(
+        (Join-Path $PSScriptRoot '..\CHANGELOG.md'),
+        (Join-Path $PSScriptRoot '..\libiao-copilot\CHANGELOG.md')
+    )
+    foreach ($cand in $changelogCandidates) {
+        if (Test-Path -LiteralPath $cand) {
+            $ChangelogPath = $cand
+            break
+        }
+    }
+    if (-not $ChangelogPath) {
+        $ChangelogPath = Join-Path $PSScriptRoot '..\CHANGELOG.md'
+    }
 }
 if (-not (Test-Path $ChangelogPath)) { throw "CHANGELOG 不存在: $ChangelogPath" }
 $changelog = Get-Content -Raw -Encoding UTF8 $ChangelogPath

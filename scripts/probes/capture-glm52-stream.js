@@ -1,8 +1,23 @@
 // 抓取 glm-5.2 真实流的 content_block_delta 全量事件序列，存成 JSON 供解析器回放
 const fs = require("fs");
-const src = fs.readFileSync(__dirname + "/glm53-effort-test.js", "utf8");
-const KEY = src.match(/const KEY = "([^"]+)"/)[1];
-const BASE = "https://newapi.libiaorobot.com/v1";
+const path = require("path");
+
+function resolveApiKey() {
+	if (process.env.LIBIAO_API_KEY) return process.env.LIBIAO_API_KEY;
+	const probeCandidates = [
+		path.join(__dirname, "glm53-effort-test.js"),
+		path.join(__dirname, "..", "probes", "glm53-effort-test.js"),
+	];
+	for (const p of probeCandidates) {
+		if (fs.existsSync(p)) {
+			const m = fs.readFileSync(p, "utf8").match(/const KEY = "([^"]+)"/);
+			if (m) return m[1];
+		}
+	}
+	throw new Error("未找到 API Key，请设置环境变量 LIBIAO_API_KEY");
+}
+const KEY = resolveApiKey();
+const BASE = process.env.LIBIAO_BASE_URL || "https://newapi.libiaorobot.com/v1";
 const HEADERS = { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" };
 
 (async () => {
@@ -41,7 +56,8 @@ const HEADERS = { "Content-Type": "application/json", "x-api-key": KEY, "anthrop
 			}
 		}
 	}
-	fs.writeFileSync(__dirname + "/glm52-stream-events.json", JSON.stringify(events, null, 0));
+	const outPath = path.join(__dirname, "..", "replay", "glm52-stream-events.json");
+	fs.writeFileSync(outPath, JSON.stringify(events, null, 0));
 	// 统计
 	const textDeltas = events.filter(e => e.type === "content_block_delta" && e.delta?.type === "text_delta");
 	const thinkDeltas = events.filter(e => e.type === "content_block_delta" && e.delta?.type === "thinking_delta");
@@ -49,5 +65,5 @@ const HEADERS = { "Content-Type": "application/json", "x-api-key": KEY, "anthrop
 	console.log("事件总数:", events.length, "| text_delta:", textDeltas.length, `(${totalText} 字符)`, "| thinking_delta:", thinkDeltas.length);
 	console.log("text 是否含 < :", textDeltas.some(e => (e.delta.text || "").includes("<")));
 	console.log("text 是否含 <think :", textDeltas.some(e => (e.delta.text || "").includes("<think")));
-	console.log("已保存 → scripts/glm52-stream-events.json");
+	console.log("已保存 → " + outPath);
 })().catch(e => { console.error(e); process.exit(1); });

@@ -1,8 +1,23 @@
 // 探针 4：GLM 系列在 Responses 链路的事件形状（用户截图实际用的是 GLM 5.2）
 const fs = require("fs");
-const src = fs.readFileSync(__dirname + "/glm53-effort-test.js", "utf8");
-const KEY = src.match(/const KEY = "([^"]+)"/)[1];
-const BASE = "https://newapi.libiaorobot.com/v1";
+const path = require("path");
+
+function resolveApiKey() {
+	if (process.env.LIBIAO_API_KEY) return process.env.LIBIAO_API_KEY;
+	const probeCandidates = [
+		path.join(__dirname, "glm53-effort-test.js"),
+		path.join(__dirname, "..", "probes", "glm53-effort-test.js"),
+	];
+	for (const p of probeCandidates) {
+		if (fs.existsSync(p)) {
+			const m = fs.readFileSync(p, "utf8").match(/const KEY = "([^"]+)"/);
+			if (m) return m[1];
+		}
+	}
+	throw new Error("未找到 API Key，请设置环境变量 LIBIAO_API_KEY");
+}
+const KEY = resolveApiKey();
+const BASE = process.env.LIBIAO_BASE_URL || "https://newapi.libiaorobot.com/v1";
 
 async function probe(model) {
 	console.log(`\n########## RESPONSES ${model} ##########`);
@@ -50,7 +65,7 @@ async function probe(model) {
 	}
 	console.log("--- 事件计数 ---");
 	for (const [t, c] of counts) console.log(`  ${t}: ${c}`);
-	console.log(`output_text 长=${out.length} 含 <think>=${out.includes("<think>")} 含 <think>=${out.includes("<think>")}`);
+	console.log(`output_text 长=${out.length} 含 <think>=${out.includes("<think>")} 含 </think>=${out.includes("</think>")}`);
 	console.log("output_text 前 400:", JSON.stringify(out.slice(0, 400)));
 	console.log(`reasoning 长=${reasoning.length} 前 150:`, JSON.stringify(reasoning.slice(0, 150)));
 }

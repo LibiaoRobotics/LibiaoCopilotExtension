@@ -1,17 +1,26 @@
-// 原始 SSE 事件探针（不落盘 key：运行时从 glm53-effort-test.js 读取）
+// 原始 SSE 事件探针（优先环境变量；若无则从 glm53-effort-test.js 读取）
 // 目的：
 //  1) Responses 链路：思考内容到底走哪类事件？output_text 里是否带 <think> 类标签？
 //  2) Anthropic 链路：message_start / message_delta 的 usage 字段形状；thinking 走什么事件？
 const fs = require("fs");
+const path = require("path");
 
-const src = fs.readFileSync(__dirname + "/glm53-effort-test.js", "utf8");
-const m = src.match(/const KEY = "([^"]+)"/);
-if (!m) {
-	console.log("无法从 glm53-effort-test.js 提取 KEY");
-	process.exit(1);
+function resolveApiKey() {
+	if (process.env.LIBIAO_API_KEY) return process.env.LIBIAO_API_KEY;
+	const probeCandidates = [
+		path.join(__dirname, "glm53-effort-test.js"),
+		path.join(__dirname, "..", "probes", "glm53-effort-test.js"),
+	];
+	for (const p of probeCandidates) {
+		if (fs.existsSync(p)) {
+			const m = fs.readFileSync(p, "utf8").match(/const KEY = "([^"]+)"/);
+			if (m) return m[1];
+		}
+	}
+	throw new Error("未找到 API Key，请设置环境变量 LIBIAO_API_KEY");
 }
-const KEY = m[1];
-const BASE = "https://newapi.libiaorobot.com/v1";
+const KEY = resolveApiKey();
+const BASE = process.env.LIBIAO_BASE_URL || "https://newapi.libiaorobot.com/v1";
 const PROMPT = "一步一步推理：23 乘 47 等于多少？最后只给答案。";
 
 async function* sseLines(res) {
@@ -78,7 +87,7 @@ async function probeResponses(model) {
 	console.log(outputText.slice(0, 300));
 	console.log("--- reasoning 类事件累计前 200 字符 ---");
 	console.log(reasoningText.slice(0, 200));
-	console.log(`output_text 含 <think>: ${outputText.includes("<think>")}  含 <think>: ${outputText.includes("<think>")}`);
+	console.log(`output_text 含 <think>: ${outputText.includes("<think>")}  含 </think>: ${outputText.includes("</think>")}`);
 }
 
 async function probeAnthropic(model) {
@@ -128,7 +137,7 @@ async function probeAnthropic(model) {
 	console.log(JSON.stringify(firstThinking.slice(0, 150)));
 	console.log("--- 首 text_delta 前 150 字符 ---");
 	console.log(JSON.stringify(firstText.slice(0, 150)));
-	console.log(`text 全文含 <think>: ${textAll.includes("<think>")}  含 <think>: ${textAll.includes("<think>")}  text 总长: ${textAll.length}`);
+	console.log(`text 全文含 <think>: ${textAll.includes("<think>")}  含 </think>: ${textAll.includes("</think>")}  text 总长: ${textAll.length}`);
 }
 
 (async () => {
