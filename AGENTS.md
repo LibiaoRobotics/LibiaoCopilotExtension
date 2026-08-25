@@ -1,33 +1,12 @@
-# AGENTS.md
+# Agent Instructions & Guidelines
 
-This file provides guidance to agents when working with code in this repository.
+All AI coding agents (GitHub Copilot, Claude Code, Cursor, Devin, etc.) working on this repository must follow the authoritative guidelines and core architecture rules documented in:
 
-## Build/Test/Lint Commands
-```bash
-npm run compile        # Build TypeScript
-npm run watch          # Build in watch mode
-npm run lint           # Run ESLint
-npm run format         # Format with Prettier
-npm run test           # Run tests (compile + vscode-test)
-npm run build          # Package extension to .vsix
-npm run download-api   # Download VS Code proposed API types (required after vscode.d.ts updates)
-```
+👉 **[.github/copilot-instructions.md](.github/copilot-instructions.md)**
 
-## Architecture
-- **Entry**: `src/extension.ts` - registers `HuggingFaceChatModelProvider` under vendor id `oaicopilot`
-- **Core Provider**: `src/provider.ts` - implements `LanguageModelChatProvider` interface
-- **API Providers**: `src/openai/`, `src/ollama/`, `src/anthropic/`, `src/gemini/` - each handles provider-specific API
+For domain-specific workflows and targeted instructions, refer to:
+- Modular Instructions: **`.github/instructions/`**
+- Actionable Skills: **`.github/skills/`**
+- Interactive Prompts: **`.github/prompts/`**
 
-## Key Conventions
-- Uses VS Code proposed API `chatProvider` - types in `src/vscode.proposed.*.d.ts`
-- API keys stored via `vscode.SecretStorage` with keys `oaicopilot.apiKey` or `oaicopilot.apiKey.{provider}`
-- Model config via `oaicopilot.models` setting (see `src/types.ts` for `HFModelItem`)
-- Supports multi-provider: same model can have different `configId` for different settings
-- **Adding a built-in model entry**: follow `docs/add-builtin-model.md` (SOP with decision trees, curl test templates, and pitfall log); model specs live in `docs/model-catalog.md`
 
-## Code Style (from eslint.config.mjs)
-- Semicolons required (`@stylistic/semi`)
-- Curly braces required (`curly`)
-- Unused vars with `_` prefix are ignored
-- Use `\t` indentation (`@stylistic/indent`)
-- Double quotes for strings (`@stylistic/quotes`)

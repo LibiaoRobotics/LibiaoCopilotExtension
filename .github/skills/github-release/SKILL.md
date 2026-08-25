@@ -63,12 +63,12 @@ git push origin vX.Y.Z
 
 ```powershell
 cd libiao-copilot
-powershell -ExecutionPolicy Bypass -File .\scripts\create-release.ps1 -Tag vX.Y.Z
+pwsh -ExecutionPolicy Bypass -File .\scripts\create-release.ps1 -Tag vX.Y.Z
 ```
 
 * **特殊场景参数**：
-  - 发布为草稿：`powershell -ExecutionPolicy Bypass -File .\scripts\create-release.ps1 -Tag vX.Y.Z -Draft`
-  - 发布为预发布版本：`powershell -ExecutionPolicy Bypass -File .\scripts\create-release.ps1 -Tag vX.Y.Z -Prerelease`
+  - 发布为草稿：`pwsh -ExecutionPolicy Bypass -File .\scripts\create-release.ps1 -Tag vX.Y.Z -Draft`
+  - 发布为预发布版本：`pwsh -ExecutionPolicy Bypass -File .\scripts\create-release.ps1 -Tag vX.Y.Z -Prerelease`
 
 ---
 

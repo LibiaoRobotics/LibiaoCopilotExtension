@@ -31,6 +31,8 @@ description: Libiao Copilot 插件的流式协议抓包调试与日志故障诊�
 | **模型回复空白或中途报工具不存在** | 模型自发调用了网关未开放的服务端假工具（如 `file_search_call`, `web_search_call`）。 | 日志出现 `output_item.added` 为 `file_search_call`，生命周期完整但结果为空。 | `src/openai/openaiResponsesApi.ts` 中的 `handleServerSideToolItem`（自动转换为同名客户端调用并回传不可用错误，引导模型自愈）。 |
 | **UI 连续弹出两张相同的工具卡片** | 网关把上一个工具调用的完整参数作为 delta 路由到了下一个 item，旧解析器在 delta 阶段提前抢跑发射。 | 同一回合内连续触发同名同参的 `tool_call`。 | `src/openai/openaiResponsesApi.ts`：delta 阶段只累积不抢跑发射，收敛到 `output_item.done` 权威发射。 |
 | **Gemini 报 400 `property is not defined`** | 白名单过滤误把 `properties` 里的用户自定义参数属性名当作 schema 关键字剔除。 | 日志中出现 `required[N]: property is not defined` 且 `properties: {}`。 | `src/gemini/geminiApi.ts`：`stripUnsupportedGeminiSchemaKeys` 对 `properties` 映射做保护。 |
+| **Gemini 开启思考后无任何思考输出** | Google 服务端默认 `includeThoughts: false`，只配置 `thinkingLevel` 会导致服务端静默扣留思考文本（Hidden Thinking）。 | usage 中有 `thoughtsTokenCount` 但无思考 chunk。 | `src/gemini/geminiApi.ts`：开启思考等级时必须无脑携带 `includeThoughts: true`。 |
+| **Anthropic 协议 Token 统计偏小** | 网关在 `message_start.usage` 仅返回初值，全量 Token 在 `message_delta.usage`。 | 流结束时 Token 统计比实际少。 | `src/anthropic/anthropicApi.ts`：宽容合并 `message_start` 与 `message_delta` 的 usage。 |
 
 ---
 

@@ -20,8 +20,8 @@
     “重新加载窗口”无效，argv.json 只在启动时读取。
 
 .EXAMPLE
-    方式一（推荐）：右键本文件 → “使用 PowerShell 运行”
-    方式二：powershell -ExecutionPolicy Bypass -File .\Install-LibiaoCopilot.ps1
+    方式一（推荐）：pwsh -ExecutionPolicy Bypass -File .\Install-LibiaoCopilot.ps1
+    方式二：右键本文件 → “使用 PowerShell 运行”
 
 .PARAMETER VsixPath
     可选。指定 .vsix 文件路径。默认使用打包产物 libiao-copilot\extension.vsix。
@@ -29,6 +29,16 @@
 param(
     [string]$VsixPath
 )
+
+# 确保在 PowerShell 7 (pwsh) 下运行，若在 Windows PowerShell 5.1 启动且系统装有 pwsh 则自动切换
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    $pwshCmd = Get-Command pwsh -ErrorAction SilentlyContinue
+    if ($pwshCmd) {
+        Write-Host ">>> 检测到当前为 Windows PowerShell $($PSVersionTable.PSVersion)，正在自动切换至 PowerShell 7 (pwsh) 执行..." -ForegroundColor Cyan
+        & $pwshCmd.Source -NoLogo -ExecutionPolicy Bypass -File $PSCommandPath @args
+        exit $LASTEXITCODE
+    }
+}
 
 $ErrorActionPreference = 'Stop'
 $ExtensionId = 'libiaorobot.libiao-copilot'

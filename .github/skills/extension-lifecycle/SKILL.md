@@ -19,9 +19,9 @@ description: Libiao Copilot 插件的编译、自动化测试、打包构建、�
    - **严禁添加 `--no-dependencies`**，否则会丢失 `@microsoft/tiktokenizer` 运行时依赖导致插件启动静默崩溃。
 3. **本地安装唯一合法指令**：
    - **严禁直接裸敲 `code --install-extension`**！
-   - 本地安装必须在仓库根目录执行：
+   - 本地安装必须在仓库根目录执行（优先使用 PowerShell 7 `pwsh`）：
      ```powershell
-     powershell -ExecutionPolicy Bypass -File .\scripts\Install-LibiaoCopilot.ps1
+     pwsh -ExecutionPolicy Bypass -File .\scripts\Install-LibiaoCopilot.ps1
      ```
      （该脚本自带清理旧版本残留目录、自动配置 `%USERPROFILE%\.vscode\argv.json` 的 `enable-proposed-api` 权限、禁用上游冲突插件等全套防护逻辑）。
 4. **版本号与 Git Tag 铁律**：
@@ -75,8 +75,8 @@ npm test
 # Step 3: 打包 VSIX（唯一输出路径为当前目录 extension.vsix，含 node_modules 依赖）
 npm run build
 
-# Step 4: 运行专属安装脚本
-powershell -ExecutionPolicy Bypass -File .\scripts\Install-LibiaoCopilot.ps1
+# Step 4: 运行专属安装脚本（推荐 pwsh）
+pwsh -ExecutionPolicy Bypass -File .\scripts\Install-LibiaoCopilot.ps1
 ```
 
 * **执行完毕后提醒**：
@@ -95,6 +95,6 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Install-LibiaoCopilot.ps1
    ```
 4. 运行自动化 Release 脚本（脚本采用 UTF-8 字节流防乱码，自动提取 CHANGELOG 段落）：
    ```powershell
-   powershell -ExecutionPolicy Bypass -File .\scripts\create-release.ps1 -Tag vX.Y.Z
+   pwsh -ExecutionPolicy Bypass -File .\scripts\create-release.ps1 -Tag vX.Y.Z
    ```
 5. 使用 Node.js 验证线上 Release 页面与中文编码无乱码。

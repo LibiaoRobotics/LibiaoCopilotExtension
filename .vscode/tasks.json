@@ -4,7 +4,7 @@
 		{
 			"label": "🚀 [一键安装] 编译+测试+打包+自动安全安装到本地",
 			"type": "shell",
-			"command": "npm run compile && npm test && npm run build && powershell -ExecutionPolicy Bypass -File .\\scripts\\Install-LibiaoCopilot.ps1",
+			"command": "npm run compile && npm test && npm run build && pwsh -ExecutionPolicy Bypass -File .\\scripts\\Install-LibiaoCopilot.ps1",
 			"problemMatcher": ["$tsc"],
 			"group": {
 				"kind": "build",

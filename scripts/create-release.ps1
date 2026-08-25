@@ -19,6 +19,17 @@ param(
 
     [switch]$Prerelease
 )
+
+# 确保在 PowerShell 7 (pwsh) 下运行，若在 Windows PowerShell 5.1 启动且系统装有 pwsh 则自动切换
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    $pwshCmd = Get-Command pwsh -ErrorAction SilentlyContinue
+    if ($pwshCmd) {
+        Write-Host ">>> 检测到当前为 Windows PowerShell $($PSVersionTable.PSVersion)，正在自动切换至 PowerShell 7 (pwsh) 执行..." -ForegroundColor Cyan
+        & $pwshCmd.Source -NoLogo -ExecutionPolicy Bypass -File $PSCommandPath @args
+        exit $LASTEXITCODE
+    }
+}
+
 $ErrorActionPreference = 'Stop'
 
 # ---------- 1. 规范化参数 ----------

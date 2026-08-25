@@ -155,13 +155,13 @@ A：修改设置会自动清空模型缓存；如仍无变化，重新加载 VS 
 **Q：模型选择器是空的？**
 A：查看错误提示信息，检查 `libiaoCopilot.baseUrl` 与 API Key 是否已配置。未配置时扩展静默不拉取模型。
 
-## 📚 开发者文档与架构指南
+## 📚 开发者指引与规范体系
 
-针对二次开发与维护同学，我们提供了深度技术解析与实操指南：
+针对插件维护与二次开发，项目基于 GitHub Copilot 官方规范构建了模块化指示与技能体系：
 
-- **[架构全景与开发者指南](docs/developer-handbook.md)**：包含 VS Code 插件加载原理、多进程 IPC 互动流、编译/打包/发布全链路、流式去重与抗击打设计、长会话上下文管理等。
-- **[内置模型目录与参数表](docs/model-catalog.md)**：所有 21 款内置网关模型的上下文、输出上限与 Thinking 挡位参数。
-- **[新增内置模型指南](docs/add-builtin-model.md)**：如何为扩展添加新的官方内置模型定义。
+- **[指令总纲与规约](.github/copilot-instructions.md)**：包含核心红线、系统架构、流式解析与全局路由。
+- **[模块化指示库](.github/instructions/)**：架构分层（`architecture`）、多协议流式（`streaming-protocols`）与运行环境（`powershell-env`）。
+- **[专项可执行技能库](.github/skills/)**：编译打包（`extension-lifecycle`）、发布（`github-release`）、抓包排障（`stream-diagnostics`）与模型维护（`add-builtin-model`）。
 
 ## 致谢
 

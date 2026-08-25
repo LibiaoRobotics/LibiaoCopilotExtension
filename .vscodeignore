@@ -19,4 +19,6 @@ CLAUDE.md
 docs/**
 scripts/**
 out/test/**
+*.zip
+*.vsix
 node_modules/@microsoft/tiktokenizer/model/**
