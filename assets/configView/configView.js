@@ -127,6 +127,7 @@ const modelTestProgress = document.getElementById("modelTestProgress");
 const modelTestTableBody = document.getElementById("modelTestTableBody");
 
 // Best practices elements
+const extensionVersionText = document.getElementById("extensionVersionText");
 const openUserMemoryBtn = document.getElementById("openUserMemory");
 const applyUserMemoryTemplateBtn = document.getElementById("applyUserMemoryTemplate");
 const revealUserMemoryDirBtn = document.getElementById("revealUserMemoryDir");
@@ -294,7 +295,7 @@ function updateOrgInstructionsUi(orgInstructions) {
 
 function updateUserMemoryUi(userMemory, customMemory, orgInstructions) {
 	if (userMemory) {
-		const { filePath, exists, lineCount, charCount, tokenCount, userName } = userMemory;
+		const { filePath, exists, lineCount, charCount, tokenCount, userName, isTemplateInjected } = userMemory;
 		if (memoryPathDisplay) {
 			memoryPathDisplay.textContent = `文件路径: ${filePath || "未知"}`;
 		}
@@ -315,6 +316,15 @@ function updateUserMemoryUi(userMemory, customMemory, orgInstructions) {
 			} else if (!userMemoryNameInput.value.trim()) {
 				// 若记忆中无称呼或文件不存在，输入框不为空，随机选一个填入
 				userMemoryNameInput.value = getRandomNickname("");
+			}
+		}
+		if (applyUserMemoryTemplateBtn) {
+			if (isTemplateInjected) {
+				applyUserMemoryTemplateBtn.disabled = true;
+				applyUserMemoryTemplateBtn.textContent = "宇宙最强思想钢印已注入";
+			} else {
+				applyUserMemoryTemplateBtn.disabled = false;
+				applyUserMemoryTemplateBtn.textContent = "🧠 立即注入宇宙最强思想钢印";
 			}
 		}
 	}
@@ -752,6 +762,13 @@ window.addEventListener("message", (event) => {
 			populateCommitModelDropdown();
 			commitModelInput.value = state.commitModel || "";
 			commitLanguageInput.value = commitLanguage;
+
+			if (extensionVersionText && message.payload.version) {
+				const v = message.payload.version;
+				const cleanV = v.startsWith("v") ? v : `v${v}`;
+				const buildDate = message.payload.buildDate;
+				extensionVersionText.textContent = buildDate ? `${cleanV} (${buildDate})` : cleanV;
+			}
 
 			// Render user memory status
 			updateUserMemoryUi(userMemory, message.payload.customMemory, message.payload.orgInstructions);

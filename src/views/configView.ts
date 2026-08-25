@@ -11,6 +11,8 @@ import { loadTestModelList, runModelTests, type ModelTestResult, type TestModelI
 import { tokenizerManager } from "../tokenizer/tokenizerManager";
 
 interface InitPayload {
+	version: string;
+	buildDate: string;
 	baseUrl: string;
 	apiKey: string;
 	delay: number;
@@ -38,6 +40,7 @@ interface InitPayload {
 		charCount: number;
 		tokenCount: number;
 		userName: string;
+		isTemplateInjected: boolean;
 	};
 	customMemory: {
 		filePath: string;
@@ -154,6 +157,7 @@ type OutgoingMessage =
 				charCount: number;
 				tokenCount: number;
 				userName: string;
+				isTemplateInjected: boolean;
 			};
 			customMemory: {
 				filePath: string;
@@ -615,6 +619,8 @@ export class ConfigViewPanel {
 		const customMemory = await this.getCustomMemoryStatus();
 		const orgInstructions = await this.getOrgInstructionsStatus();
 		const payload: InitPayload = {
+			version: VersionManager.getVersion(),
+			buildDate: VersionManager.getBuildDate(),
 			baseUrl,
 			apiKey,
 			delay,
@@ -993,6 +999,7 @@ export class ConfigViewPanel {
 		charCount: number;
 		tokenCount: number;
 		userName: string;
+		isTemplateInjected: boolean;
 	}> {
 		const filePath = this.getMemoryFilePath();
 		let exists = false;
@@ -1000,6 +1007,7 @@ export class ConfigViewPanel {
 		let charCount = 0;
 		let tokenCount = 0;
 		let userName = "";
+		let isTemplateInjected = false;
 		try {
 			if (fs.existsSync(filePath)) {
 				exists = true;
@@ -1014,11 +1022,26 @@ export class ConfigViewPanel {
 					console.error("[libiaoCopilot] countTokens failed", err);
 					tokenCount = Math.round(charCount * 0.65);
 				}
+
+				try {
+					const templateUri = vscode.Uri.joinPath(
+						this.extensionUri,
+						"assets",
+						"templates",
+						"user-preferences.template.md"
+					);
+					const templateBytes = await vscode.workspace.fs.readFile(templateUri);
+					const rawTemplate = new TextDecoder("utf-8").decode(templateBytes);
+					isTemplateInjected = isUserMemoryTemplateInjected(content, rawTemplate);
+				} catch (err) {
+					console.error("[libiaoCopilot] check template injection failed", err);
+					isTemplateInjected = false;
+				}
 			}
 		} catch (err) {
 			console.error("[libiaoCopilot] check user memory failed", err);
 		}
-		return { filePath, exists, lineCount, charCount, tokenCount, userName };
+		return { filePath, exists, lineCount, charCount, tokenCount, userName, isTemplateInjected };
 	}
 
 	private async getCustomMemoryStatus(): Promise<{
@@ -1501,6 +1524,19 @@ export function isMemoryContentEqual(a: string, b: string): boolean {
 	const normA = a.replace(/\r\n/g, "\n").trim();
 	const normB = b.replace(/\r\n/g, "\n").trim();
 	return normA === normB;
+}
+
+/**
+ * 判断给定的核心记忆内容是否由模板渲染生成（即模板是否已注入）。
+ * 提取内容中的昵称（若有），与模板进行比对。
+ */
+export function isUserMemoryTemplateInjected(content: string, rawTemplate: string): boolean {
+	if (!content || !content.trim()) {
+		return false;
+	}
+	const userName = extractUserNameFromMemory(content);
+	const expectedContent = renderUserMemoryTemplate(rawTemplate, userName);
+	return isMemoryContentEqual(content, expectedContent);
 }
 
 /**

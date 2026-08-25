@@ -7,6 +7,7 @@ import {
 	renderUserMemoryTemplate,
 	updateUserNameInMemory,
 	isMemoryContentEqual,
+	isUserMemoryTemplateInjected,
 	formatBackupTimestamp,
 	backupMemoryToDesktop,
 	buildUserMemoryEvaluationPrompt,
@@ -18,7 +19,24 @@ import {
 	buildOrgInstructionsEvaluationPrompt,
 } from "../views/configView";
 
+import {
+	formatBuildDate,
+	VersionManager,
+} from "../versionManager";
+
 suite("User Memory & Best Practices", () => {
+	test("formatBuildDate & VersionManager: 正确格式化日期与获取版本信息", () => {
+		const fixedDate = new Date(2026, 7, 25); // 2026-08-25
+		assert.strictEqual(formatBuildDate(fixedDate), "2026-08-25");
+
+		const version = VersionManager.getVersion();
+		assert.ok(version.length > 0, "版本号不应为空");
+		assert.strictEqual(version, "1.2.1");
+
+		const buildDate = VersionManager.getBuildDate();
+		assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(buildDate), `打包日期应符合 YYYY-MM-DD 格式，当前为: ${buildDate}`);
+	});
+
 	test("正确从记忆文件内容中提取用户称呼/昵称（含无称呼场景）", () => {
 		const cases = [
 			{ text: "- 称呼用户为“特哥”。\n- 默认使用中文", expected: "特哥" },
@@ -123,6 +141,26 @@ suite("User Memory & Best Practices", () => {
 		assert.ok(!replacedEmpty.includes("称呼用户为"));
 		assert.ok(!replacedEmpty.includes("{{USER_NAME}}"));
 		assert.ok(replacedEmpty.includes("默认使用中文交流"));
+	});
+
+	test("isUserMemoryTemplateInjected: 正确识别核心记忆模板注入状态（无论带称呼与否）", () => {
+		const template = "# 用户核心记忆\n\n## 沟通\n- 称呼用户为“{{USER_NAME}}”。\n- 默认使用中文交流；\n\n## 工程默认\n- 必须只做被要求的改动。";
+
+		// 1. 注入并设置了称呼
+		const injectedWithName = "# 用户核心记忆\n\n## 沟通\n- 称呼用户为“特哥”。\n- 默认使用中文交流；\n\n## 工程默认\n- 必须只做被要求的改动。";
+		assert.strictEqual(isUserMemoryTemplateInjected(injectedWithName, template), true, "设置了称呼且其余内容一致应判定已注入");
+
+		// 2. 注入且无称呼
+		const injectedNoName = "# 用户核心记忆\n\n## 沟通\n- 默认使用中文交流；\n\n## 工程默认\n- 必须只做被要求的改动。";
+		assert.strictEqual(isUserMemoryTemplateInjected(injectedNoName, template), true, "无称呼且其余内容一致应判定已注入");
+
+		// 3. 用户修改了规则正文（多加了一条规则或删减了内容）
+		const userModified = "# 用户核心记忆\n\n## 沟通\n- 称呼用户为“特哥”。\n- 默认使用中文交流；\n\n## 工程默认\n- 必须只做被要求的改动。\n- 自定义额外规则";
+		assert.strictEqual(isUserMemoryTemplateInjected(userModified, template), false, "内容被用户修改应判定未注入");
+
+		// 4. 空内容或无文件
+		assert.strictEqual(isUserMemoryTemplateInjected("", template), false, "空内容应判定未注入");
+		assert.strictEqual(isUserMemoryTemplateInjected("   \n\t ", template), false, "纯空白字符应判定未注入");
 	});
 
 	test("正确推导跨平台 globalStorage 目录下的 memory 路径", () => {
