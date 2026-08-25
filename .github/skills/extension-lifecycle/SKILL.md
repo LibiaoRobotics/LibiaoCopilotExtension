@@ -85,14 +85,16 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Install-LibiaoCopilot.ps1
 ---
 
 ### 场景 D：GitHub Release 发布新版本
-当特哥明确要求发布特定版本（如 `v1.0.9`）时：
+当特哥明确要求发布新版本（如 `v1.2.0`）时，严格遵循 **`github-release` 专项技能**：
 1. 检查 `package.json` 的版本号与 CHANGELOG.md 是否已准备就绪。
-2. 确认已创建注解 Tag 并推送到远程：
+2. 确保工作区干净且已推送到 `origin/main`。
+3. 确认已创建注解 Tag 并推送到远程：
    ```powershell
-   git tag -a v1.0.x -m "release: v1.0.x"
-   git push origin v1.0.x
+   git tag -a vX.Y.Z -m "release: vX.Y.Z"
+   git push origin vX.Y.Z
    ```
-3. 运行自动化 Release 脚本（会自动提取 CHANGELOG 对应段落生成 Release Note 并发布）：
+4. 运行自动化 Release 脚本（脚本采用 UTF-8 字节流防乱码，自动提取 CHANGELOG 段落）：
    ```powershell
-   powershell -ExecutionPolicy Bypass -File .\scripts\create-release.ps1 -Tag v1.0.x
+   powershell -ExecutionPolicy Bypass -File .\scripts\create-release.ps1 -Tag vX.Y.Z
    ```
+5. 使用 Node.js 验证线上 Release 页面与中文编码无乱码。
