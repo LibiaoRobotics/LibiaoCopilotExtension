@@ -17,4 +17,6 @@ AGENTS.md
 CLAUDE.md
 .doc/**
 docs/**
+scripts/**
 out/test/**
+node_modules/@microsoft/tiktokenizer/model/**

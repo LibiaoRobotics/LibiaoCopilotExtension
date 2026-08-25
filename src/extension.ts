@@ -115,7 +115,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand("libiaoCopilot.openConfig", async () => {
-			ConfigViewPanel.openPanel(context.extensionUri, context.secrets);
+			ConfigViewPanel.openPanel(context.extensionUri, context.secrets, context.globalStorageUri);
 		})
 	);
 

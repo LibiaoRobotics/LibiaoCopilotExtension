@@ -126,6 +126,155 @@ const cancelModelTestBtn = document.getElementById("cancelModelTest");
 const modelTestProgress = document.getElementById("modelTestProgress");
 const modelTestTableBody = document.getElementById("modelTestTableBody");
 
+// Best practices elements
+const openUserMemoryBtn = document.getElementById("openUserMemory");
+const applyUserMemoryTemplateBtn = document.getElementById("applyUserMemoryTemplate");
+const revealUserMemoryDirBtn = document.getElementById("revealUserMemoryDir");
+const userMemoryNameInput = document.getElementById("userMemoryName");
+const randomNameBtn = document.getElementById("randomNameBtn");
+const updateUserNameBtn = document.getElementById("updateUserNameBtn");
+const memoryStatusBadge = document.getElementById("memoryStatusBadge");
+const memoryPathDisplay = document.getElementById("memoryPathDisplay");
+const customMemoryCard = document.getElementById("customMemoryCard");
+const openCustomMemoryBtn = document.getElementById("openCustomMemory");
+const deleteCustomMemoryBtn = document.getElementById("deleteCustomMemory");
+const customMemoryStatusBadge = document.getElementById("customMemoryStatusBadge");
+const customMemoryPathDisplay = document.getElementById("customMemoryPathDisplay");
+const orgInstructionsCard = document.getElementById("orgInstructionsCard");
+const orgInstructionsStatusBadge = document.getElementById("orgInstructionsStatusBadge");
+const orgInstructionsPathDisplay = document.getElementById("orgInstructionsPathDisplay");
+const evaluateOrgInstructionsBtn = document.getElementById("evaluateOrgInstructions");
+const sanitizeOrgInstructionsBtn = document.getElementById("sanitizeOrgInstructions");
+const openOrgInstructionsBtn = document.getElementById("openOrgInstructions");
+const evaluateUserMemoryBtn = document.getElementById("evaluateUserMemory");
+const evaluateCustomMemoryBtn = document.getElementById("evaluateCustomMemory");
+const evaluateCombinedMemoryBtn = document.getElementById("evaluateCombinedMemory");
+
+// 16 个趣味昵称池
+const NICKNAMES_POOL = [
+	"碳基领导",
+	"尊贵的碳基生物",
+	"Ctrl+C 首席架构师",
+	"Bug 终结者",
+	"主分支守护神",
+	"代码天尊",
+	"技术大腿",
+	"首席甩锅官",
+	"硅基驯兽师",
+	"Token 批发商",
+	"无情需求发射器",
+	"东方不报错",
+	"线上救火总指挥",
+	"热修复真仙",
+	"祖传代码继承人",
+	"防御性编程大师",
+];
+
+function getRandomNickname(currentName) {
+	const pool = NICKNAMES_POOL.filter((n) => n !== currentName);
+	return pool[Math.floor(Math.random() * pool.length)] || NICKNAMES_POOL[0];
+}
+
+function formatTokenCount(tokens) {
+	if (!tokens || tokens <= 0) {
+		return "0 tokens";
+	}
+	if (tokens >= 1000) {
+		return `约 ${(tokens / 1000).toFixed(1)}k tokens`;
+	}
+	return `约 ${tokens} tokens`;
+}
+
+function updateOrgInstructionsUi(orgInstructions) {
+	if (!orgInstructions || !orgInstructionsCard) {
+		if (orgInstructionsCard) {
+			orgInstructionsCard.style.display = "none";
+		}
+		return;
+	}
+	const { filePath, exists, hasContent, isWritable, lineCount, charCount, tokenCount } = orgInstructions;
+	// 动态感知判断条件：文件存在且有内容即展示（是否只读均展示）
+	const shouldShow = !!(exists && hasContent);
+	orgInstructionsCard.style.display = shouldShow ? "block" : "none";
+
+	if (orgInstructionsPathDisplay) {
+		orgInstructionsPathDisplay.textContent = `文件路径: ${filePath || "未知"}`;
+	}
+	if (orgInstructionsStatusBadge) {
+		const charsStr = `${(charCount || 0).toLocaleString()} 字`;
+		const tokensStr = formatTokenCount(tokenCount);
+		orgInstructionsStatusBadge.className = "memory-status-badge status-missing org-warning-badge";
+		orgInstructionsStatusBadge.textContent = `${lineCount} 行 · ${charsStr} · ${tokensStr}`;
+	}
+}
+
+function updateUserMemoryUi(userMemory, customMemory, orgInstructions) {
+	if (userMemory) {
+		const { filePath, exists, lineCount, charCount, tokenCount, userName } = userMemory;
+		if (memoryPathDisplay) {
+			memoryPathDisplay.textContent = `文件路径: ${filePath || "未知"}`;
+		}
+		if (memoryStatusBadge) {
+			if (exists) {
+				const charsStr = `${(charCount || 0).toLocaleString()} 字`;
+				const tokensStr = formatTokenCount(tokenCount);
+				memoryStatusBadge.className = "memory-status-badge status-ready";
+				memoryStatusBadge.textContent = `✅ 已就绪 (${lineCount} 行 · ${charsStr} · ${tokensStr})`;
+			} else {
+				memoryStatusBadge.className = "memory-status-badge status-missing";
+				memoryStatusBadge.textContent = `⚠️ 尚未创建（点击下方应用模板）`;
+			}
+		}
+		if (userMemoryNameInput) {
+			if (userName) {
+				userMemoryNameInput.value = userName;
+			} else if (!userMemoryNameInput.value.trim()) {
+				// 若记忆中无称呼或文件不存在，输入框不为空，随机选一个填入
+				userMemoryNameInput.value = getRandomNickname("");
+			}
+		}
+	}
+
+	if (customMemory) {
+		const { filePath, exists, lineCount, charCount, tokenCount } = customMemory;
+		if (customMemoryPathDisplay) {
+			customMemoryPathDisplay.textContent = `文件路径: ${filePath || "未知"}`;
+		}
+		if (customMemoryStatusBadge) {
+			if (exists) {
+				const charsStr = `${(charCount || 0).toLocaleString()} 字`;
+				const tokensStr = formatTokenCount(tokenCount);
+				customMemoryStatusBadge.className = "memory-status-badge status-ready";
+				customMemoryStatusBadge.textContent = `✅ 已就绪 (${lineCount} 行 · ${charsStr} · ${tokensStr})`;
+			} else {
+				customMemoryStatusBadge.className = "memory-status-badge status-missing";
+				customMemoryStatusBadge.textContent = `⚠️ 尚未创建（点击下方编辑）`;
+			}
+		}
+	}
+
+	updateOrgInstructionsUi(orgInstructions);
+
+	const userExists = !!(userMemory && userMemory.exists);
+	const customExists = !!(customMemory && customMemory.exists);
+
+	if (evaluateUserMemoryBtn) {
+		evaluateUserMemoryBtn.style.display = userExists ? "inline-block" : "none";
+	}
+	if (evaluateCustomMemoryBtn) {
+		evaluateCustomMemoryBtn.style.display = customExists ? "inline-block" : "none";
+	}
+	if (deleteCustomMemoryBtn) {
+		deleteCustomMemoryBtn.style.display = customExists ? "inline-block" : "none";
+	}
+	if (evaluateCombinedMemoryBtn) {
+		evaluateCombinedMemoryBtn.style.display = userExists && customExists ? "inline-block" : "none";
+	}
+	if (openCustomMemoryBtn) {
+		openCustomMemoryBtn.textContent = customExists ? "在编辑器中编辑附加记忆" : "创建并编辑附加记忆";
+	}
+}
+
 // Error message element
 const modelErrorElement = document.getElementById("modelError");
 
@@ -179,6 +328,110 @@ if (resetModelsBtn) {
 document.getElementById("openSettings").addEventListener("click", () => {
 	vscode.postMessage({ type: "openSettings" });
 });
+
+// Best practices event listeners
+if (randomNameBtn) {
+	randomNameBtn.addEventListener("click", () => {
+		const current = userMemoryNameInput ? userMemoryNameInput.value.trim() : "";
+		if (userMemoryNameInput) {
+			userMemoryNameInput.value = getRandomNickname(current);
+		}
+	});
+}
+
+if (updateUserNameBtn) {
+	updateUserNameBtn.addEventListener("click", () => {
+		const targetName = userMemoryNameInput ? userMemoryNameInput.value.trim() : "";
+		vscode.postMessage({
+			type: "updateUserMemoryName",
+			userName: targetName,
+		});
+	});
+}
+
+if (openUserMemoryBtn) {
+	openUserMemoryBtn.addEventListener("click", () => {
+		vscode.postMessage({
+			type: "openUserMemoryFile",
+			userName: userMemoryNameInput ? userMemoryNameInput.value.trim() : "",
+		});
+	});
+}
+
+if (openCustomMemoryBtn) {
+	openCustomMemoryBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "openCustomMemoryFile" });
+	});
+}
+
+if (deleteCustomMemoryBtn) {
+	deleteCustomMemoryBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "deleteCustomMemory" });
+	});
+}
+
+if (evaluateUserMemoryBtn) {
+	evaluateUserMemoryBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "evaluateUserMemory" });
+	});
+}
+
+if (evaluateCustomMemoryBtn) {
+	evaluateCustomMemoryBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "evaluateCustomMemory" });
+	});
+}
+
+if (evaluateCombinedMemoryBtn) {
+	evaluateCombinedMemoryBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "evaluateCombinedMemory" });
+	});
+}
+
+if (sanitizeOrgInstructionsBtn) {
+	sanitizeOrgInstructionsBtn.addEventListener("click", () => {
+		const confirmId = "sanitizeOrgInstructions_" + Date.now();
+		pendingConfirmations.set(confirmId, {
+			action: () => {
+				vscode.postMessage({ type: "sanitizeOrgInstructions" });
+			},
+		});
+		vscode.postMessage({
+			type: "requestConfirm",
+			id: confirmId,
+			message: "确定要狙杀并排除组织指令干扰吗？\n\n该操作将清空 default.instructions.md 的内容并将其锁定为只读属性，防止后续 GitHub 登录时重新覆写污染。",
+			action: "sanitizeOrgInstructions",
+		});
+	});
+}
+
+if (openOrgInstructionsBtn) {
+	openOrgInstructionsBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "openOrgInstructionsFile" });
+	});
+}
+
+if (evaluateOrgInstructionsBtn) {
+	evaluateOrgInstructionsBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "evaluateOrgInstructions" });
+	});
+}
+
+if (applyUserMemoryTemplateBtn) {
+	applyUserMemoryTemplateBtn.addEventListener("click", () => {
+		const targetName = userMemoryNameInput ? userMemoryNameInput.value.trim() : "";
+		vscode.postMessage({
+			type: "applyUserMemoryTemplate",
+			userName: targetName,
+		});
+	});
+}
+
+if (revealUserMemoryDirBtn) {
+	revealUserMemoryDirBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "revealUserMemoryFolder" });
+	});
+}
 
 const handleRefresh = () => {
 	// Hide the model form if it's visible
@@ -360,6 +613,7 @@ window.addEventListener("message", (event) => {
 				providerKeys,
 				commitLanguage,
 				modelTestEnabled,
+				userMemory,
 			} = message.payload;
 			state.baseUrl = baseUrl;
 			state.apiKey = apiKey;
@@ -403,8 +657,14 @@ window.addEventListener("message", (event) => {
 			commitModelInput.value = state.commitModel || "";
 			commitLanguageInput.value = commitLanguage;
 
+			// Render user memory status
+			updateUserMemoryUi(userMemory, message.payload.customMemory, message.payload.orgInstructions);
+
 			// Render model management
 			renderModels();
+			break;
+		case "userMemoryStatus":
+			updateUserMemoryUi(message.userMemory, message.customMemory, message.orgInstructions);
 			break;
 		case "modelsFetched":
 			// Handle the response from fetchModels

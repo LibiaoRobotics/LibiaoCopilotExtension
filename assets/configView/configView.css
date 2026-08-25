@@ -449,3 +449,257 @@ button:not(.secondary):not(.danger) {
 	word-break: break-all;
 	max-width: 320px;
 }
+
+/* 最佳实践卡片样式 */
+.practice-card {
+	background: var(--vscode-editor-background);
+	border: 1px solid var(--vscode-editorWidget-border);
+	border-radius: 8px;
+	padding: 14px;
+	margin-top: 10px;
+	margin-bottom: 8px;
+}
+
+.practice-card-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 6px;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.practice-title label {
+	font-size: 13px;
+	font-weight: 700;
+	margin-bottom: 0;
+	color: var(--vscode-foreground);
+}
+
+.practice-card-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 14px;
+	padding-top: 12px;
+	border-top: 1px solid rgba(255, 255, 255, 0.06);
+	flex-wrap: wrap;
+}
+
+.memory-compact-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-top: 10px;
+	flex-wrap: wrap;
+}
+
+.memory-compact-label {
+	font-weight: 600;
+	font-size: 12px;
+	white-space: nowrap;
+	color: var(--vscode-foreground);
+}
+
+.memory-compact-input-group {
+	flex: 1;
+	min-width: 280px;
+}
+
+.input-with-button {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.input-with-button input {
+	flex: 1;
+	margin-bottom: 0;
+}
+
+.input-with-button button {
+	white-space: nowrap;
+	margin-right: 0;
+	padding: 8px 10px;
+}
+
+.memory-status-badge {
+	display: inline-flex;
+	align-items: center;
+	padding: 4px 10px;
+	border-radius: 6px;
+	font-size: 12px;
+	font-weight: 600;
+	background: rgba(255, 255, 255, 0.05);
+	border: 1px solid var(--vscode-editorWidget-border);
+	color: var(--vscode-foreground);
+}
+
+.memory-status-badge.status-ready {
+	color: var(--vscode-testing-iconPassed);
+	border-color: var(--vscode-testing-iconPassed);
+	background: rgba(78, 201, 176, 0.1);
+}
+
+.memory-status-badge.status-missing {
+	color: var(--vscode-charts-yellow);
+	border-color: var(--vscode-charts-yellow);
+	background: rgba(204, 167, 0, 0.1);
+}
+
+button.btn-small,
+.btn-small {
+	font-size: 11px;
+	padding: 3px 8px;
+	border-radius: 6px;
+	line-height: 1.4;
+	white-space: nowrap;
+}
+
+.memory-path-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 10px;
+	flex-wrap: wrap;
+}
+
+.memory-path-row .memory-path-text {
+	margin-top: 0;
+	flex: 1;
+	min-width: 200px;
+}
+
+.memory-path-text {
+	margin-top: 12px;
+	font-family: var(--vscode-editor-font-family, monospace);
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+	word-break: break-all;
+	user-select: text;
+}
+
+/* 宇宙最强思想钢印按钮 - 炫酷流光溢彩流动边框 */
+#applyUserMemoryTemplate {
+	position: relative;
+	z-index: 1;
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	font-weight: 700;
+	border: none;
+	border-radius: 8px;
+	padding: 8px 16px;
+	box-shadow: 0 0 12px rgba(99, 102, 241, 0.35);
+	cursor: pointer;
+	overflow: visible;
+}
+
+#applyUserMemoryTemplate::before {
+	content: '';
+	position: absolute;
+	top: -2px;
+	left: -2px;
+	right: -2px;
+	bottom: -2px;
+	background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899, #06b6d4, #6366f1);
+	background-size: 300% 300%;
+	border-radius: 10px;
+	z-index: -1;
+	animation: flowingBorderRainbow 3s linear infinite;
+}
+
+#applyUserMemoryTemplate:hover {
+	transform: translateY(-1px) scale(1.02);
+	box-shadow: 0 0 20px rgba(168, 85, 247, 0.65);
+}
+
+@keyframes flowingBorderRainbow {
+	0% {
+		background-position: 0% 50%;
+	}
+	50% {
+		background-position: 100% 50%;
+	}
+	100% {
+		background-position: 0% 50%;
+	}
+}
+
+/* 组织指令警告卡片与狙杀按钮特效 */
+.org-warning-card {
+	border: 1px solid rgba(239, 68, 68, 0.45) !important;
+	background: rgba(239, 68, 68, 0.04) !important;
+	box-shadow: 0 0 14px rgba(239, 68, 68, 0.12);
+}
+
+.org-warning-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 8px;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.org-warning-label {
+	font-size: 14px !important;
+	font-weight: 800 !important;
+	color: #ef4444 !important;
+	letter-spacing: 0.3px;
+}
+
+.org-warning-badge {
+	border-color: rgba(239, 68, 68, 0.5) !important;
+	color: #f87171 !important;
+	background: rgba(239, 68, 68, 0.12) !important;
+	font-weight: 700;
+}
+
+/* 狙杀和排除干扰按钮 - 炫酷熔岩火光流光边框 */
+#sanitizeOrgInstructions,
+.org-sanitize-btn {
+	position: relative;
+	z-index: 1;
+	background: linear-gradient(135deg, #b91c1c, #991b1b) !important;
+	color: #ffffff !important;
+	font-weight: 700;
+	border: none !important;
+	border-radius: 8px;
+	padding: 8px 16px;
+	box-shadow: 0 0 14px rgba(220, 38, 38, 0.55);
+	cursor: pointer;
+	overflow: visible;
+}
+
+#sanitizeOrgInstructions::before,
+.org-sanitize-btn::before {
+	content: '';
+	position: absolute;
+	top: -2px;
+	left: -2px;
+	right: -2px;
+	bottom: -2px;
+	background: linear-gradient(90deg, #ef4444, #f59e0b, #dc2626, #f97316, #ef4444);
+	background-size: 300% 300%;
+	border-radius: 10px;
+	z-index: -1;
+	animation: flowingBorderFlame 2.5s linear infinite;
+}
+
+#sanitizeOrgInstructions:hover,
+.org-sanitize-btn:hover {
+	transform: translateY(-1px) scale(1.02);
+	box-shadow: 0 0 22px rgba(239, 68, 68, 0.85);
+}
+
+@keyframes flowingBorderFlame {
+	0% {
+		background-position: 0% 50%;
+	}
+	50% {
+		background-position: 100% 50%;
+	}
+	100% {
+		background-position: 0% 50%;
+	}
+}
+
