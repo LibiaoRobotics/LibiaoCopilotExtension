@@ -100,15 +100,19 @@ $payload = @{
     prerelease = [bool]$Prerelease
 } | ConvertTo-Json
 
+$bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
+
 try {
-    $resp = Invoke-RestMethod -Uri $baseUri -Method Post -Headers $headers -Body $payload -ContentType 'application/json'
+    $resp = Invoke-RestMethod -Uri $baseUri -Method Post -Headers $headers -Body $bodyBytes -ContentType 'application/json; charset=utf-8'
     Write-Host "==> Release 创建成功: $($resp.html_url)  id=$($resp.id)" -ForegroundColor Green
 } catch {
-    if ($_.Exception.Response.StatusCode.value__ -eq 422) {
+    $statusCode = if ($_.Exception.Response) { $_.Exception.Response.StatusCode.value__ } else { 0 }
+    if ($statusCode -eq 422 -or $statusCode -eq 400) {
         # 已存在 → PATCH 更新
         $existing = Invoke-RestMethod -Uri "$baseUri/tags/$Tag" -Headers $headers
         $patchBody = @{ name = $Tag; body = $section; draft = [bool]$Draft; prerelease = [bool]$Prerelease } | ConvertTo-Json
-        $resp = Invoke-RestMethod -Uri "$baseUri/$($existing.id)" -Method Patch -Headers $headers -Body $patchBody -ContentType 'application/json'
+        $patchBytes = [System.Text.Encoding]::UTF8.GetBytes($patchBody)
+        $resp = Invoke-RestMethod -Uri "$baseUri/$($existing.id)" -Method Patch -Headers $headers -Body $patchBytes -ContentType 'application/json; charset=utf-8'
         Write-Host "==> Release 已存在，已更新: $($resp.html_url)  id=$($resp.id)" -ForegroundColor Green
     } else {
         throw
