@@ -1,4 +1,4 @@
-# 通用 GitHub Release 发布工具
+﻿# 通用 GitHub Release 发布工具
 # 用法示例：
 #   .\create-release.ps1 -Tag v1.0.8                          # 自动从 CHANGELOG 提取 1.0.8 段落到 Release Notes
 #   .\create-release.ps1 -Tag v1.0.9 -Draft                   # 草稿
