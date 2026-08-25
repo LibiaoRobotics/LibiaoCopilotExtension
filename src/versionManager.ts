@@ -18,14 +18,36 @@ export class VersionManager {
 	private static _buildDate: string | null = null;
 
 	/**
-	 * Get the current extension version
+	 * Get the current extension version dynamically from package.json (Single Source of Truth)
 	 */
 	static getVersion(): string {
 		if (this._version === null) {
-			const extension =
-				vscode.extensions.getExtension("libiaorobot.libiao-copilot") ||
-				vscode.extensions.getExtension("johnny-zhao.oai-compatible-copilot");
-			this._version = extension?.packageJSON?.version ?? "1.2.1";
+			const extension = vscode.extensions.getExtension("libiaorobot.libiao-copilot");
+			if (extension?.packageJSON?.version) {
+				this._version = extension.packageJSON.version;
+			} else {
+				// 兜底：在单测执行环境或本地开发宿主下动态定位并读取 package.json
+				try {
+					const candidates = [
+						path.join(__dirname, "..", "package.json"),
+						path.join(__dirname, "..", "..", "package.json"),
+					];
+					for (const cand of candidates) {
+						if (fs.existsSync(cand)) {
+							const pkg = JSON.parse(fs.readFileSync(cand, "utf-8"));
+							if (pkg && typeof pkg.version === "string") {
+								this._version = pkg.version;
+								break;
+							}
+						}
+					}
+				} catch (err) {
+					console.error("[libiaoCopilot] read package.json version error", err);
+				}
+			}
+			if (!this._version) {
+				this._version = "0.0.0";
+			}
 		}
 		return this._version!;
 	}
@@ -36,9 +58,7 @@ export class VersionManager {
 	static getBuildDate(): string {
 		if (this._buildDate === null) {
 			try {
-				const extension =
-					vscode.extensions.getExtension("libiaorobot.libiao-copilot") ||
-					vscode.extensions.getExtension("johnny-zhao.oai-compatible-copilot");
+				const extension = vscode.extensions.getExtension("libiaorobot.libiao-copilot");
 				if (extension) {
 					const candidates = [
 						path.join(extension.extensionPath, "out", "extension.js"),

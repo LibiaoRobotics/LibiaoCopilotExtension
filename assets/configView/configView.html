@@ -36,7 +36,7 @@
 			<div class="section-header">
 				<div class="section-title-row">
 					<h2>最佳实践</h2>
-					<span id="extensionVersionText" class="extension-version-text" title="当前 Libiao Copilot 插件版本与打包日期">v1.2.1</span>
+					<span id="extensionVersionText" class="extension-version-text" title="当前 Libiao Copilot 插件版本与打包日期"></span>
 				</div>
 			</div>
 			<div class="practice-card">
@@ -67,6 +67,30 @@
 					<button id="applyUserMemoryTemplate">🧠 立即注入宇宙最强思想钢印</button>
 					<button id="openUserMemory" class="secondary">在编辑器中打开</button>
 					<button id="revealUserMemoryDir" class="secondary">定位所在目录</button>
+				</div>
+			</div>
+
+			<!-- 终端运行环境 (PowerShell 7) 卡片 -->
+			<div class="practice-card" id="powershellCard">
+				<div class="practice-card-header">
+					<div class="practice-title">
+						<label>⚡ 终端运行底座 (PowerShell 7)</label>
+					</div>
+					<div id="psStatusBadge" class="memory-status-badge">检测中...</div>
+				</div>
+				<div class="field-description" id="psDescriptionText">
+					AI 自动化脚本与终端执行的核心底座。全链路原生 UTF-8 编码，彻底杜绝 Windows 5.1 下中文字符串乱码、管道异常与并发缺失。
+				</div>
+				<div class="memory-path-row">
+					<button id="refreshPsStatus" class="secondary btn-small" title="重新检测本机 PowerShell 7 环境与版本">🔍 重新检测</button>
+					<div class="field-description memory-path-text" id="psPathDisplay">
+						可执行文件: 检测中...
+					</div>
+				</div>
+				<div class="practice-card-actions">
+					<button id="installPsBtn" class="danger">🚀 一键安装 PowerShell 7</button>
+					<button id="setDefaultTerminalProfileBtn" class="secondary" style="display: none;" title="将 VS Code 新建终端的默认 Profile 设为 PowerShell (pwsh)">⚡ 设为 VS Code 默认终端</button>
+					<button id="openPsDocsBtn" class="secondary" title="查看微软官方 PowerShell 安装与配置文档">🌐 官方安装指南</button>
 				</div>
 			</div>
 

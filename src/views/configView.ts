@@ -9,6 +9,13 @@ import { ensureModelContextDefaults } from "../modelConfiguration";
 import { VersionManager } from "../versionManager";
 import { loadTestModelList, runModelTests, type ModelTestResult, type TestModelInfo } from "../modelTester";
 import { tokenizerManager } from "../tokenizer/tokenizerManager";
+import {
+	getPowerShellStatus,
+	launchPowerShellInstaller,
+	openPowerShellOfficialDocs,
+	setPowerShellAsDefaultProfile,
+	type PowerShellStatus,
+} from "../powershellManager";
 
 interface InitPayload {
 	version: string;
@@ -58,6 +65,7 @@ interface InitPayload {
 		charCount: number;
 		tokenCount: number;
 	};
+	powershell: PowerShellStatus;
 }
 
 interface ExportConfig {
@@ -130,7 +138,11 @@ type IncomingMessage =
 	| { type: "evaluateUserMemory" }
 	| { type: "evaluateCustomMemory" }
 	| { type: "evaluateCombinedMemory" }
-	| { type: "revealUserMemoryFolder" };
+	| { type: "revealUserMemoryFolder" }
+	| { type: "getPowerShellStatus" }
+	| { type: "installPowerShell" }
+	| { type: "openPowerShellDocs" }
+	| { type: "setDefaultTerminalProfile" };
 
 type OutgoingMessage =
 	| { type: "init"; payload: InitPayload }
@@ -148,6 +160,7 @@ type OutgoingMessage =
 	  }
 	| { type: "modelTestDone"; tested: number; succeeded: number; total: number }
 	| { type: "modelTestStatus"; testing: boolean }
+	| { type: "powershellStatus"; powershell: PowerShellStatus }
 	| {
 			type: "userMemoryStatus";
 			userMemory: {
@@ -380,6 +393,23 @@ export class ConfigViewPanel {
 			case "revealUserMemoryFolder":
 				await this.revealUserMemoryFolder();
 				break;
+			case "getPowerShellStatus": {
+				const powershell = await this.getPowerShellStatusSafe();
+				this.panel.webview.postMessage({ type: "powershellStatus", powershell } as OutgoingMessage);
+				break;
+			}
+			case "installPowerShell":
+				await launchPowerShellInstaller();
+				break;
+			case "openPowerShellDocs":
+				await openPowerShellOfficialDocs();
+				break;
+			case "setDefaultTerminalProfile": {
+				await setPowerShellAsDefaultProfile();
+				const powershell = await this.getPowerShellStatusSafe();
+				this.panel.webview.postMessage({ type: "powershellStatus", powershell } as OutgoingMessage);
+				break;
+			}
 			default:
 				break;
 		}
@@ -618,6 +648,7 @@ export class ConfigViewPanel {
 		const userMemory = await this.getUserMemoryStatus();
 		const customMemory = await this.getCustomMemoryStatus();
 		const orgInstructions = await this.getOrgInstructionsStatus();
+		const powershell = await this.getPowerShellStatusSafe();
 		const payload: InitPayload = {
 			version: VersionManager.getVersion(),
 			buildDate: VersionManager.getBuildDate(),
@@ -639,6 +670,7 @@ export class ConfigViewPanel {
 			userMemory,
 			customMemory,
 			orgInstructions,
+			powershell,
 		};
 		this.panel.webview.postMessage({ type: "init", payload });
 	}
@@ -1113,6 +1145,21 @@ export class ConfigViewPanel {
 			console.error("[libiaoCopilot] check org instructions failed", err);
 		}
 		return { filePath, exists, hasContent, isWritable, lineCount, charCount, tokenCount };
+	}
+
+	private async getPowerShellStatusSafe(): Promise<PowerShellStatus> {
+		try {
+			return await getPowerShellStatus();
+		} catch (err) {
+			console.error("[libiaoCopilot] getPowerShellStatus failed", err);
+			return {
+				installed: false,
+				version: "",
+				executablePath: "",
+				isDefaultTerminalProfile: false,
+				platform: process.platform,
+			};
+		}
 	}
 
 	private async postAllMemoryStatus() {

@@ -29,9 +29,11 @@ suite("User Memory & Best Practices", () => {
 		const fixedDate = new Date(2026, 7, 25); // 2026-08-25
 		assert.strictEqual(formatBuildDate(fixedDate), "2026-08-25");
 
+		const pkgPath = path.join(__dirname, "..", "..", "package.json");
+		const expectedVersion = JSON.parse(fs.readFileSync(pkgPath, "utf-8")).version;
 		const version = VersionManager.getVersion();
 		assert.ok(version.length > 0, "版本号不应为空");
-		assert.strictEqual(version, "1.2.1");
+		assert.strictEqual(version, expectedVersion, "VersionManager 应与 package.json 中的版本号严格保持一致");
 
 		const buildDate = VersionManager.getBuildDate();
 		assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(buildDate), `打包日期应符合 YYYY-MM-DD 格式，当前为: ${buildDate}`);

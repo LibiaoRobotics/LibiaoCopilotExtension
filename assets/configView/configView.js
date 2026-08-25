@@ -151,6 +151,16 @@ const evaluateUserMemoryBtn = document.getElementById("evaluateUserMemory");
 const evaluateCustomMemoryBtn = document.getElementById("evaluateCustomMemory");
 const evaluateCombinedMemoryBtn = document.getElementById("evaluateCombinedMemory");
 
+// PowerShell 7 practice elements
+const powershellCard = document.getElementById("powershellCard");
+const psStatusBadge = document.getElementById("psStatusBadge");
+const psPathDisplay = document.getElementById("psPathDisplay");
+const psDescriptionText = document.getElementById("psDescriptionText");
+const refreshPsStatusBtn = document.getElementById("refreshPsStatus");
+const installPsBtn = document.getElementById("installPsBtn");
+const setDefaultTerminalProfileBtn = document.getElementById("setDefaultTerminalProfileBtn");
+const openPsDocsBtn = document.getElementById("openPsDocsBtn");
+
 // 100 个趣味昵称池
 const NICKNAMES_POOL = [
 	"碳基领导",
@@ -369,6 +379,48 @@ function updateUserMemoryUi(userMemory, customMemory, orgInstructions) {
 	}
 }
 
+function updatePowerShellUi(powershell) {
+	if (!powershell) {
+		return;
+	}
+	const { installed, version, executablePath, isDefaultTerminalProfile, platform } = powershell;
+	if (psPathDisplay) {
+		if (installed) {
+			psPathDisplay.textContent = `可执行文件: ${executablePath || "pwsh"}`;
+		} else {
+			psPathDisplay.textContent = "可执行文件: 未检测到 pwsh（建议立即安装）";
+		}
+	}
+	if (psStatusBadge) {
+		if (installed) {
+			psStatusBadge.className = "memory-status-badge status-ready";
+			psStatusBadge.textContent = `✅ 已就绪 (v${version})`;
+		} else {
+			psStatusBadge.className = "memory-status-badge status-missing";
+			psStatusBadge.textContent = "⚠️ 未安装（当前为系统默认/旧版终端）";
+		}
+	}
+	if (installPsBtn) {
+		installPsBtn.style.display = installed ? "none" : "inline-block";
+	}
+	if (setDefaultTerminalProfileBtn) {
+		if (installed && platform === "win32") {
+			setDefaultTerminalProfileBtn.style.display = "inline-block";
+			if (isDefaultTerminalProfile) {
+				setDefaultTerminalProfileBtn.disabled = true;
+				setDefaultTerminalProfileBtn.textContent = "✅ 已设为默认终端";
+				setDefaultTerminalProfileBtn.title = "VS Code Windows 默认终端 Profile 已配置为 PowerShell";
+			} else {
+				setDefaultTerminalProfileBtn.disabled = false;
+				setDefaultTerminalProfileBtn.textContent = "⚡ 设为 VS Code 默认终端";
+				setDefaultTerminalProfileBtn.title = "将 VS Code Windows 默认终端设置为 PowerShell (pwsh)";
+			}
+		} else {
+			setDefaultTerminalProfileBtn.style.display = "none";
+		}
+	}
+}
+
 // Error message element
 const modelErrorElement = document.getElementById("modelError");
 
@@ -536,6 +588,34 @@ if (applyUserMemoryTemplateBtn) {
 if (revealUserMemoryDirBtn) {
 	revealUserMemoryDirBtn.addEventListener("click", () => {
 		vscode.postMessage({ type: "revealUserMemoryFolder" });
+	});
+}
+
+if (refreshPsStatusBtn) {
+	refreshPsStatusBtn.addEventListener("click", () => {
+		if (psStatusBadge) {
+			psStatusBadge.className = "memory-status-badge";
+			psStatusBadge.textContent = "检测中...";
+		}
+		vscode.postMessage({ type: "getPowerShellStatus" });
+	});
+}
+
+if (installPsBtn) {
+	installPsBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "installPowerShell" });
+	});
+}
+
+if (setDefaultTerminalProfileBtn) {
+	setDefaultTerminalProfileBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "setDefaultTerminalProfile" });
+	});
+}
+
+if (openPsDocsBtn) {
+	openPsDocsBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "openPowerShellDocs" });
 	});
 }
 
@@ -773,11 +853,17 @@ window.addEventListener("message", (event) => {
 			// Render user memory status
 			updateUserMemoryUi(userMemory, message.payload.customMemory, message.payload.orgInstructions);
 
+			// Render powershell status
+			updatePowerShellUi(message.payload.powershell);
+
 			// Render model management
 			renderModels();
 			break;
 		case "userMemoryStatus":
 			updateUserMemoryUi(message.userMemory, message.customMemory, message.orgInstructions);
+			break;
+		case "powershellStatus":
+			updatePowerShellUi(message.powershell);
 			break;
 		case "modelsFetched":
 			// Handle the response from fetchModels
