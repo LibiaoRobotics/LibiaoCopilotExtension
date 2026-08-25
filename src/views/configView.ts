@@ -1114,11 +1114,11 @@ export class ConfigViewPanel {
 			const content = fs.readFileSync(filePath, "utf-8");
 			const newContent = updateUserNameInMemory(content, rawUserName || "");
 			if (isMemoryContentEqual(content, newContent)) {
-				vscode.window.showInformationMessage("称呼与当前一致，无需更新。");
+				vscode.window.showInformationMessage("昵称与当前一致，无需更新。");
 				return;
 			}
 
-			// 保存称呼前先自动备份原记忆至桌面
+			// 保存昵称前先自动备份原记忆至桌面
 			let backupPath: string | null = null;
 			if (content.trim().length > 0) {
 				backupPath = backupMemoryToDesktop(content, undefined, undefined, "user-preferences");
@@ -1128,13 +1128,13 @@ export class ConfigViewPanel {
 			const name = rawUserName?.trim();
 			const backupNote = backupPath ? `（原记忆已备份至桌面：${path.basename(backupPath)}）` : "";
 			const infoMsg = name
-				? `用户核心记忆称呼已更新为「${name}」，其余内容保持不变${backupNote}。`
-				: `已从用户核心记忆中移除特定称呼，其余内容保持不变${backupNote}。`;
+				? `用户核心记忆昵称已更新为「${name}」，其余内容保持不变${backupNote}。`
+				: `已从用户核心记忆中移除特定昵称，其余内容保持不变${backupNote}。`;
 			vscode.window.showInformationMessage(infoMsg);
 			await this.postAllMemoryStatus();
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
-			vscode.window.showErrorMessage(`更新称呼失败：${msg}`);
+			vscode.window.showErrorMessage(`更新昵称失败：${msg}`);
 		}
 	}
 

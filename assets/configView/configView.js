@@ -150,24 +150,108 @@ const evaluateUserMemoryBtn = document.getElementById("evaluateUserMemory");
 const evaluateCustomMemoryBtn = document.getElementById("evaluateCustomMemory");
 const evaluateCombinedMemoryBtn = document.getElementById("evaluateCombinedMemory");
 
-// 16 个趣味昵称池
+// 100 个趣味昵称池
 const NICKNAMES_POOL = [
 	"碳基领导",
 	"尊贵的碳基生物",
-	"Ctrl+C 首席架构师",
-	"Bug 终结者",
+	"硅基驯兽师",
+	"Token 批发商",
+	"提示词吟唱大哲",
+	"算力收割机",
+	"幻觉纠偏特派员",
+	"上下文管理员",
+	"硅基打工人导师",
+	"深度学习驯服者",
+	"大模型投喂官",
+	"算力燃烧者",
+	"智能涌现观察员",
+	"矩阵乘法指挥官",
+	"零样本通灵师",
+	"温度系数调谐专家",
 	"主分支守护神",
 	"代码天尊",
 	"技术大腿",
-	"首席甩锅官",
-	"硅基驯兽师",
-	"Token 批发商",
-	"无情需求发射器",
 	"东方不报错",
-	"线上救火总指挥",
 	"热修复真仙",
 	"祖传代码继承人",
 	"防御性编程大师",
+	"抽象设计圣手",
+	"架构界扫地僧",
+	"重构狂魔",
+	"闭包大祭司",
+	"递归尽头见真仙",
+	"接口定义狂神",
+	"并发不锁上人",
+	"依赖注入掌门",
+	"架构画饼首席厨师",
+	"线上救火总指挥",
+	"Bug 终结者",
+	"生产环境拆弹专家",
+	"零点部署狂人",
+	"宕机急救室主任",
+	"报警风暴过滤器",
+	"日志捞针特工",
+	"容器编排老法师",
+	"内存泄露追凶手",
+	"兜底策略总工程师",
+	"五个九保活大仙",
+	"灰度发布操盘手",
+	"容灾备份掌门人",
+	"熔断降级舵手",
+	"压测终极考验官",
+	"物理拔线特战队长",
+	"祈祷服务器不崩散仙",
+	"Ctrl+C 首席架构师",
+	"首席甩锅官",
+	"无情需求发射器",
+	"优雅摸鱼特级大师",
+	"需求粉碎机",
+	"敏捷开发摸鱼组长",
+	"会议静音观察员",
+	"键盘按键延寿专家",
+	"咖啡因转化为代码机",
+	"需求变更拦截网",
+	"准点下班带头人",
+	"摸鱼流派创始人",
+	"带薪发呆国家队",
+	"绩效保卫战神",
+	"对齐颗粒度大师",
+	"赋能闭环吹号手",
+	"工位赛博佛陀",
+	"Git 变基狂徒",
+	"二进制通灵师",
+	"正则表达式终极翻译官",
+	"一行代码写天下",
+	"跨端适配孤勇者",
+	"垃圾回收操盘手",
+	"状态机化身",
+	"异步并发浪潮儿",
+	"栈溢出游泳健将",
+	"指针越界捕手",
+	"类型体操世界冠军",
+	"编译通过即下班",
+	"汇编指令低语者",
+	"算法复杂度屠夫",
+	"零警告强迫症领袖",
+	"宏定义造物主",
+	"空指针克星",
+	"赛博地头蛇",
+	"甲方克星",
+	"赛博修真老祖",
+	"赛博世界执剑人",
+	"终极代码审美官",
+	"原神启动总顾问",
+	"尊贵VIP开发者",
+	"顶级白嫖算力专家",
+	"人脑外挂终端",
+	"灵感永动机",
+	"赛博修罗场赢家",
+	"全宇宙最强碳基大脑",
+	"终端黑客隐士",
+	"赛博飞升领航员",
+	"降维打击执行官",
+	"宇宙级Bug粉碎机",
+	"全能架构大宗师",
 ];
 
 function getRandomNickname(currentName) {
@@ -246,9 +330,9 @@ function updateUserMemoryUi(userMemory, customMemory, orgInstructions) {
 				const tokensStr = formatTokenCount(tokenCount);
 				customMemoryStatusBadge.className = "memory-status-badge status-ready";
 				customMemoryStatusBadge.textContent = `✅ 已就绪 (${lineCount} 行 · ${charsStr} · ${tokensStr})`;
+				customMemoryStatusBadge.style.display = "";
 			} else {
-				customMemoryStatusBadge.className = "memory-status-badge status-missing";
-				customMemoryStatusBadge.textContent = `⚠️ 尚未创建（点击下方编辑）`;
+				customMemoryStatusBadge.style.display = "none";
 			}
 		}
 	}
@@ -335,6 +419,18 @@ if (randomNameBtn) {
 		const current = userMemoryNameInput ? userMemoryNameInput.value.trim() : "";
 		if (userMemoryNameInput) {
 			userMemoryNameInput.value = getRandomNickname(current);
+			userMemoryNameInput.focus();
+			const len = userMemoryNameInput.value.length;
+			userMemoryNameInput.setSelectionRange(len, len);
+		}
+	});
+}
+
+if (userMemoryNameInput && updateUserNameBtn) {
+	userMemoryNameInput.addEventListener("keydown", (e) => {
+		if (e.key === "Enter") {
+			e.preventDefault();
+			updateUserNameBtn.click();
 		}
 	});
 }

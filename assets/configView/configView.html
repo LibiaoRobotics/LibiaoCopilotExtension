@@ -10,11 +10,11 @@
 	<body>
 		<section id="globalConfigSection">
 			<div class="section-header">
-				<h2>全局配置</h2>
+				<h2>接入配置</h2>
 				<div class="section-actions">
 					<button id="saveBaseTop">保存配置</button>
-				<button id="resetModels" class="secondary">获取模型列表</button>
-				<button id="openSettings" class="secondary">打开配置文件</button>
+					<button id="resetModels" class="secondary">获取模型列表</button>
+					<button id="openSettings" class="secondary">打开配置文件</button>
 				</div>
 			</div>
 			<div class="row">
@@ -27,6 +27,103 @@
 					<label for="apiKey">全局 API Key</label>
 					<div class="field-description">用于身份认证的 API 密钥。</div>
 					<input id="apiKey" type="password" placeholder="sk-..." />
+				</div>
+			</div>
+		</section>
+
+		<!-- 最佳实践配置 -->
+		<section id="bestPracticesSection">
+			<div class="section-header">
+				<h2>最佳实践</h2>
+			</div>
+			<div class="practice-card">
+				<div class="practice-card-header">
+					<div class="practice-title">
+						<label>🧠 用户核心记忆 (User Preferences Memory)</label>
+					</div>
+					<div id="memoryStatusBadge" class="memory-status-badge">检测中...</div>
+				</div>
+				<div class="field-description">
+					跨会话注入 Copilot 上下文的最高优先级准则与工程约束（实证主义、防盲目重构、防乱改版本等）。
+				</div>
+				<div class="memory-compact-row">
+					<span class="memory-compact-label">昵称：</span>
+					<div class="input-with-button memory-compact-input-group">
+						<input id="userMemoryName" type="text" placeholder="（可选）例如：碳基领导 / 硅基驯兽师" />
+						<button id="randomNameBtn" type="button" class="secondary" title="随机切换趣味昵称">🎲 换一个昵称</button>
+						<button id="updateUserNameBtn" type="button" class="secondary" title="仅修改昵称，保持文件其他内容不变">💾 保存昵称</button>
+					</div>
+				</div>
+				<div class="memory-path-row">
+					<button id="evaluateUserMemory" class="secondary btn-small" title="让 AI 把把关，评估核心记忆的有效性与工程防线">🔍 让AI把把关</button>
+					<div class="field-description memory-path-text" id="memoryPathDisplay">
+						文件路径: 加载中...
+					</div>
+				</div>
+				<div class="practice-card-actions">
+					<button id="applyUserMemoryTemplate">🧠 立即注入宇宙最强思想钢印</button>
+					<button id="openUserMemory" class="secondary">在编辑器中打开</button>
+					<button id="revealUserMemoryDir" class="secondary">定位所在目录</button>
+				</div>
+			</div>
+
+			<!-- 组织指令卡片（排除干扰：仅当存在、有内容且可编辑时动态展示，优先级高于附加记忆） -->
+			<div class="practice-card org-warning-card" id="orgInstructionsCard" style="display: none;">
+				<div class="practice-card-header org-warning-header">
+					<div class="practice-title org-warning-title">
+						<label class="org-warning-label">⚠️ 发现组织指令干扰源，请务必排除！</label>
+					</div>
+					<div id="orgInstructionsStatusBadge" class="memory-status-badge status-missing org-warning-badge">检测中...</div>
+				</div>
+				<div class="field-description">
+					检测到 GitHub 登录时自动下发的组织级全局指令（default.instructions.md）。其中混乱的规则会隐式注入每轮会话并干扰正常开发。
+				</div>
+				<div class="memory-path-row">
+					<button id="evaluateOrgInstructions" class="secondary btn-small" title="让 AI 评评理，深度审视组织指令中的反模式与开发痛点">⚖️ 让AI评评理</button>
+					<div class="field-description memory-path-text" id="orgInstructionsPathDisplay">
+						文件路径: 加载中...
+					</div>
+				</div>
+				<div class="practice-card-actions">
+					<button id="sanitizeOrgInstructions" class="danger org-sanitize-btn">🎯 狙杀和排除干扰</button>
+					<button id="openOrgInstructions" class="secondary">在编辑器中查看</button>
+				</div>
+			</div>
+
+			<!-- 自定义附加记忆卡片 -->
+			<div class="practice-card" id="customMemoryCard">
+				<div class="practice-card-header">
+					<div class="practice-title">
+						<label>📝 自定义附加记忆 (Custom Memory Notes)</label>
+					</div>
+					<div id="customMemoryStatusBadge" class="memory-status-badge" style="display: none;">检测中...</div>
+				</div>
+				<div class="field-description">
+					存放您的私人规则、个人编码偏好或特定业务准则（custom-notes.md），与核心记忆一同自动注入全局上下文。
+				</div>
+				<div class="memory-path-row">
+					<button id="evaluateCustomMemory" class="secondary btn-small" title="让 AI 把把关，评估附加记忆的规则清晰度与规范性">🔍 让AI把把关</button>
+					<div class="field-description memory-path-text" id="customMemoryPathDisplay">
+						文件路径: 加载中...
+					</div>
+				</div>
+				<div class="practice-card-actions">
+					<button id="openCustomMemory" class="secondary">在编辑器中编辑附加记忆</button>
+					<button id="evaluateCombinedMemory" class="secondary" style="display: none;" title="排查核心记忆与附加记忆之间的规则冲突与冗余">✨ 让AI综合评价这对卧龙凤雏</button>
+					<button id="deleteCustomMemory" class="secondary" style="display: none;" title="删除自定义附加记忆文件（删除前将自动备份至桌面）">🗑️ 删除附加记忆</button>
+				</div>
+			</div>
+		</section>
+
+		<!-- 进阶配置 -->
+		<section id="advancedConfigSection">
+			<div class="section-header">
+				<h2>进阶配置</h2>
+				<div class="section-actions">
+					<button id="saveBase">保存配置</button>
+					<button id="exportConfig" class="secondary">导出</button>
+					<button id="importConfig" class="secondary">导入</button>
+					<button id="refreshGlobalConfig" class="secondary">刷新</button>
 				</div>
 			</div>
 			<div class="retry-config">
@@ -140,96 +237,6 @@
 						<div class="field-description">摘要本身的最大输出 Token 数。默认 4000。</div>
 						<input id="summarizeMaxTokens" type="number" min="256" max="32768" placeholder="4000" />
 					</div>
-				</div>
-			</div>
-			<div class="block-gap">
-				<button id="saveBase">保存配置</button>
-				<button id="exportConfig" class="secondary">导出</button>
-				<button id="importConfig" class="secondary">导入</button>
-				<button id="refreshGlobalConfig" class="secondary">刷新</button>
-			</div>
-		</section>
-
-		<!-- 最佳实践配置 -->
-		<section id="bestPracticesSection">
-			<div class="section-header">
-				<h2>最佳实践</h2>
-			</div>
-			<div class="practice-card">
-				<div class="practice-card-header">
-					<div class="practice-title">
-						<label>🧠 用户核心记忆 (User Preferences Memory)</label>
-					</div>
-					<div id="memoryStatusBadge" class="memory-status-badge">检测中...</div>
-				</div>
-				<div class="field-description">
-					跨会话注入 Copilot 上下文的最高优先级准则与工程约束（实证主义、防盲目重构、防乱改版本等）。
-				</div>
-				<div class="memory-compact-row">
-					<span class="memory-compact-label">称呼 / 昵称：</span>
-					<div class="input-with-button memory-compact-input-group">
-						<input id="userMemoryName" type="text" placeholder="（可选）例如：碳基领导 / 硅基驯兽师" />
-						<button id="randomNameBtn" type="button" class="secondary" title="随机切换趣味昵称">🎲 随一个</button>
-						<button id="updateUserNameBtn" type="button" class="secondary" title="仅修改称呼，保持文件其他内容不变">💾 保存称呼</button>
-					</div>
-				</div>
-				<div class="memory-path-row">
-					<button id="evaluateUserMemory" class="secondary btn-small" title="让 AI 把把关，评估核心记忆的有效性与工程防线">🔍 让AI把把关</button>
-					<div class="field-description memory-path-text" id="memoryPathDisplay">
-						文件路径: 加载中...
-					</div>
-				</div>
-				<div class="practice-card-actions">
-					<button id="applyUserMemoryTemplate">🧠 立即注入宇宙最强思想钢印</button>
-					<button id="openUserMemory" class="secondary">在编辑器中打开</button>
-					<button id="revealUserMemoryDir" class="secondary">定位所在目录</button>
-				</div>
-			</div>
-
-			<!-- 自定义附加记忆卡片 -->
-			<div class="practice-card" id="customMemoryCard">
-				<div class="practice-card-header">
-					<div class="practice-title">
-						<label>📝 自定义附加记忆 (Custom Memory Notes)</label>
-					</div>
-					<div id="customMemoryStatusBadge" class="memory-status-badge">检测中...</div>
-				</div>
-				<div class="field-description">
-					存放您的私人规则、个人编码偏好或特定业务准则（custom-notes.md），与核心记忆一同自动注入全局上下文。
-				</div>
-				<div class="memory-path-row">
-					<button id="evaluateCustomMemory" class="secondary btn-small" title="让 AI 把把关，评估附加记忆的规则清晰度与规范性">🔍 让AI把把关</button>
-					<div class="field-description memory-path-text" id="customMemoryPathDisplay">
-						文件路径: 加载中...
-					</div>
-				</div>
-				<div class="practice-card-actions">
-					<button id="openCustomMemory" class="secondary">在编辑器中编辑附加记忆</button>
-					<button id="evaluateCombinedMemory" class="secondary" style="display: none;" title="排查核心记忆与附加记忆之间的规则冲突与冗余">✨ 让AI综合评价这对卧龙凤雏</button>
-					<button id="deleteCustomMemory" class="secondary" style="display: none;" title="删除自定义附加记忆文件（删除前将自动备份至桌面）">🗑️ 删除附加记忆</button>
-				</div>
-			</div>
-
-			<!-- 组织指令卡片（仅当存在、有内容且可编辑时动态展示） -->
-			<div class="practice-card org-warning-card" id="orgInstructionsCard" style="display: none;">
-				<div class="practice-card-header org-warning-header">
-					<div class="practice-title org-warning-title">
-						<label class="org-warning-label">⚠️ 发现组织指令干扰源，请务必排除！</label>
-					</div>
-					<div id="orgInstructionsStatusBadge" class="memory-status-badge status-missing org-warning-badge">检测中...</div>
-				</div>
-				<div class="field-description">
-					检测到 GitHub 登录时自动下发的组织级全局指令（default.instructions.md）。其中混乱的规则会隐式注入每轮会话并干扰正常开发。
-				</div>
-				<div class="memory-path-row">
-					<button id="evaluateOrgInstructions" class="secondary btn-small" title="让 AI 评评理，深度审视组织指令中的反模式与开发痛点">⚖️ 让AI评评理</button>
-					<div class="field-description memory-path-text" id="orgInstructionsPathDisplay">
-						文件路径: 加载中...
-					</div>
-				</div>
-				<div class="practice-card-actions">
-					<button id="sanitizeOrgInstructions" class="danger org-sanitize-btn">🎯 狙杀和排除干扰</button>
-					<button id="openOrgInstructions" class="secondary">在编辑器中查看</button>
 				</div>
 			</div>
 		</section>
