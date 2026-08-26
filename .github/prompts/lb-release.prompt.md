@@ -15,7 +15,9 @@ argument-hint: [版本号，必填，如 1.3.0]
 3. **改 CHANGELOG**：在顶部新增 `## 目标版本号` 段落（不带 `v`、与现有格式一致，三级分类为「新增 / 改进 / 修复」）。内容以自上版本标签以来的 `git log` 为素材自动提炼摘要，措辞风格与既有 CHANGELOG 条目保持一致；如 git log 难以覆盖明显改动，向特哥确认后补充。
 4. **测试**：`npm run compile` + `npm test`，全量用例必须 PASS；失败则定位修复后重跑，严禁跳过。
 5. **打包**：`npm run build`（严禁 `--no-dependencies`），产物为 `extension.vsix`。
-6. **本地安装**：`pwsh -ExecutionPolicy Bypass -File .\scripts\Install-LibiaoCopilot.ps1`。
+6. **本地安装与旧版清理**：
+   - 执行 `pwsh -ExecutionPolicy Bypass -File .\scripts\Install-LibiaoCopilot.ps1` 并确认输出显示已安装目标版本；
+   - 对比第 2 步改号前后的版本号，若发生变化，则删除 `%USERPROFILE%\.vscode\extensions` 下形如 `libiaorobot.libiao-copilot-<其他版本>` 的旧版目录：只匹配 `libiaorobot.libiao-copilot-*` 前缀、必须排除目标版本目录、严禁触碰任何其他扩展；遇到文件被占用等删除失败时如实报告并保留手动清理指引，严禁静默跳过。
 7. **提交并推送 GitHub**：`git status` 确认变更清单无意外文件（如 `extension.vsix` 已被 .gitignore 排除）后，`git add -A` 并 commit（message 格式 `release: vX.Y.Z`），推送 `origin main`。
 8. **打注解标签并推送**：`git tag -a vX.Y.Z -m "release: vX.Y.Z"`，然后 `git push origin vX.Y.Z`。
 9. **发布 Release**：`pwsh -ExecutionPolicy Bypass -File .\scripts\create-release.ps1 -Tag vX.Y.Z`；若报「无法获取 GitHub token」，提示特哥先在终端执行一次 `git push`（或通过 Git Credential Manager 登录一次）后重试。
