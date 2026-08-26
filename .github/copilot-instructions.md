@@ -31,3 +31,8 @@
 - **`safe-unicode-edit`**：Emoji 码点转义与跨目录文件安全移动。
 - **`add-builtin-model`**：新增/修改内置模型、effort 挡位与 priceNote 成本标注。
 - **`model-benchmark`**：网关批量连通性、TTFT 首字延迟与 TPS 压测。
+
+### 🤖 专项智能体 (`.github/agents/`)
+
+- **`Stream-Replay-Debugger`**：流式协议抓包重放、思考泄漏、断流与状态机深度诊断子智能体（隔离海量原始报文噪声）。
+
