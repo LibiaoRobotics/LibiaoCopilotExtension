@@ -1,5 +1,6 @@
 ---
 description: 🚀 编译代码、跑测试、打包 VSIX 并通过专属脚本一键安装到本地 VS Code
+name: lb-install
 ---
 
 请严格按照 `extension-lifecycle` 技能的 SOP 流水线，帮我执行：
