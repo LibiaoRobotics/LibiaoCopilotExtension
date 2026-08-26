@@ -628,7 +628,22 @@ button.btn-small,
 	box-shadow: 0 0 20px rgba(168, 85, 247, 0.8), 0 0 35px rgba(6, 182, 212, 0.5);
 }
 
+/* 思想钢印检测中 - 静默无光，中性低调 */
+#applyUserMemoryTemplate.detecting {
+	animation: none;
+	background: rgba(255, 255, 255, 0.05);
+	background-image: none;
+	color: var(--vscode-descriptionForeground);
+	border: 1px solid var(--vscode-editorWidget-border);
+	box-shadow: none;
+	cursor: not-allowed;
+	font-weight: 500;
+	transform: none;
+	opacity: 0.85;
+}
+
 /* 思想钢印已注入 - 按钮禁用并褪去流光，与「已就绪」状态徽标配色完全一致 */
+#applyUserMemoryTemplate.injected:disabled,
 #applyUserMemoryTemplate:disabled {
 	animation: none;
 	background: rgba(78, 201, 176, 0.1);

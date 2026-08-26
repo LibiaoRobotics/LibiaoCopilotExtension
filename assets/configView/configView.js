@@ -329,11 +329,14 @@ function updateUserMemoryUi(userMemory, customMemory, orgInstructions) {
 			}
 		}
 		if (applyUserMemoryTemplateBtn) {
+			applyUserMemoryTemplateBtn.classList.remove("detecting");
 			if (isTemplateInjected) {
 				applyUserMemoryTemplateBtn.disabled = true;
+				applyUserMemoryTemplateBtn.classList.add("injected");
 				applyUserMemoryTemplateBtn.textContent = "宇宙最强思想钢印已注入";
 			} else {
 				applyUserMemoryTemplateBtn.disabled = false;
+				applyUserMemoryTemplateBtn.classList.remove("injected");
 				applyUserMemoryTemplateBtn.textContent = "🧠 立即注入宇宙最强思想钢印";
 			}
 		}
