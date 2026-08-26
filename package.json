@@ -588,6 +588,28 @@
 							"vision": false
 						},
 						{
+							"id": "glm-5.3-flash",
+							"displayName": "GLM 5.3 Flash",
+							"priceNote": "\u2B50\uFE0F推荐\u2B50\uFE0F",
+							"owned_by": "libiaorobot",
+							"apiMode": "anthropic",
+							"context_length": 1048576,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 131072,
+							"extra": {
+								"thinking": {
+									"type": "enabled",
+									"budget_tokens": 32000
+								}
+							},
+							"vision": true
+						},
+						{
 							"id": "qwen3.7-plus",
 							"displayName": "Qwen 3.7 Plus",
 							"priceNote": "❌️不推荐❌️",

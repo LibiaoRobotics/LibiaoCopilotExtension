@@ -4,7 +4,7 @@
 
 ---
 
-## 📌 官方 22 款内置模型参数大表
+## 📌 官方 23 款内置模型参数大表
 
 | 模型 ID | 显示名称 | apiMode | 上下文窗口 | 最大输出 | 思考 / Effort 档位 (默认档) | 视觉 | 推荐状态 (priceNote) |
 |---|---|---|---|---|---|---|---|
@@ -28,6 +28,7 @@
 | `MiniMax-M3` | MiniMax M3 | openai | 1,000,000 | 65,536 | — | ✅ | ❌️不推荐❌️ |
 | `glm-5.2` | GLM 5.2 | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ❌ | ❌️不推荐❌️ |
 | `glm-5.3` | GLM 5.3 | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ❌ | ⭐️推荐⭐️ |
+| `glm-5.3-flash` | GLM 5.3 Flash | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ✅ | ⭐️推荐⭐️ |
 | `qwen3.7-plus` | Qwen 3.7 Plus | openai-responses | 1,000,000 | 131,072 | minimal / low / medium / high (**high**) | ✅ | ❌️不推荐❌️ |
 | `qwen3.7-max` | Qwen 3.7 Max | openai-responses | 1,000,000 | 65,536 | minimal / low / medium / high (**high**) | ❌ | ❌️不推荐❌️ |
 
@@ -37,5 +38,5 @@
 
 - **Qwen 3.8 / 3.7 系列**：走百炼 Responses 原生端点，只读 `reasoning.effort`；测试图像严禁使用 1x1 极小图防 400。
 - **DeepSeek V4 Pro / Flash**：Responses 中继模式，多轮工具调用必须开启 `"include_reasoning_in_request": true`。
-- **GLM-5.2 / GLM-5.3**：走 Anthropic 原生端点，通过 `extra.thinking.budget_tokens: 32000` 控温，不读 `reasoning_effort`。
+- **GLM-5.2 / GLM-5.3 / GLM-5.3-Flash**：走 Anthropic 原生端点，通过 `extra.thinking.budget_tokens: 32000` 控温，不读 `reasoning_effort`。GLM-5.3-Flash 为原生多模态（图片/视频/文件），仅 0.4 元/M 输入（GLM-5.3 的 1/20）。
 - **Claude 系列**：Opus 5 默认思考；若关闭思考模式，`reasoning_effort` 仅支持到 `high`。
