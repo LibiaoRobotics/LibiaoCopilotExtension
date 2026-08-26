@@ -17,118 +17,76 @@ description: 新增、修改或维护 Libiao Copilot 官方内置模型条目的
 2. **禁止破坏 `package.json` 全局格式**：
    - **严禁**使用 `JSON.parse` + `JSON.stringify` 整体重写 `package.json`（会导致 1900+ 行 diff 爆炸、缩进错乱和单行数组被拆散）。
    - **必须**使用基于字符串的精确增量替换或 Node 脚本局部插入。
-3. **apiMode 与思考字段严格匹配**（写错字段会导致思考静默失效）：
-   - `openai-responses` 模式：**只能**写 `"reasoning_effort"` 和 `"reasoning_efforts": [...]`。**严禁**写 `enable_thinking` 或顶层 `thinking`！
+3. **apiMode 与思考字段严格匹配**（写错字段会导致思考静默失效或 UI 无档位）：
+   - `openai-responses` 模式：**必须**写 `"reasoning_effort"` 和 `"reasoning_efforts": [...]`。**严禁**写 `enable_thinking` 或顶层 `thinking`！
    - `anthropic` 模式：**只能**写在 `"extra": { "thinking": { "type": "enabled", "budget_tokens": 32000 } }`。**严禁**写顶层 `thinking` 或 `reasoning_effort`！
-   - `openai` 模式：写 `"thinking": { "type": "enabled" }`。
-4. **禁止凭常理脑补，提交前必须 `curl` 真机验证**：
+   - `gemini` 模式：写 `"reasoning_effort": "auto"` 与 `"reasoning_efforts": ["auto", "low", "medium", "high"]`（插件会自动携带 `includeThoughts: true`）。
+   - `openai` 模式：若支持思考档位，配置 `"reasoning_effort"` 与 `"reasoning_efforts"`（供 VS Code 生成档位选择器）。
+4. **思考档位必须严格限定在 7 档标准枚举白名单**：
+   - 源码 `src/modelConfiguration.ts` 仅支持：`["auto", "minimal", "low", "medium", "high", "xhigh", "max"]`。
+   - **血泪教训**：严禁自造非标档位（如 `off` / `none` / `medium_low`），否则 `isReasoningEffortValue` 校验失败会导致 VS Code 齿轮设置**静默隐藏档位选择器**！
+5. **`include_reasoning_in_request` 开启边界铁律**：
+   - **DeepSeek 系列**（V4 Pro/Flash）：多轮工具调用**必须配置 `"include_reasoning_in_request": true`**，否则网关会报上下文缺失。
+   - **其他所有模型**（Qwen / GPT / Claude 等）：**严禁开启**（直接省略），否则部分网关识别到非法历史 reasoning 结构体会直接报 HTTP 400。
+6. **模型规格三级权威溯源铁律（严禁无据脑补）**：
+   - **一级（必须优先）**：必须查阅官方网站获取第一手厂商技术文档（如 OpenAI、Anthropic、Google DeepMind、阿里云百炼、DeepSeek 等）。
+   - **二级（官方缺失降级）**：若厂商官网尚未收录或缺失，必须从权威第三方网站（如 HuggingFace 官方模型卡片、OpenRouter 官方模型目录）交叉查验。
+   - **三级（熔断中断）**：若依然获取不到确切参数，**严禁凭常理脑补猜测，必须立即中断任务并提醒特哥决策**！
+7. **提交前必须 `curl` 真机验证**：
    - 必须向 NewAPI 网关发送真实请求，验证 HTTP 200、思考出字、以及 `effort` 是否被真实采纳。
    - **Vision 避坑**：测试图像理解时**严禁使用 1x1 假图**（部分模型有最小分辨率限制会报 HTTP 400），必须使用正常尺寸图片。
 
 ---
 
-## 🛠️ 标准操作 SOP
+## 🛠️ 标准操作 SOP（6 步极简骨架）
 
-### 第 1 步：确定模型参数与 apiMode 决策树
-根据官方规范确定字段：
-- `id` / `name` / `owned_by`
-- `displayName`: **纯文本（不带 Emoji）**
-- `context_length`（如 1000000）
-- `context_sizes`: `[262144, 524288, 1000000]`，`default_context_size`: `524288`
-- `max_tokens`（取思考模式下的最大输出，如 128000）
-- `vision`: `true` / `false`
-- `apiMode` 判定：
-  - 官方支持 Responses API $\rightarrow$ `"openai-responses"`
-  - 厂商原生 Anthropic 端点（如 GLM） $\rightarrow$ `"anthropic"`
-  - 传统 Chat Completions $\rightarrow$ `"openai"`
-
----
-
-### 第 2 步：向网关发送 `curl` 连通性与思考真机探测
-网关地址：`https://newapi.libiaorobot.com/v1`
-
-**Responses 模式探测模板（PowerShell）**：
+### 第 1 步：环境就绪 —— 检查并初始化 `NEWAPI_KEY`
+在 PowerShell 中执行前置检查指令（无值时通过无痕掩码提示输入，变量名定死为 `NEWAPI_KEY`）：
 ```powershell
-curl.exe -s -w "`nHTTP_STATUS:%{http_code}" -X POST "https://newapi.libiaorobot.com/v1/responses" -H "Authorization: Bearer <Key>" -H "content-type: application/json" -d '{"model":"<模型id>","input":"1+1等于几？请一步步推理后只回答最终数字","max_output_tokens":256,"reasoning":{"effort":"high"}}'
-```
-* **判定标准**：
-  - HTTP 200 且返回内容含思考流或 `reasoning_tokens > 0`；
-  - 确认传入的 `effort` 被正常采纳。
-
----
-
-### 第 3 步：配置 `priceNote` 成本/推荐标注
-根据模型定位确定是推荐（`⭐推荐⭐`）还是不推荐（`❌不推荐❌`）：
-1. 在 `libiao-copilot/scripts/set-price-notes.js` 中的 `assigns` 表登记该模型 ID。
-2. 运行 `node scripts/set-price-notes.js` 或在插入条目时带上 `priceNote`：
-   - 推荐：`"priceNote": "\u2B50\uFE0F推荐\u2B50\uFE0F"`
-   - 不推荐：`"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F"`
-
----
-
-### 第 4 步：安全写入 `package.json`
-在 `libiao-copilot/package.json` 的 `libiaoCopilot.models.default` 数组中添加条目。
-标准条目示例：
-```json
-{
-  "id": "qwen3.8-max",
-  "name": "Qwen 3.8 Max",
-  "displayName": "Qwen 3.8 Max",
-  "owned_by": "alibaba",
-  "priceNote": "\u2B50\uFE0F推荐\u2B50\uFE0F",
-  "context_length": 1000000,
-  "context_sizes": [262144, 524288, 1000000],
-  "default_context_size": 524288,
-  "max_tokens": 128000,
-  "apiMode": "openai-responses",
-  "vision": true,
-  "reasoning_effort": "xhigh",
-  "reasoning_efforts": ["low", "medium", "xhigh"],
-  "include_reasoning_in_request": true
+if (-not $env:NEWAPI_KEY) {
+    $env:NEWAPI_KEY = Read-Host -MaskInput "请输入 NewAPI Key（当前会话有效，星号掩码）"
 }
 ```
 
+### 第 2 步：权威溯源、参数确定与 apiMode 决策
+- 遵循三级溯源机制查验物理参数；
+- 确保 `context_sizes` 升序且 $\min(\text{context\_sizes}) > \text{max\_tokens}$；
+- 详细字段规范与四级决策树请参阅：
+  👉 **[模型参数与 apiMode 决策矩阵 (Decision Matrix)](./decision-matrix.md)**
+
+### 第 3 步：向网关发送 `curl` 连通性、思考流与 Vision 真机探测
+- 使用 `$env:NEWAPI_KEY` 向 NewAPI 网关发送对应协议探测；
+- 严格核验 HTTP 200、思考真实出字及档位极值；
+- 各协议探测命令模板与三重验收标准请参阅：
+  👉 **[网关真机探测与验收标准 (Gateway Probes)](./gateway-probes.md)**
+
+### 第 4 步：确定 `priceNote` 推荐标注与 Unicode 转义
+- 推荐款：`"priceNote": "\u2B50\uFE0F推荐\u2B50\uFE0F"`（支持追加个性化文案）；
+- 不推荐款：`"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F"`；
+- 普通/中立款：直接省略该字段；
+- **铁律**：严禁在 JSON 中手写字面 Emoji，必须使用 Unicode 转义符防乱码。
+
+### 第 5 步：安全写入 `package.json` 并执行全量自检门禁
+1. **聚合插入**：将新条目增量插入到 `package.json` 所属厂商家族内部（主推款置顶）。
+2. **一键自检**：在 `libiao-copilot/` 目录下执行全量内置模型自检门禁：
+   ```powershell
+   npm run verify:models
+   ```
+   （自动校验 ID 查重、Emoji 码点完整性、7 档枚举白名单与预算截断防护，一票否决）。
+
+### 第 6 步：执行全量测试回归与档案大表同步
+1. **自动化全量回归**：在 `libiao-copilot/` 目录下执行：
+   ```powershell
+   npm test
+   ```
+2. **同步技术大表**：将新模型完整参数登记至同目录下档案大表：
+   👉 **[官方内置模型参数技术档案大表 (Built-in Models Catalog)](./builtin-models.md)**
+
 ---
 
-### 第 5 步：执行测试回归验证
-在 `libiao-copilot/` 目录下执行：
-```powershell
-npm run compile
-npm test
-```
-确保 `modelConfiguration.test.ts`、元数据解析、以及全量测试全部 PASS！
+## 📚 模块化参考资源索引
 
----
+- 📘 **[模型参数与 apiMode 决策矩阵](./decision-matrix.md)**：三级溯源、字段计算约束、7 档思考白名单与协议判定树。
+- 📡 **[网关真机探测与验收标准](./gateway-probes.md)**：Responses / Anthropic / OpenAI / Vision 全协议探测模板与验收指标。
+- 📌 **[官方内置模型参数技术档案大表](./builtin-models.md)**：22 款存量内置模型规格大表与厂商网关特性备忘。
 
-## 📌 官方 22 款内置模型参数技术档案大表
-
-| 模型 ID | 显示名称 | apiMode | 上下文窗口 | 最大输出 | 思考 / Effort 档位 (默认档) | 视觉 | 推荐状态 (priceNote) |
-|---|---|---|---|---|---|---|---|
-| `qwen3.8-max-preview` | Qwen 3.8 Max 预览版 | openai-responses | 1,000,000 | 128,000 | low / medium / xhigh (**xhigh**) | ✅ | — |
-| `qwen3.8-max` | Qwen 3.8 Max | openai-responses | 1,000,000 | 128,000 | low / medium / xhigh (**xhigh**) | ✅ | ⭐️推荐⭐️ |
-| `deepseek-v4-pro` | DeepSeek Pro | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | ❌️不推荐❌️ |
-| `deepseek-v4-flash` | DeepSeek Flash | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | — |
-| `deepseek-v4-flash-vision-exp` | Deepseek Flash 识图版 | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ✅ | ⭐️推荐⭐️ |
-| `gemini-3.1-pro-preview` | Gemini 3.1 Pro 预览版 | openai | 1,048,576 | 65,536 | low / medium / high (**high**) | ✅ | — |
-| `gemini-3.1-flash-image` | Gemini 3.1 Flash | openai | 131,072 | 32,768 | — | ✅ | ❌️不推荐❌️ |
-| `gemini-3.5-flash` | Gemini 3.5 Flash | openai | 1,048,576 | 65,536 | low / medium / high (**high**) | ✅ | ❌️不推荐❌️ |
-| `gemini-3.6-flash` | Gemini 3.6 Flash | openai | 1,048,576 | 65,536 | low / medium / high (**high**) | ✅ | — |
-| `gemini-3.7-flash` | Gemini 3.7 Flash | gemini | 1,048,576 | 65,536 | auto / low / medium / high (**auto**) | ✅ | ⭐️推荐⭐️快！太快了！比特哥前女友变心还快！ |
-| `gpt-5.6-luna` | GPT-5.6 Luna | openai-responses | 1,050,000 | 128,000 | low / medium / high / xhigh / max (**medium**) | ✅ | ❌️不推荐❌️ |
-| `gpt-5.6-sol` | GPT-5.6 Sol | openai-responses | 1,050,000 | 128,000 | low / medium / high / xhigh / max (**medium**) | ✅ | — |
-| `gpt-5.6-terra` | GPT-5.6 Terra | openai-responses | 1,050,000 | 128,000 | low / medium / high / xhigh / max (**medium**) | ✅ | ❌️不推荐❌️ |
-| `gpt-5.5` | GPT-5.5 | openai-responses | 1,050,000 | 128,000 | low / medium / high / xhigh (**xhigh**) | ✅ | ❌️不推荐❌️ |
-| `claude-opus-4-8` | Claude Opus 4.8 | openai | 1,000,000 | 128,000 | low / medium / high / xhigh / max (**medium**) | ✅ | ❌️不推荐❌️ |
-| `claude-opus-5` | Claude Opus 5 | openai | 1,000,000 | 128,000 | low / medium / high / xhigh / max (**medium**) | ✅ | — |
-| `claude-sonnet-5` | Claude Sonnet 5 | openai | 1,000,000 | 128,000 | low / medium / high / xhigh / max (**medium**) | ✅ | — |
-| `MiniMax-M3` | MiniMax M3 | openai | 1,000,000 | 65,536 | — | ✅ | ❌️不推荐❌️ |
-| `glm-5.2` | GLM 5.2 | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ❌ | ❌️不推荐❌️ |
-| `glm-5.3` | GLM 5.3 | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ❌ | ⭐️推荐⭐️ |
-| `qwen3.7-plus` | Qwen 3.7 Plus | openai-responses | 1,000,000 | 131,072 | minimal / low / medium / high (**high**) | ✅ | ❌️不推荐❌️ |
-| `qwen3.7-max` | Qwen 3.7 Max | openai-responses | 1,000,000 | 65,536 | minimal / low / medium / high (**high**) | ❌ | ❌️不推荐❌️ |
-
-### 关键网关特性备忘
-- **Qwen 3.8 / 3.7 系列**：走百炼 Responses 原生端点，只读 `reasoning.effort`；测试图像严禁使用 1x1 极小图防 400。
-- **DeepSeek V4 Pro / Flash**：Responses 中继模式，多轮工具调用必须开启 `"include_reasoning_in_request": true`。
-- **GLM-5.2 / GLM-5.3**：走 Anthropic 原生端点，通过 `extra.thinking.budget_tokens: 32000` 控温，不读 `reasoning_effort`。
-- **Claude 系列**：Opus 5 默认思考；若关闭思考模式，`reasoning_effort` 仅支持到 `high`。

@@ -4,6 +4,20 @@
 
 ---
 
+## 🚨 脚本目录归类收敛纪律 (Scripts Directory Hygiene)
+
+**严禁在 `scripts/` 根目录下直接新建脚本**。所有新增脚本必须按职责放入对应子目录：
+
+1. **�️ 校验与门禁自检** $\rightarrow$ `scripts/validators/`（如内置模型参数、编码与思考档位全量自检门禁）；
+2. **📡 网关与流式探测** $\rightarrow$ `scripts/probes/`（如连通性抓包、TPS 测速、思考通道探针）；
+3. **📊 日志与数据分析** $\rightarrow$ `scripts/analyzers/`（如慢性病分析、泄漏统计、Token 提取）；
+4. **📼 离线重放与样本** $\rightarrow$ `scripts/replay/`（如真实 SSE 样本回放、解析器边界回归）；
+5. **新场景扩展**：若创建新职责脚本，必须**新建自解释语义子目录**（如 `scripts/generators/`），并在本文档中同步登记。
+
+*(注：`scripts/` 根目录仅保留 `Install-LibiaoCopilot.*`、`create-release.ps1` 等工程级生命周期入口脚本)*
+
+---
+
 ## 目录结构
 
 ```text
@@ -11,7 +25,8 @@ scripts/
 ├── Install-LibiaoCopilot.ps1  # ★ 官方一键安装与 argv.json 提权脚本（Windows PowerShell）
 ├── Install-LibiaoCopilot.bat  # 双击一键安装入口批处理
 ├── create-release.ps1         # ★ GitHub Release 自动化发布脚本
-├── set-price-notes.js         # 内置模型价格/推荐状态批量标注工具
+├── validators/                # 🛡️ 校验与门禁自检工具
+│   └── verify-models.js      # ★ 内置模型参数、编码与思考档位全量自检门禁
 ├── probes/                    # 📡 在线真机抓包探针（直接向网关发流式请求取证）
 │   ├── probe-stream-events.js # 多协议原始 SSE 事件抓取器
 │   ├── probe-responses-with-tools.js # Responses 协议工具调用流式探针

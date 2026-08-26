@@ -11,6 +11,7 @@
 3. **终端与脚本**：CLI/任务必须统一使用 `pwsh`（禁用 Windows PowerShell 5.1）；`.ps1` 脚本必须含 UTF-8 BOM。
 4. **打包与安装**：打包统一为 `npm run build`（保留运行时依赖）；本地安装仅限 `pwsh -File .\scripts\Install-LibiaoCopilot.ps1`（禁止直接使用 `code --install-extension`）。
 5. **网关安全**：默认 `baseUrl` 必须留空，严禁硬编码内部网关地址。
+6. **脚本目录收敛**：严禁在 `scripts/` 根目录下直接新建脚本；所有新增脚本必须按职责归入对应功能子目录（`probes/`、`analyzers/`、`replay/` 或新建自解释子目录），并在 `scripts/README.md` 中同步登记。
 
 ---
 
