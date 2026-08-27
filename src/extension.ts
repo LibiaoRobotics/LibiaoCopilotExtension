@@ -8,6 +8,7 @@ import { normalizeUserModels } from "./utils";
 import { abortCommitGeneration, generateCommitMsg } from "./gitCommit/commitMessageGenerator";
 import { TokenizerManager } from "./tokenizer/tokenizerManager";
 import { clearModelListCache } from "./provideModel";
+import { runVersionMigrations } from "./versionManager";
 
 export function activate(context: vscode.ExtensionContext) {
 	const officialExtension = vscode.extensions.getExtension("johnny-zhao.oai-compatible-copilot");
@@ -19,6 +20,9 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Initialize logger
 	logger.init();
+
+	// 执行版本跃迁单次配置迁移 (One-time Migration)
+	void runVersionMigrations(context);
 
 	// Initialize TokenizerManager with extension path
 	TokenizerManager.initialize(context.extensionPath);

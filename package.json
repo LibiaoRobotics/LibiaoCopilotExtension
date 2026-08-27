@@ -986,8 +986,8 @@
 				},
 				"libiaoCopilot.commitModel": {
 					"type": "string",
-					"default": "deepseek-v4-flash",
-					"description": "用于生成 Git 提交信息的模型 ID（可含 configId，如 'glm-5.2::thinking'）。默认 deepseek-v4-flash。"
+					"default": "qwen3.8-flash",
+					"description": "用于生成 Git 提交信息的模型 ID（可含 configId，如 'glm-5.2::thinking'）。默认 qwen3.8-flash。"
 				},
 				"libiaoCopilot.commitLanguage": {
 					"type": "string",

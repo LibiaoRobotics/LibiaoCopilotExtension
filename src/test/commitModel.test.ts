@@ -6,6 +6,7 @@ import {
 	getRecommendedCommitModels,
 	resolveValidCommitModel,
 } from "../utils";
+import { isVersionOlder, runVersionMigrations } from "../versionManager";
 
 suite("commitModel recommendations & auto-healing", () => {
 	const qwenFlashModel: HFModelItem = {
@@ -99,5 +100,31 @@ suite("commitModel recommendations & auto-healing", () => {
 
 		const resolvedWithNoAvailable = resolveValidCommitModel("invalid", []);
 		assert.strictEqual(resolvedWithNoAvailable, "qwen3.8-flash");
+	});
+
+	test("isVersionOlder correctly evaluates semver versions", () => {
+		assert.strictEqual(isVersionOlder("1.2.3", "1.2.4"), true);
+		assert.strictEqual(isVersionOlder("1.1.9", "1.2.0"), true);
+		assert.strictEqual(isVersionOlder("1.2.4", "1.2.4"), false);
+		assert.strictEqual(isVersionOlder("1.3.0", "1.2.4"), false);
+		assert.strictEqual(isVersionOlder("1.2.10", "1.2.4"), false);
+	});
+
+	test("runVersionMigrations performs one-time migration and records lastVersion in globalState", async () => {
+		const store = new Map<string, unknown>();
+		store.set("libiaoCopilot.lastVersion", "1.2.3");
+
+		const mockContext = {
+			globalState: {
+				get: <T>(key: string) => store.get(key) as T | undefined,
+				update: async (key: string, value: unknown) => {
+					store.set(key, value);
+				},
+			},
+		} as unknown as import("vscode").ExtensionContext;
+
+		await runVersionMigrations(mockContext);
+
+		assert.strictEqual(store.get("libiaoCopilot.lastVersion"), "1.2.4");
 	});
 });

@@ -150,7 +150,7 @@
 
 ### Git 提交信息生成模型
 
-- `libiaoCopilot.commitModel`：用于生成 Git 提交信息的模型 ID（可含 configId，如 `glm-5.2::thinking`），默认 `deepseek-v4-flash`。未配置时从内置模型表兜底；配置的模型不存在时会报错提示。
+- `libiaoCopilot.commitModel`：用于生成 Git 提交信息的模型 ID（可含 configId，如 `glm-5.2::thinking`），默认 `qwen3.8-flash`。未配置时从推荐模型表兜底；配置的模型不存在时会自动智能纠偏。
 
 ## 常见问题
 
