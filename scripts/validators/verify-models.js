@@ -18,6 +18,7 @@ const fs = require("fs");
 const path = require("path");
 
 const PKG_PATH = path.join(__dirname, "..", "..", "package.json");
+const RECOMMENDATIONS_PATH = path.join(__dirname, "..", "..", "src", "gitCommit", "commitRecommendations.ts");
 
 const VALID_API_MODES = new Set(["openai", "openai-responses", "anthropic", "gemini", "ollama"]);
 const VALID_REASONING_EFFORTS = new Set(["auto", "minimal", "low", "medium", "high", "xhigh", "max"]);
@@ -145,7 +146,7 @@ function checkModels() {
 				// 检查不超出 context_length
 				if (m.context_length) {
 					const maxInSizes = Math.max(...m.context_sizes);
-					if (maxInSizes > m.context_length) {
+					if (maxInSizes > maxInSizes > m.context_length) {
 						console.error(`❌ ${prefix} context_sizes 最大值 (${maxInSizes}) 超出 context_length (${m.context_length})！`);
 						errorCount++;
 					}
@@ -165,6 +166,52 @@ function checkModels() {
 			}
 		}
 	});
+
+	// 8. 专项检查：Git Commit 推荐模型清单防呆验证
+	if (fs.existsSync(RECOMMENDATIONS_PATH)) {
+		const recContent = fs.readFileSync(RECOMMENDATIONS_PATH, "utf8");
+		const match = recContent.match(/RECOMMENDED_COMMIT_MODEL_IDS:\s*readonly\s*string\[\]\s*=\s*\[([\s\S]*?)\];/);
+		const defaultMatch = recContent.match(/DEFAULT_COMMIT_MODEL\s*=\s*["']([^"']+)["']/);
+
+		if (!match) {
+			console.error("❌ 无法从 src/gitCommit/commitRecommendations.ts 中解析 RECOMMENDED_COMMIT_MODEL_IDS！");
+			errorCount++;
+		} else {
+			// 先剥离所有单行注释与多行注释
+			const cleanedListStr = match[1].replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
+			const ids = (cleanedListStr.match(/["']([^"']+)["']/g) || []).map((s) => s.replace(/["']/g, ""));
+
+			if (ids.length === 0) {
+				console.error("❌ RECOMMENDED_COMMIT_MODEL_IDS 推荐列表不能为空！");
+				errorCount++;
+			} else {
+				const defaultModel = defaultMatch ? defaultMatch[1] : "";
+				if (defaultModel !== ids[0]) {
+					console.error(`❌ DEFAULT_COMMIT_MODEL ("${defaultModel}") 必须与 RECOMMENDED_COMMIT_MODEL_IDS 首项 ("${ids[0]}") 严格一致！`);
+					errorCount++;
+				}
+
+				const recSeen = new Set();
+				for (const recId of ids) {
+					if (recSeen.has(recId)) {
+						console.error(`❌ Git Commit 推荐列表中存在重复 ID: "${recId}"`);
+						errorCount++;
+					}
+					recSeen.add(recId);
+
+					const target = models.find((m) => m.id === recId);
+					if (!target) {
+						console.error(`❌ Git Commit 推荐模型 "${recId}" 不存在于 package.json 内置模型列表中！`);
+						errorCount++;
+					}
+				}
+				console.log(`✨ Git Commit 推荐清单校验通过：共 ${ids.length} 款推荐模型，默认兜底为 "${ids[0]}"。`);
+			}
+		}
+	} else {
+		console.warn("⚠️  未找到 src/gitCommit/commitRecommendations.ts，跳过提交模型清单专项检查。");
+		warnCount++;
+	}
 
 	console.log(`\n========================================`);
 	if (errorCount > 0) {

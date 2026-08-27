@@ -31,75 +31,7 @@ export interface ParsedModelId {
 	configId?: string;
 }
 
-/**
- * 官方推荐用于生成 Git Commit Message 的模型白名单（严格按推荐优先级排序）
- */
-export const DEFAULT_COMMIT_MODEL = "deepseek-v4-flash";
-export const RECOMMENDED_COMMIT_MODEL_IDS: readonly string[] = [
-	"deepseek-v4-flash",
-];
-
-/**
- * 获取适用于 Git Commit Message 的推荐模型列表（严格按推荐优先级排序）
- * @param userModels 用户配置的模型列表
- * @param builtInModels 内置模型表
- */
-export function getRecommendedCommitModels(
-	userModels: HFModelItem[],
-	builtInModels?: Map<string, HFModelItem>
-): HFModelItem[] {
-	const builtIns = builtInModels ?? getBuiltInModels();
-	const result: HFModelItem[] = [];
-	const seen = new Set<string>();
-
-	for (const id of RECOMMENDED_COMMIT_MODEL_IDS) {
-		const { baseId, configId } = parseModelId(id);
-		// 优先取用户配置中完全匹配 (baseId + configId) 的模型
-		let model = userModels.find(
-			(m) => m.id === baseId && (configId ? m.configId === configId : !m.configId)
-		);
-		// 若无精确匹配，尝试查找用户配置的同 baseId 模型（覆盖内置）
-		if (!model && !configId) {
-			model = userModels.find((m) => m.id === baseId);
-		}
-		// 若用户未配置，则从内置模型表中兜底
-		if (!model) {
-			model = builtIns.get(baseId);
-		}
-		if (model) {
-			const key = `${model.id}::${model.configId ?? ""}`;
-			if (!seen.has(key)) {
-				seen.add(key);
-				result.push(model);
-			}
-		}
-	}
-	return result;
-}
-
-/**
- * 校验并纠偏 commitModel，若传入的模型不在推荐列表内，则回退至首选推荐模型
- */
-export function resolveValidCommitModel(
-	currentModelId: string | undefined,
-	availableCommitModels: HFModelItem[]
-): string {
-	if (
-		currentModelId &&
-		availableCommitModels.some((m) => {
-			const fullId = `${m.id}${m.configId ? "::" + m.configId : ""}`;
-			return fullId === currentModelId || m.id === currentModelId;
-		})
-	) {
-		return currentModelId;
-	}
-	// 回退到第一个推荐可用模型或默认值
-	if (availableCommitModels.length > 0) {
-		const first = availableCommitModels[0];
-		return `${first.id}${first.configId ? "::" + first.configId : ""}`;
-	}
-	return DEFAULT_COMMIT_MODEL;
-}
+export * from "./gitCommit/commitRecommendations";
 
 export function getModelProviderId(model: unknown): string {
 	if (!model || typeof model !== "object") {
