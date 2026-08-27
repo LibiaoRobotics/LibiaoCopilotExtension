@@ -33,3 +33,11 @@ applyTo: "**/*.ts"
 ## 4. UI 与状态栏
 - **模型图标**：`displayName` 数据保持纯净，由 `formatModelDisplayName` 根据 `libiaoCopilot.visionIcon` 统一动态添加 `👁️` 或 `🖼️` 图标。
 - **状态栏**：基于用户实际选定的 `contextSize` 比例计算，$\ge 90\%$ 报错，$\ge 70\%$ 告警。
+
+## 5. 版本跃迁与配置静默迁移机制 (Version-based State Migration)
+- **核心定位**：当新版本调整了核心默认配置或首推策略（如切换默认 Git Commit 模型），但老用户本地 `settings.json` 已固化了旧版默认值时，采用**基于 `context.globalState` 的单次版本迁移**，严禁通过修改配置项 Key 名称来强制废弃。
+- **执行原则**：
+  - **单次触发（One-time Guard）**：在 `extension.ts` 激活阶段读取 `globalState.get("libiaoCopilot.lastVersion")`，仅当检测到老版本跃迁（`lastVersion < targetVersion`）时执行一次静默配置重置/纠偏。
+  - **尊重用户选择**：迁移完成后立即打上标记或更新 `lastVersion`；后续启动绝不重复覆盖，100% 尊重用户在迁移后主动做的配置选择。
+  - **配置零污染**：配置项名称全局保持统一，不产生命名债务，`settings.json` 保持干净规范。
+
