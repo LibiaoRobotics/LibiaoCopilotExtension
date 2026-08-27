@@ -1543,15 +1543,12 @@ function populateCommitModelDropdown() {
 		commitModelInput.removeChild(commitModelInput.lastChild);
 	}
 
-	// Filter models that support commit generation (openai, openai-responses, anthropic, ollama apiMode)
-	const commitCompatibleModels = state.commitModels
-		.filter((model) => {
-			const apiMode = model.apiMode || "openai";
-			return apiMode !== "gemini" && !model.id.startsWith("__provider__");
-		})
-		.sort((a, b) => a.id.localeCompare(b.id));
+	// state.commitModels 已在后端按官方推荐白名单及优先级排序好
+	const commitCompatibleModels = (state.commitModels || []).filter(
+		(model) => !model.id.startsWith("__provider__")
+	);
 
-	// Add options for compatible models
+	// Add options for compatible models in recommended order
 	commitCompatibleModels.forEach((model) => {
 		const option = document.createElement("option");
 		const fullModelId = `${model.id}${model.configId ? "::" + model.configId : ""}`;

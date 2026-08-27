@@ -5,7 +5,14 @@ import { OpenaiApi } from "../openai/openaiApi";
 import { OpenaiResponsesApi } from "../openai/openaiResponsesApi";
 import { AnthropicApi } from "../anthropic/anthropicApi";
 import { OllamaApi } from "../ollama/ollamaApi";
-import { normalizeUserModels, parseModelId, getBuiltInModel } from "../utils";
+import {
+	normalizeUserModels,
+	parseModelId,
+	getBuiltInModel,
+	DEFAULT_COMMIT_MODEL,
+	getRecommendedCommitModels,
+	resolveValidCommitModel,
+} from "../utils";
 import { logger } from "../logger";
 
 /**
@@ -181,10 +188,18 @@ async function performCommitMsgGeneration(
 
 		// Get user models from configuration
 		const userModels = normalizeUserModels(config.get<unknown>("libiaoCopilot.models", []));
+		const recommendedCommitModels = getRecommendedCommitModels(userModels);
 
-		// 提交信息生成模型：读独立配置项 libiaoCopilot.commitModel
-		const configuredCommitModel = config.get<string>("libiaoCopilot.commitModel", "deepseek-v4-flash");
-		const { baseId, configId } = parseModelId(configuredCommitModel);
+		// 提交信息生成模型：读独立配置项 libiaoCopilot.commitModel 并进行纠偏
+		const configuredCommitModel = config.get<string>("libiaoCopilot.commitModel", DEFAULT_COMMIT_MODEL);
+		const validCommitModel = resolveValidCommitModel(configuredCommitModel, recommendedCommitModels);
+
+		// 若检测到历史残留或非推荐模型，静默自动纠偏配置
+		if (configuredCommitModel !== validCommitModel) {
+			void config.update("libiaoCopilot.commitModel", validCommitModel, vscode.ConfigurationTarget.Global);
+		}
+
+		const { baseId, configId } = parseModelId(validCommitModel);
 		let selectedModel = userModels.find(
 			(m) => m.id === baseId && ((configId && m.configId === configId) || (!configId && !m.configId))
 		);

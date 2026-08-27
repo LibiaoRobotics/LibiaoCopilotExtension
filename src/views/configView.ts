@@ -3,7 +3,14 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import type { HFApiMode, HFModelItem } from "../types";
-import { normalizeUserModels, parseModelId, getBuiltInModels } from "../utils";
+import {
+	normalizeUserModels,
+	parseModelId,
+	getBuiltInModels,
+	DEFAULT_COMMIT_MODEL,
+	getRecommendedCommitModels,
+	resolveValidCommitModel,
+} from "../utils";
 import { fetchModels, clearModelListCache } from "../provideModel";
 import { ensureModelContextDefaults } from "../modelConfiguration";
 import { VersionManager } from "../versionManager";
@@ -623,20 +630,13 @@ export class ConfigViewPanel {
 			interval_ms: 1000,
 		});
 
-		const commitModel = config.get<string>("libiaoCopilot.commitModel", "deepseek-v4-flash");
+		const commitModelRaw = config.get<string>("libiaoCopilot.commitModel", DEFAULT_COMMIT_MODEL);
 		const commitLanguage = config.get<string>("libiaoCopilot.commitLanguage", "Chinese (Simplified)");
 
-		// 提交模型下拉列表：用户配置（排除 __provider__ 占位）∪ 内置模型，按 id+configId 去重
-		const builtInModels = getBuiltInModels();
-		const seen = new Set<string>();
-		const commitModels: HFModelItem[] = [];
-		for (const m of [...models.filter((model) => !model.id.startsWith("__provider__")), ...builtInModels.values()]) {
-			const key = `${m.id}::${m.configId ?? ""}`;
-			if (!seen.has(key)) {
-				seen.add(key);
-				commitModels.push(m);
-			}
-		}
+		// 提交模型下拉列表：按官方推荐白名单和优先级提取当前可用模型
+		const commitModels = getRecommendedCommitModels(models);
+		// 校验并纠偏当前 commitModel，若配置了不在推荐列表中的旧模型，自动纠偏回退
+		const commitModel = resolveValidCommitModel(commitModelRaw, commitModels);
 
 		const readFileLines = config.get<number>("libiaoCopilot.readFileLines", 0);
 		const visionIcon = config.get<string>("libiaoCopilot.visionIcon", "picture");
