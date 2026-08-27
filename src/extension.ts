@@ -9,6 +9,7 @@ import { abortCommitGeneration, generateCommitMsg } from "./gitCommit/commitMess
 import { TokenizerManager } from "./tokenizer/tokenizerManager";
 import { clearModelListCache } from "./provideModel";
 import { runVersionMigrations } from "./versionManager";
+import { schedulePowerShellPrompt } from "./powershellManager";
 
 export function activate(context: vscode.ExtensionContext) {
 	const officialExtension = vscode.extensions.getExtension("johnny-zhao.oai-compatible-copilot");
@@ -26,6 +27,9 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Initialize TokenizerManager with extension path
 	TokenizerManager.initialize(context.extensionPath);
+
+	// Windows 环境下延时检查 PowerShell 7 状态并引导
+	schedulePowerShellPrompt(context);
 
 	const tokenCountStatusBarItem: vscode.StatusBarItem = initStatusBar(context);
 	const provider = new HuggingFaceChatModelProvider(context.secrets, tokenCountStatusBarItem);

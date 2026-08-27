@@ -219,3 +219,87 @@ export async function getPowerShellStatus(): Promise<PowerShellStatus> {
 		platform,
 	};
 }
+
+export const POWERSHELL_PROMPT_SUPPRESS_KEY = "libiaoCopilot.suppressPowerShellPrompt";
+
+/**
+ * 启动后检查 PowerShell 7 安装及默认终端状态，并在必要时弹出操作提示（仅限 Windows 平台）
+ */
+export async function promptPowerShellSetupIfNeeded(
+	globalState: vscode.Memento,
+	overridePlatform?: string,
+	mockShowInfo?: (message: string, ...items: string[]) => Thenable<string | undefined>
+): Promise<"installed_prompted" | "default_profile_prompted" | "skipped" | "none"> {
+	const platform = overridePlatform ?? process.platform;
+	if (platform !== "win32") {
+		return "none";
+	}
+
+	const isSuppressed = globalState.get<boolean>(POWERSHELL_PROMPT_SUPPRESS_KEY, false);
+	if (isSuppressed) {
+		return "skipped";
+	}
+
+	const status = await getPowerShellStatus();
+	const showInfo = mockShowInfo ?? vscode.window.showInformationMessage;
+
+	if (!status.installed) {
+		const installBtn = "🚀 一键安装";
+		const suppressBtn = "不再提示";
+		const selection = await showInfo(
+			"Libiao Copilot: 检测到当前系统尚未安装 PowerShell 7 (pwsh)。建议安装以获得最佳终端兼容性与运行速度。",
+			installBtn,
+			suppressBtn
+		);
+
+		if (selection === installBtn) {
+			await launchPowerShellInstaller();
+		} else if (selection === suppressBtn) {
+			await globalState.update(POWERSHELL_PROMPT_SUPPRESS_KEY, true);
+		}
+		return "installed_prompted";
+	}
+
+	if (!status.isDefaultTerminalProfile) {
+		const setDefaultBtn = "⚡ 设为默认";
+		const suppressBtn = "不再提示";
+		const selection = await showInfo(
+			"Libiao Copilot: 检测到已安装 PowerShell 7，建议将其设为 VS Code 默认集成终端以避免脚本编码问题。",
+			setDefaultBtn,
+			suppressBtn
+		);
+
+		if (selection === setDefaultBtn) {
+			const success = await setPowerShellAsDefaultProfile();
+			if (success) {
+				void vscode.window.showInformationMessage("已成功将 PowerShell 设置为 VS Code 默认集成终端。新建终端即可生效。");
+			}
+		} else if (selection === suppressBtn) {
+			await globalState.update(POWERSHELL_PROMPT_SUPPRESS_KEY, true);
+		}
+		return "default_profile_prompted";
+	}
+
+	return "none";
+}
+
+/**
+ * 在插件激活后延时（默认 1 分钟）调度 PowerShell 7 状态检查
+ */
+export function schedulePowerShellPrompt(
+	context: vscode.ExtensionContext,
+	delayMs = 60000
+): vscode.Disposable {
+	const timer = setTimeout(async () => {
+		try {
+			await promptPowerShellSetupIfNeeded(context.globalState);
+		} catch (err) {
+			console.error("[libiaoCopilot] Failed during PowerShell startup prompt check", err);
+		}
+	}, delayMs);
+
+	const disposable = new vscode.Disposable(() => clearTimeout(timer));
+	context.subscriptions.push(disposable);
+	return disposable;
+}
+
