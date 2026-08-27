@@ -28,7 +28,7 @@
 | `MiniMax-M3` | MiniMax M3 | openai | 1,000,000 | 65,536 | — | ✅ | ❌️不推荐❌️ |
 | `glm-5.2` | GLM 5.2 | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ❌ | ❌️不推荐❌️ |
 | `glm-5.3` | GLM 5.3 | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ❌ | ⭐️推荐⭐️ |
-| `glm-5.3-flash` | GLM 5.3 Flash | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ✅ | ⭐️推荐⭐️ |
+| `glm-5.3-flash` | GLM 5.3 Flash | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ✅ | 白菜价 |
 | `qwen3.7-plus` | Qwen 3.7 Plus | openai-responses | 1,000,000 | 131,072 | minimal / low / medium / high (**high**) | ✅ | ❌️不推荐❌️ |
 | `qwen3.7-max` | Qwen 3.7 Max | openai-responses | 1,000,000 | 65,536 | minimal / low / medium / high (**high**) | ❌ | ❌️不推荐❌️ |
 

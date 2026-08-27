@@ -64,6 +64,7 @@ if (-not $env:NEWAPI_KEY) {
 - 推荐款：`"priceNote": "\u2B50\uFE0F推荐\u2B50\uFE0F"`（支持追加个性化文案）；
 - 不推荐款：`"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F"`；
 - 普通/中立款：直接省略该字段；
+- 纯文字备注形态（如 `"priceNote": "白菜价"`）：允许直接写纯文字，门禁仅要求无 U+FFFD 乱码；但**严禁**以 ⭐/❌ Emoji 开头却丢失变体选择符（`\uFE0F`）；
 - **铁律**：严禁在 JSON 中手写字面 Emoji，必须使用 Unicode 转义符防乱码。
 
 ### 第 5 步：安全写入 `package.json` 并执行全量自检门禁

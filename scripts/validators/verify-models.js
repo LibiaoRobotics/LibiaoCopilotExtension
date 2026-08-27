@@ -6,7 +6,7 @@
  * 2. displayName 纯文本（严禁手写 Emoji）
  * 3. owned_by 统一为 "libiaorobot"
  * 4. apiMode 在合法枚举白名单内
- * 5. priceNote 无 U+FFFD 乱码且 Emoji 变体选择符完整
+ * 5. priceNote 无 U+FFFD 乱码；Emoji 前缀形态校验变体选择符完整（纯文字备注放行）
  * 6. reasoning_effort / reasoning_efforts 严格符合 7 档枚举白名单且默认档包含在数组内
  * 7. context_length、context_sizes 升序与 default_context_size 合法性
  * 8. include_reasoning_in_request 使用范围检查
@@ -89,13 +89,13 @@ function checkModels() {
 			errorCount++;
 		}
 
-		// 5. priceNote 检查
+		// 5. priceNote 检查（Emoji 前缀形态校验变体选择符；纯文字备注如「白菜价」仅防乱码）
 		if (m.priceNote) {
 			const points = [...m.priceNote].map((c) => c.codePointAt(0));
 			if (points.includes(0xFFFD)) {
 				console.error(`❌ ${prefix} priceNote 包含 U+FFFD 乱码损坏！`);
 				errorCount++;
-			} else {
+			} else if (points[0] === EMOJI_STAR_POINTS[0] || points[0] === EMOJI_CROSS_POINTS[0]) {
 				const isRec = !m.priceNote.includes("不");
 				const expectedPoints = isRec ? EMOJI_STAR_POINTS : EMOJI_CROSS_POINTS;
 				if (points[0] !== expectedPoints[0] || points[1] !== expectedPoints[1]) {
