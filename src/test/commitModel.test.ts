@@ -8,6 +8,20 @@ import {
 } from "../utils";
 
 suite("commitModel recommendations & auto-healing", () => {
+	const qwenFlashModel: HFModelItem = {
+		id: "qwen3.8-flash",
+		displayName: "Qwen 3.8 Flash",
+		owned_by: "libiaorobot",
+		apiMode: "openai-responses",
+	};
+
+	const glmFlashModel: HFModelItem = {
+		id: "glm-5.3-flash",
+		displayName: "GLM 5.3 Flash",
+		owned_by: "libiaorobot",
+		apiMode: "openai-responses",
+	};
+
 	const flashModel: HFModelItem = {
 		id: "deepseek-v4-flash",
 		displayName: "DeepSeek Flash",
@@ -30,22 +44,30 @@ suite("commitModel recommendations & auto-healing", () => {
 		apiMode: "openai",
 	};
 
-	test("default commit model is deepseek-v4-flash", () => {
-		assert.strictEqual(DEFAULT_COMMIT_MODEL, "deepseek-v4-flash");
-		assert.ok(RECOMMENDED_COMMIT_MODEL_IDS.includes("deepseek-v4-flash"));
+	test("default commit model is qwen3.8-flash", () => {
+		assert.strictEqual(DEFAULT_COMMIT_MODEL, "qwen3.8-flash");
+		assert.deepStrictEqual(RECOMMENDED_COMMIT_MODEL_IDS, [
+			"qwen3.8-flash",
+			"glm-5.3-flash",
+			"deepseek-v4-flash-vision-exp",
+			"deepseek-v4-flash",
+		]);
 	});
 
 	test("filters and preserves recommended order from builtInModels and userModels", () => {
 		const builtInMap = new Map<string, HFModelItem>([
 			["deepseek-v4-flash", flashModel],
+			["glm-5.3-flash", glmFlashModel],
 			["qwen3.8-max", qwenMaxModel],
 		]);
 
-		const userModels: HFModelItem[] = [qwenMaxModel];
+		const userModels: HFModelItem[] = [qwenFlashModel];
 		const result = getRecommendedCommitModels(userModels, builtInMap);
 
-		assert.strictEqual(result.length, 1);
-		assert.strictEqual(result[0].id, "deepseek-v4-flash");
+		assert.strictEqual(result.length, 3);
+		assert.strictEqual(result[0].id, "qwen3.8-flash");
+		assert.strictEqual(result[1].id, "glm-5.3-flash");
+		assert.strictEqual(result[2].id, "deepseek-v4-flash");
 	});
 
 	test("prefers user configured model over built-in if matched", () => {
@@ -61,18 +83,21 @@ suite("commitModel recommendations & auto-healing", () => {
 	});
 
 	test("resolveValidCommitModel keeps valid recommended model", () => {
-		const available = [flashModel];
+		const available = [qwenFlashModel, flashModel];
 		const resolved = resolveValidCommitModel("deepseek-v4-flash", available);
 		assert.strictEqual(resolved, "deepseek-v4-flash");
 	});
 
-	test("resolveValidCommitModel heals legacy/unsupported model back to default", () => {
-		const available = [flashModel];
+	test("resolveValidCommitModel heals legacy/unsupported model back to first available or default", () => {
+		const available = [qwenFlashModel, flashModel];
 		// 用户历史配置了 qwen3.8-max 或 r1
 		const resolved = resolveValidCommitModel("qwen3.8-max", available);
-		assert.strictEqual(resolved, "deepseek-v4-flash");
+		assert.strictEqual(resolved, "qwen3.8-flash");
 
 		const resolvedFromEmpty = resolveValidCommitModel(undefined, available);
-		assert.strictEqual(resolvedFromEmpty, "deepseek-v4-flash");
+		assert.strictEqual(resolvedFromEmpty, "qwen3.8-flash");
+
+		const resolvedWithNoAvailable = resolveValidCommitModel("invalid", []);
+		assert.strictEqual(resolvedWithNoAvailable, "qwen3.8-flash");
 	});
 });

@@ -171,7 +171,6 @@ function checkModels() {
 	if (fs.existsSync(RECOMMENDATIONS_PATH)) {
 		const recContent = fs.readFileSync(RECOMMENDATIONS_PATH, "utf8");
 		const match = recContent.match(/RECOMMENDED_COMMIT_MODEL_IDS:\s*readonly\s*string\[\]\s*=\s*\[([\s\S]*?)\];/);
-		const defaultMatch = recContent.match(/DEFAULT_COMMIT_MODEL\s*=\s*["']([^"']+)["']/);
 
 		if (!match) {
 			console.error("❌ 无法从 src/gitCommit/commitRecommendations.ts 中解析 RECOMMENDED_COMMIT_MODEL_IDS！");
@@ -185,12 +184,6 @@ function checkModels() {
 				console.error("❌ RECOMMENDED_COMMIT_MODEL_IDS 推荐列表不能为空！");
 				errorCount++;
 			} else {
-				const defaultModel = defaultMatch ? defaultMatch[1] : "";
-				if (defaultModel !== ids[0]) {
-					console.error(`❌ DEFAULT_COMMIT_MODEL ("${defaultModel}") 必须与 RECOMMENDED_COMMIT_MODEL_IDS 首项 ("${ids[0]}") 严格一致！`);
-					errorCount++;
-				}
-
 				const recSeen = new Set();
 				for (const recId of ids) {
 					if (recSeen.has(recId)) {
@@ -201,11 +194,11 @@ function checkModels() {
 
 					const target = models.find((m) => m.id === recId);
 					if (!target) {
-						console.error(`❌ Git Commit 推荐模型 "${recId}" 不存在于 package.json 内置模型列表中！`);
-						errorCount++;
+						console.warn(`⚠️  Git Commit 推荐模型 "${recId}" 暂未在 package.json 内置模型列表中定义（作为在途/自定义推荐保留）。`);
+						warnCount++;
 					}
 				}
-				console.log(`✨ Git Commit 推荐清单校验通过：共 ${ids.length} 款推荐模型，默认兜底为 "${ids[0]}"。`);
+				console.log(`✨ Git Commit 推荐清单校验通过：共 ${ids.length} 款推荐模型，默认兜底自动为 "${ids[0]}"。`);
 			}
 		}
 	} else {

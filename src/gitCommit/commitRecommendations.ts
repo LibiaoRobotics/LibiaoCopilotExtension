@@ -17,19 +17,19 @@ import { getBuiltInModels, parseModelId } from "../utils";
  */
 
 /**
- * 全局默认兜底提交模型（必须与 RECOMMENDED_COMMIT_MODEL_IDS[0] 保持一致）
- */
-export const DEFAULT_COMMIT_MODEL = "deepseek-v4-flash";
-
-/**
  * 官方推荐用于生成 Git Commit Message 的模型 ID 白名单（严格按推荐优先级降序排列）
  */
 export const RECOMMENDED_COMMIT_MODEL_IDS: readonly string[] = [
+	"qwen3.8-flash",
+	"glm-5.3-flash",
+	"deepseek-v4-flash-vision-exp",
 	"deepseek-v4-flash",
-	// 将来如需扩充，可直接按优先级添加：
-	// "gpt-4o-mini",
-	// "claude-3-5-haiku",
 ];
+
+/**
+ * 全局默认兜底提交模型（自动指向推荐列表首项）
+ */
+export const DEFAULT_COMMIT_MODEL = RECOMMENDED_COMMIT_MODEL_IDS[0] || "deepseek-v4-flash";
 
 /**
  * 获取适用于 Git Commit Message 的推荐模型列表（严格按推荐优先级排序）
