@@ -12,6 +12,7 @@
 4. **打包与安装**：打包统一为 `npm run build`（保留运行时依赖）；本地安装仅限 `pwsh -File .\scripts\Install-LibiaoCopilot.ps1`（禁止直接使用 `code --install-extension`）。
 5. **网关安全**：默认 `baseUrl` 必须留空，严禁硬编码内部网关地址。
 6. **脚本目录收敛**：严禁在 `scripts/` 根目录下直接新建脚本；所有新增脚本必须按职责归入对应功能子目录（`probes/`、`analyzers/`、`replay/` 或新建自解释子目录），并在 `scripts/README.md` 中同步登记。
+7. **Changelog 用户视角纪律**：`CHANGELOG.md` 必须纯粹以最终用户视角书写（只记录对用户可见的功能、体验改进与缺陷修复）；严禁写入任何内部代码重构、配置源抽离、门禁脚本改造、测试用例或开发者专用的维护提示等开发侧细节。
 
 ---
 
