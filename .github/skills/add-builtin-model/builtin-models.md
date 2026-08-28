@@ -4,12 +4,13 @@
 
 ---
 
-## 📌 官方 23 款内置模型参数大表
+## 📌 官方 24 款内置模型参数大表
 
 | 模型 ID | 显示名称 | apiMode | 上下文窗口 | 最大输出 | 思考 / Effort 档位 (默认档) | 视觉 | 推荐状态 (priceNote) |
 |---|---|---|---|---|---|---|---|
 | `qwen3.8-max-preview` | Qwen 3.8 Max 预览版 | openai-responses | 1,000,000 | 128,000 | low / medium / xhigh (**xhigh**) | ✅ | — |
 | `qwen3.8-max` | Qwen 3.8 Max | openai-responses | 1,000,000 | 128,000 | low / medium / xhigh (**xhigh**) | ✅ | ⭐️推荐⭐️ |
+| `qwen3.8-flash` | Qwen 3.8 Flash | openai-responses | 1,000,000 | 128,000 | low / medium / xhigh (**xhigh**) | ✅ | ⭐️推荐⭐️ |
 | `deepseek-v4-pro` | DeepSeek Pro | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | ❌️不推荐❌️ |
 | `deepseek-v4-flash` | DeepSeek Flash | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | — |
 | `deepseek-v4-flash-vision-exp` | Deepseek Flash 识图版 | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ✅ | ⭐️推荐⭐️ |
