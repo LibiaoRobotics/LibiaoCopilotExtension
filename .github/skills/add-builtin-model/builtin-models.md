@@ -9,16 +9,16 @@
 | 模型 ID | 显示名称 | apiMode | 上下文窗口 | 最大输出 | 思考 / Effort 档位 (默认档) | 视觉 | 推荐状态 (priceNote) |
 |---|---|---|---|---|---|---|---|
 | `qwen3.8-max-preview` | Qwen 3.8 Max 预览版 | openai-responses | 1,000,000 | 128,000 | low / medium / xhigh (**xhigh**) | ✅ | — |
-| `qwen3.8-max` | Qwen 3.8 Max | openai-responses | 1,000,000 | 128,000 | low / medium / xhigh (**xhigh**) | ✅ | ⭐️推荐⭐️ |
-| `qwen3.8-flash` | Qwen 3.8 Flash | openai-responses | 1,000,000 | 128,000 | low / medium / xhigh (**xhigh**) | ✅ | ⭐️推荐⭐️ |
-| `deepseek-v4-pro` | DeepSeek Pro | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | ❌️不推荐❌️ |
-| `deepseek-v4-flash` | DeepSeek Flash | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | — |
-| `deepseek-v4-flash-vision-exp` | Deepseek Flash 识图版 | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ✅ | ⭐️推荐⭐️ |
+| `qwen3.8-max` | Qwen 3.8 Max | openai-responses | 1,000,000 | 128,000 | low / medium / xhigh (**xhigh**) | ✅ | ⚠️尴尬的性价比⚠️ 能力足够，但速度乌龟 |
+| `qwen3.8-flash` | Qwen 3.8 Flash | openai-responses | 1,000,000 | 128,000 | low / medium / xhigh (**xhigh**) | ✅ | ⭐️最佳性价比⭐️ 兼顾低成本、大窗口与高质量，日常刚需 |
+| `deepseek-v4-pro` | DeepSeek Pro | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | ❌️糟糕的性价比❌️ 消耗与计费偏高，产出收益不成正比 |
+| `deepseek-v4-flash` | DeepSeek Flash | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | ❌️路边一条❌️ 不如它的识图版，随时关闭 |
+| `deepseek-v4-flash-vision-exp` | Deepseek Flash 识图版 | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ✅ | ⚠️性价比略尴尬⚠️ 能力、速度、价格都是比下有余但比上不足 |
 | `gemini-3.1-pro-preview` | Gemini 3.1 Pro 预览版 | openai | 1,048,576 | 65,536 | low / medium / high (**high**) | ✅ | — |
 | `gemini-3.1-flash-image` | Gemini 3.1 Flash | openai | 131,072 | 32,768 | — | ✅ | ❌️不推荐❌️ |
 | `gemini-3.5-flash` | Gemini 3.5 Flash | openai | 1,048,576 | 65,536 | low / medium / high (**high**) | ✅ | ❌️不推荐❌️ |
 | `gemini-3.6-flash` | Gemini 3.6 Flash | openai | 1,048,576 | 65,536 | low / medium / high (**high**) | ✅ | — |
-| `gemini-3.7-flash` | Gemini 3.7 Flash | gemini | 1,048,576 | 65,536 | auto / low / medium / high (**auto**) | ✅ | ⭐️推荐⭐️快！太快了！比特哥前女友变心还快！ |
+| `gemini-3.7-flash` | Gemini 3.7 Flash | gemini | 1,048,576 | 65,536 | auto / low / medium / high (**auto**) | ✅ | ⭐️强烈推荐⭐️ 综合能力第一梯队，响应极速，主力首选（快！太快了！比特哥前女友变心还快！） |
 | `gpt-5.6-luna` | GPT-5.6 Luna | openai-responses | 1,050,000 | 128,000 | low / medium / high / xhigh / max (**medium**) | ✅ | ❌️不推荐❌️ |
 | `gpt-5.6-sol` | GPT-5.6 Sol | openai-responses | 1,050,000 | 128,000 | low / medium / high / xhigh / max (**medium**) | ✅ | — |
 | `gpt-5.6-terra` | GPT-5.6 Terra | openai-responses | 1,050,000 | 128,000 | low / medium / high / xhigh / max (**medium**) | ✅ | ❌️不推荐❌️ |
@@ -27,9 +27,9 @@
 | `claude-opus-5` | Claude Opus 5 | openai | 1,000,000 | 128,000 | low / medium / high / xhigh / max (**medium**) | ✅ | — |
 | `claude-sonnet-5` | Claude Sonnet 5 | openai | 1,000,000 | 128,000 | low / medium / high / xhigh / max (**medium**) | ✅ | — |
 | `MiniMax-M3` | MiniMax M3 | openai | 1,000,000 | 65,536 | — | ✅ | ❌️不推荐❌️ |
-| `glm-5.2` | GLM 5.2 | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ❌ | ❌️不推荐❌️ |
-| `glm-5.3` | GLM 5.3 | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ❌ | ⭐️推荐⭐️ |
-| `glm-5.3-flash` | GLM 5.3 Flash | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ✅ | 白菜价 |
+| `glm-5.2` | GLM 5.2 | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ❌ | ❌️路边一条❌️ 代际落后，已被 GLM 5.3 完全取代 |
+| `glm-5.3` | GLM 5.3 | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ❌ | ⭐️性价比略逊一筹⭐️ 旗舰能力过硬，略贵但也算推荐 |
+| `glm-5.3-flash` | GLM 5.3 Flash | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ✅ | ⚠️白菜价但超慢⚠️ 价格极致低廉，但出字响应严重拖后腿 |
 | `qwen3.7-plus` | Qwen 3.7 Plus | openai-responses | 1,000,000 | 131,072 | minimal / low / medium / high (**high**) | ✅ | ❌️不推荐❌️ |
 | `qwen3.7-max` | Qwen 3.7 Max | openai-responses | 1,000,000 | 65,536 | minimal / low / medium / high (**high**) | ❌ | ❌️不推荐❌️ |
 

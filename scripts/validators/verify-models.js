@@ -23,8 +23,7 @@ const RECOMMENDATIONS_PATH = path.join(__dirname, "..", "..", "src", "gitCommit"
 const VALID_API_MODES = new Set(["openai", "openai-responses", "anthropic", "gemini", "ollama"]);
 const VALID_REASONING_EFFORTS = new Set(["auto", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
-const EMOJI_STAR_POINTS = [0x2B50, 0xFE0F];
-const EMOJI_CROSS_POINTS = [0x274C, 0xFE0F];
+const EMOJI_PREFIX_CODEPOINTS = new Set([0x2B50, 0x274C, 0x26A0]); // ⭐, ❌, ⚠️
 
 function checkModels() {
 	if (!fs.existsSync(PKG_PATH)) {
@@ -96,11 +95,9 @@ function checkModels() {
 			if (points.includes(0xFFFD)) {
 				console.error(`❌ ${prefix} priceNote 包含 U+FFFD 乱码损坏！`);
 				errorCount++;
-			} else if (points[0] === EMOJI_STAR_POINTS[0] || points[0] === EMOJI_CROSS_POINTS[0]) {
-				const isRec = !m.priceNote.includes("不");
-				const expectedPoints = isRec ? EMOJI_STAR_POINTS : EMOJI_CROSS_POINTS;
-				if (points[0] !== expectedPoints[0] || points[1] !== expectedPoints[1]) {
-					console.error(`❌ ${prefix} priceNote 的 Emoji 变体选择符丢失或转义有误！码点: ${points.map((p) => "U+" + p.toString(16).toUpperCase()).join(" ")}`);
+			} else if (EMOJI_PREFIX_CODEPOINTS.has(points[0])) {
+				if (points[1] !== 0xFE0F) {
+					console.error(`❌ ${prefix} priceNote 的 Emoji 变体选择符 (\\uFE0F) 丢失或转义有误！码点: ${points.map((p) => "U+" + p.toString(16).toUpperCase()).join(" ")}`);
 					errorCount++;
 				}
 			}

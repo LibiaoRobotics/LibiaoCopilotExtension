@@ -142,8 +142,8 @@ export async function runVersionMigrations(context: vscode.ExtensionContext): Pr
 	const currentVersion = VersionManager.getVersion();
 
 	try {
-		// 1.2.4 版本迁移：老用户升级时，若 settings.json 中保存的是旧默认 commitModel (deepseek-v4-flash)，静默升级至首推模型
-		if (!lastVersion || isVersionOlder(lastVersion, "1.2.4")) {
+		// 1.2.5 版本迁移：老用户（<= 1.2.4）升级时，若 settings.json 中保存的是旧默认 commitModel (deepseek-v4-flash)，静默升级至首推模型
+		if (!lastVersion || isVersionOlder(lastVersion, "1.2.5")) {
 			const config = vscode.workspace.getConfiguration();
 			const inspect = config.inspect<string>("libiaoCopilot.commitModel");
 			const currentValue = inspect?.globalValue;

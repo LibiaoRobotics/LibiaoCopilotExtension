@@ -61,10 +61,11 @@ if (-not $env:NEWAPI_KEY) {
   👉 **[网关真机探测与验收标准 (Gateway Probes)](./gateway-probes.md)**
 
 ### 第 4 步：确定 `priceNote` 推荐标注与 Unicode 转义
-- 推荐款：`"priceNote": "\u2B50\uFE0F推荐\u2B50\uFE0F"`（支持追加个性化文案）；
-- 不推荐款：`"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F"`；
-- 普通/中立款：直接省略该字段；
-- 纯文字备注形态（如 `"priceNote": "白菜价"`）：允许直接写纯文字，门禁仅要求无 U+FFFD 乱码；但**严禁**以 ⭐/❌ Emoji 开头却丢失变体选择符（`\uFE0F`）；
+- 推荐款：`"priceNote": "\u2B50\uFE0F推荐\u2B50\uFE0F"`（支持追加个性化文案，如 `⭐️最佳性价比⭐️ 兼顾低成本...`）；
+- 中立/迟缓款：`"priceNote": "\u26A0\uFE0F尴尬的性价比\u26A0\uFE0F"` 或 `"priceNote": "\u26A0\uFE0F白菜价但超慢\u26A0\uFE0F"`；
+- 不推荐款：`"priceNote": "\u274C\uFE0F不推荐\u274C\uFE0F"`（或 `❌️糟糕的性价比❌️`、`❌️路边一条❌️`）；
+- 普通款：直接省略该字段；
+- 纯文字备注形态（如 `"priceNote": "白菜价"`）：允许直接写纯文字，门禁仅要求无 U+FFFD 乱码；但**严禁**以 ⭐/⚠️/❌ Emoji 开头却丢失变体选择符（`\uFE0F`）；
 - **铁律**：严禁在 JSON 中手写字面 Emoji，必须使用 Unicode 转义符防乱码。
 
 ### 第 5 步：安全写入 `package.json` 并执行全量自检门禁

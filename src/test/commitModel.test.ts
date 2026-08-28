@@ -112,7 +112,7 @@ suite("commitModel recommendations & auto-healing", () => {
 
 	test("runVersionMigrations performs one-time migration and records lastVersion in globalState", async () => {
 		const store = new Map<string, unknown>();
-		store.set("libiaoCopilot.lastVersion", "1.2.3");
+		store.set("libiaoCopilot.lastVersion", "1.2.4");
 
 		const mockContext = {
 			globalState: {
@@ -125,6 +125,6 @@ suite("commitModel recommendations & auto-healing", () => {
 
 		await runVersionMigrations(mockContext);
 
-		assert.strictEqual(store.get("libiaoCopilot.lastVersion"), "1.2.4");
+		assert.strictEqual(store.get("libiaoCopilot.lastVersion"), "1.2.5");
 	});
 });
