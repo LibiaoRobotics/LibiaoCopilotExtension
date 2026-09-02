@@ -23,6 +23,14 @@ import {
 	setPowerShellAsDefaultProfile,
 	type PowerShellStatus,
 } from "../powershellManager";
+import {
+	scanWorkspaceGuard,
+	buildWorkspaceInstructionsTemplate,
+	buildStackInstructionsTemplate,
+	buildWorkspaceSkillTemplate,
+	type WorkspaceGuardStatus,
+	type SupportedStack,
+} from "../workspaceGuard";
 
 interface InitPayload {
 	version: string;
@@ -73,6 +81,7 @@ interface InitPayload {
 		tokenCount: number;
 	};
 	powershell: PowerShellStatus;
+	workspaceGuard: WorkspaceGuardStatus;
 }
 
 interface ExportConfig {
@@ -149,7 +158,15 @@ type IncomingMessage =
 	| { type: "getPowerShellStatus" }
 	| { type: "installPowerShell" }
 	| { type: "openPowerShellDocs" }
-	| { type: "setDefaultTerminalProfile" };
+	| { type: "setDefaultTerminalProfile" }
+	| { type: "getWorkspaceGuardStatus"; selectedProjectRoot?: string }
+	| { type: "selectWorkspaceProject"; projectRoot: string }
+	| { type: "browseWorkspaceProjectFolder" }
+	| { type: "initWorkspaceInstructions" }
+	| { type: "injectStackInstructions"; stack: SupportedStack }
+	| { type: "createWorkspaceSkill"; skillName?: string }
+	| { type: "openWorkspaceInstructionsFile" }
+	| { type: "revealWorkspaceDotGithub" };
 
 type OutgoingMessage =
 	| { type: "init"; payload: InitPayload }
@@ -168,6 +185,7 @@ type OutgoingMessage =
 	| { type: "modelTestDone"; tested: number; succeeded: number; total: number }
 	| { type: "modelTestStatus"; testing: boolean }
 	| { type: "powershellStatus"; powershell: PowerShellStatus }
+	| { type: "workspaceGuardStatus"; status: WorkspaceGuardStatus }
 	| {
 			type: "userMemoryStatus";
 			userMemory: {
@@ -207,6 +225,8 @@ export class ConfigViewPanel {
 	// 模型测试会话状态（面板级，防止面板重建后状态泄漏）
 	private modelTestRunning = false;
 	private modelTestCancelToken: vscode.CancellationTokenSource | undefined;
+	// 用户选中的工程目录记忆（针对 Monorepo / 多模块根目录）
+	private currentSelectedProjectRoot: string | undefined;
 
 	public static openPanel(
 		extensionUri: vscode.Uri,
@@ -417,6 +437,30 @@ export class ConfigViewPanel {
 				this.panel.webview.postMessage({ type: "powershellStatus", powershell } as OutgoingMessage);
 				break;
 			}
+			case "getWorkspaceGuardStatus":
+				await this.postWorkspaceGuardStatus(message.selectedProjectRoot);
+				break;
+			case "selectWorkspaceProject":
+				await this.selectWorkspaceProject(message.projectRoot);
+				break;
+			case "browseWorkspaceProjectFolder":
+				await this.browseWorkspaceProjectFolder();
+				break;
+			case "initWorkspaceInstructions":
+				await this.initWorkspaceInstructions();
+				break;
+			case "injectStackInstructions":
+				await this.injectStackInstructions(message.stack);
+				break;
+			case "createWorkspaceSkill":
+				await this.createWorkspaceSkill(message.skillName);
+				break;
+			case "openWorkspaceInstructionsFile":
+				await this.openWorkspaceInstructionsFile();
+				break;
+			case "revealWorkspaceDotGithub":
+				await this.revealWorkspaceDotGithub();
+				break;
 			default:
 				break;
 		}
@@ -649,6 +693,7 @@ export class ConfigViewPanel {
 		const customMemory = await this.getCustomMemoryStatus();
 		const orgInstructions = await this.getOrgInstructionsStatus();
 		const powershell = await this.getPowerShellStatusSafe();
+		const workspaceGuard = this.getWorkspaceGuardStatusSafe();
 		const payload: InitPayload = {
 			version: VersionManager.getVersion(),
 			buildDate: VersionManager.getBuildDate(),
@@ -671,6 +716,7 @@ export class ConfigViewPanel {
 			customMemory,
 			orgInstructions,
 			powershell,
+			workspaceGuard,
 		};
 		this.panel.webview.postMessage({ type: "init", payload });
 	}
@@ -1172,6 +1218,241 @@ export class ConfigViewPanel {
 			customMemory,
 			orgInstructions,
 		} as OutgoingMessage);
+	}
+
+	private getWorkspaceGuardStatusSafe(selectedRoot?: string): WorkspaceGuardStatus {
+		const folders = vscode.workspace.workspaceFolders;
+		if (!folders || folders.length === 0) {
+			return {
+				hasWorkspace: false,
+				projectCandidates: [],
+				detectedStacks: [],
+				dotGithubExists: false,
+				hasInstructions: false,
+				instructionFiles: [],
+				skills: [],
+				prompts: [],
+				agents: [],
+				defenseLevel: "none",
+			};
+		}
+		const primaryFolder = folders[0];
+		const effectiveSelected = selectedRoot || this.currentSelectedProjectRoot;
+		const activeFile = vscode.window.activeTextEditor?.document?.uri?.fsPath;
+		const status = scanWorkspaceGuard(
+			primaryFolder.uri.fsPath,
+			primaryFolder.name,
+			effectiveSelected,
+			activeFile
+		);
+		this.currentSelectedProjectRoot = status.selectedProjectRoot;
+		return status;
+	}
+
+	private async postWorkspaceGuardStatus(selectedRoot?: string) {
+		const status = this.getWorkspaceGuardStatusSafe(selectedRoot);
+		this.panel.webview.postMessage({
+			type: "workspaceGuardStatus",
+			status,
+		} as OutgoingMessage);
+	}
+
+	private async selectWorkspaceProject(projectRoot: string) {
+		if (!fs.existsSync(projectRoot)) {
+			vscode.window.showErrorMessage(`所选工程目录不存在: ${projectRoot}`);
+			return;
+		}
+		this.currentSelectedProjectRoot = path.resolve(projectRoot);
+		await this.postWorkspaceGuardStatus(this.currentSelectedProjectRoot);
+	}
+
+	private async browseWorkspaceProjectFolder() {
+		const folders = vscode.workspace.workspaceFolders;
+		const defaultUri = folders && folders.length > 0 ? folders[0].uri : undefined;
+		const uris = await vscode.window.showOpenDialog({
+			canSelectFiles: false,
+			canSelectFolders: true,
+			canSelectMany: false,
+			defaultUri,
+			openLabel: "选择为目标工程目录",
+			title: "选择项目工程根目录（包含代码或待创建 .github 的目录）",
+		});
+
+		if (uris && uris.length > 0) {
+			const selectedPath = uris[0].fsPath;
+			await this.selectWorkspaceProject(selectedPath);
+		}
+	}
+
+	private getEffectiveProjectRoot(): { root: string; name: string } | undefined {
+		const status = this.getWorkspaceGuardStatusSafe();
+		if (!status.hasWorkspace || !status.selectedProjectRoot) {
+			return undefined;
+		}
+		return {
+			root: status.selectedProjectRoot,
+			name: status.selectedProjectName || path.basename(status.selectedProjectRoot),
+		};
+	}
+
+	private async initWorkspaceInstructions() {
+		const target = this.getEffectiveProjectRoot();
+		if (!target) {
+			vscode.window.showWarningMessage("当前未打开任何工作区或未选定目标工程目录。");
+			return;
+		}
+		const { root, name } = target;
+		const dotGithub = path.join(root, ".github");
+		const targetFile = path.join(dotGithub, "copilot-instructions.md");
+
+		try {
+			if (fs.existsSync(targetFile)) {
+				vscode.window.showInformationMessage(`目标工程 [${name}] 已存在项目指令总纲，已在编辑器中打开。`);
+			} else {
+				if (!fs.existsSync(dotGithub)) {
+					fs.mkdirSync(dotGithub, { recursive: true });
+				}
+				const template = buildWorkspaceInstructionsTemplate(name);
+				fs.writeFileSync(targetFile, template, "utf-8");
+				vscode.window.showInformationMessage(`已成功为 [${name}] 初始化项目指令总纲（.github/copilot-instructions.md）！`);
+			}
+
+			const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(targetFile));
+			await vscode.window.showTextDocument(doc);
+		} catch (err) {
+			vscode.window.showErrorMessage(`初始化项目指令总纲失败: ${err instanceof Error ? err.message : String(err)}`);
+		} finally {
+			await this.postWorkspaceGuardStatus();
+		}
+	}
+
+	private async injectStackInstructions(stack: SupportedStack) {
+		const target = this.getEffectiveProjectRoot();
+		if (!target) {
+			vscode.window.showWarningMessage("当前未打开任何工作区或未选定目标工程目录。");
+			return;
+		}
+		const { root, name } = target;
+		const instructionsDir = path.join(root, ".github", "instructions");
+		const { fileName, content } = buildStackInstructionsTemplate(stack);
+		const targetFile = path.join(instructionsDir, fileName);
+
+		try {
+			if (fs.existsSync(targetFile)) {
+				vscode.window.showInformationMessage(`[${name}] 的技术栈规约 ${fileName} 已存在，已在编辑器中打开。`);
+			} else {
+				if (!fs.existsSync(instructionsDir)) {
+					fs.mkdirSync(instructionsDir, { recursive: true });
+				}
+				fs.writeFileSync(targetFile, content, "utf-8");
+				vscode.window.showInformationMessage(`已成功为 [${name}] 注入 ${fileName} 技术栈工程规约！`);
+			}
+
+			const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(targetFile));
+			await vscode.window.showTextDocument(doc);
+		} catch (err) {
+			vscode.window.showErrorMessage(`注入技术栈规约失败: ${err instanceof Error ? err.message : String(err)}`);
+		} finally {
+			await this.postWorkspaceGuardStatus();
+		}
+	}
+
+	private async createWorkspaceSkill(rawSkillName?: string) {
+		const target = this.getEffectiveProjectRoot();
+		if (!target) {
+			vscode.window.showWarningMessage("当前未打开任何工作区或未选定目标工程目录。");
+			return;
+		}
+		const { root, name } = target;
+
+		let skillName = rawSkillName?.trim();
+		if (!skillName) {
+			skillName = await vscode.window.showInputBox({
+				title: `在 [${name}] 中新建项目场景化技能 (Skill)`,
+				prompt: "请输入技能英文标识符（例如 db-migration 或 api-benchmark）",
+				placeHolder: "my-workflow-skill",
+				validateInput: (value) => {
+					const trimmed = value.trim();
+					if (!trimmed) {
+						return "技能标识不能为空";
+					}
+					if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
+						return "仅允许包含英文字母、数字、下划线及连字符 (-)";
+					}
+					return null;
+				},
+			});
+		}
+
+		if (!skillName) {
+			return;
+		}
+
+		const sanitizedName = skillName.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+		const skillDir = path.join(root, ".github", "skills", sanitizedName);
+		const targetFile = path.join(skillDir, "SKILL.md");
+
+		try {
+			if (fs.existsSync(targetFile)) {
+				vscode.window.showInformationMessage(`[${name}] 技能 ${sanitizedName} 已存在，已在编辑器中打开。`);
+			} else {
+				if (!fs.existsSync(skillDir)) {
+					fs.mkdirSync(skillDir, { recursive: true });
+				}
+				const template = buildWorkspaceSkillTemplate(sanitizedName);
+				fs.writeFileSync(targetFile, template, "utf-8");
+				vscode.window.showInformationMessage(`已成功为 [${name}] 创建技能脚手架：.github/skills/${sanitizedName}/SKILL.md`);
+			}
+
+			const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(targetFile));
+			await vscode.window.showTextDocument(doc);
+		} catch (err) {
+			vscode.window.showErrorMessage(`创建技能失败: ${err instanceof Error ? err.message : String(err)}`);
+		} finally {
+			await this.postWorkspaceGuardStatus();
+		}
+	}
+
+	private async openWorkspaceInstructionsFile() {
+		const target = this.getEffectiveProjectRoot();
+		if (!target) {
+			vscode.window.showWarningMessage("当前未打开任何工作区。");
+			return;
+		}
+		const { root, name } = target;
+		const targetFile = path.join(root, ".github", "copilot-instructions.md");
+		if (fs.existsSync(targetFile)) {
+			const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(targetFile));
+			await vscode.window.showTextDocument(doc);
+		} else {
+			const answer = await vscode.window.showInformationMessage(
+				`目标工程 [${name}] 尚未创建项目指令总纲，是否立即初始化？`,
+				"立即初始化",
+				"取消"
+			);
+			if (answer === "立即初始化") {
+				await this.initWorkspaceInstructions();
+			}
+		}
+	}
+
+	private async revealWorkspaceDotGithub() {
+		const target = this.getEffectiveProjectRoot();
+		if (!target) {
+			vscode.window.showWarningMessage("当前未打开任何工作区。");
+			return;
+		}
+		const { root } = target;
+		const dotGithub = path.join(root, ".github");
+		if (!fs.existsSync(dotGithub)) {
+			fs.mkdirSync(dotGithub, { recursive: true });
+		}
+		const uri = vscode.Uri.file(dotGithub);
+		try {
+			await vscode.commands.executeCommand("revealInExplorer", uri);
+		} catch {
+			await vscode.env.openExternal(uri);
+		}
 	}
 
 	private async updateUserMemoryName(rawUserName?: string) {

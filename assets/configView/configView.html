@@ -117,6 +117,63 @@
 				</div>
 			</div>
 
+			<!-- 项目级工程防线卡片（工作区级指令总纲、技术栈规约与技能脚手架） -->
+			<div class="practice-card" id="workspaceGuardCard">
+				<div class="practice-card-header">
+					<div class="practice-title">
+						<label>🧱 项目级工程防线</label>
+					</div>
+					<div id="workspaceGuardStatusBadge" class="memory-status-badge">检测中...</div>
+				</div>
+				<div class="field-description" id="workspaceGuardDescText">
+					随 Git 仓库版本流转的项目指令总纲（.github/copilot-instructions.md）、精准按文件类型匹配的技术栈规约（applyTo）与场景化技能 SOP。
+				</div>
+				<!-- 目标工程目录选择与甄别行 -->
+				<div class="workspace-project-selector-row">
+					<span class="memory-compact-label">目标工程：</span>
+					<div class="input-with-button workspace-project-select-group">
+						<select id="workspaceProjectSelect" class="workspace-project-dropdown" title="在当前工作空间中选择要布防的目标项目工程">
+							<option value="">探测中...</option>
+						</select>
+						<button id="browseWorkspaceProjectBtn" type="button" class="secondary btn-small" title="浏览文件系统选择其他子目录作为目标工程">📁 浏览选择</button>
+					</div>
+				</div>
+				<div class="memory-path-row">
+					<button id="refreshWorkspaceGuard" class="secondary btn-small" title="重新检测当前工作区的 AI 资产状态">🔍 重新检测</button>
+					<div class="field-description memory-path-text" id="workspaceGuardPathDisplay">
+						工程根目录: 加载中...
+					</div>
+				</div>
+				<!-- 规约与技能资产清单标签 -->
+				<div class="workspace-guard-stats-row" id="workspaceGuardStatsRow" style="display: none;">
+					<span class="guard-stat-tag" id="statInstructionsTag" title="项目指令总纲状态">总纲: 未创建</span>
+					<span class="guard-stat-tag" id="statModulesTag" title="模块化规约数量">规约: 0 个</span>
+					<span class="guard-stat-tag" id="statSkillsTag" title="场景化技能数量">技能: 0 个</span>
+					<span class="guard-stat-tag" id="statPromptsTag" title="提示词模板数量">提示词: 0 个</span>
+				</div>
+				<!-- 智能推荐技术栈提示行 -->
+				<div class="workspace-stack-recommend-row" id="workspaceStackRecommendRow" style="display: none;">
+					<span class="stack-recommend-label">💡 嗅探到项目技术栈：</span>
+					<span id="workspaceDetectedStacksBadge" class="stack-detected-badge">无</span>
+				</div>
+				<div class="practice-card-actions">
+					<button id="initWorkspaceInstructionsBtn" class="primary">🚀 一键初始化项目总纲</button>
+					<button id="openWorkspaceInstructionsBtn" class="secondary" style="display: none;">在编辑器中打开总纲</button>
+					<div class="dropdown-button-group">
+						<button id="injectStackDropdownBtn" class="secondary dropdown-toggle" type="button">🧩 注入技术栈规约 ▾</button>
+						<div id="injectStackMenu" class="dropdown-menu" style="display: none;">
+							<button class="dropdown-item" data-stack="typescript">TypeScript / JS (applyTo)</button>
+							<button class="dropdown-item" data-stack="csharp">C# / .NET (applyTo)</button>
+							<button class="dropdown-item" data-stack="python">Python (applyTo)</button>
+							<button class="dropdown-item" data-stack="cpp">C / C++ (applyTo)</button>
+							<button class="dropdown-item" data-stack="java">Java (applyTo)</button>
+						</div>
+					</div>
+					<button id="createWorkspaceSkillBtn" class="secondary">⚡ 新建技能 (Skill)</button>
+					<button id="revealWorkspaceDotGithubBtn" class="secondary" title="在文件管理器中定位 .github 目录">📂 定位 .github 目录</button>
+				</div>
+			</div>
+
 			<!-- 终端运行环境 (PowerShell 7) 卡片（位于所有记忆类设置下方） -->
 			<div class="practice-card" id="powershellCard">
 				<div class="practice-card-header">

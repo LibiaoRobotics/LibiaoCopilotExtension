@@ -161,6 +161,28 @@ const installPsBtn = document.getElementById("installPsBtn");
 const setDefaultTerminalProfileBtn = document.getElementById("setDefaultTerminalProfileBtn");
 const openPsDocsBtn = document.getElementById("openPsDocsBtn");
 
+// Workspace Guard practice elements
+const workspaceGuardCard = document.getElementById("workspaceGuardCard");
+const workspaceGuardStatusBadge = document.getElementById("workspaceGuardStatusBadge");
+const workspaceGuardDescText = document.getElementById("workspaceGuardDescText");
+const workspaceProjectSelect = document.getElementById("workspaceProjectSelect");
+const browseWorkspaceProjectBtn = document.getElementById("browseWorkspaceProjectBtn");
+const refreshWorkspaceGuardBtn = document.getElementById("refreshWorkspaceGuard");
+const workspaceGuardPathDisplay = document.getElementById("workspaceGuardPathDisplay");
+const workspaceGuardStatsRow = document.getElementById("workspaceGuardStatsRow");
+const statInstructionsTag = document.getElementById("statInstructionsTag");
+const statModulesTag = document.getElementById("statModulesTag");
+const statSkillsTag = document.getElementById("statSkillsTag");
+const statPromptsTag = document.getElementById("statPromptsTag");
+const workspaceStackRecommendRow = document.getElementById("workspaceStackRecommendRow");
+const workspaceDetectedStacksBadge = document.getElementById("workspaceDetectedStacksBadge");
+const initWorkspaceInstructionsBtn = document.getElementById("initWorkspaceInstructionsBtn");
+const openWorkspaceInstructionsBtn = document.getElementById("openWorkspaceInstructionsBtn");
+const injectStackDropdownBtn = document.getElementById("injectStackDropdownBtn");
+const injectStackMenu = document.getElementById("injectStackMenu");
+const createWorkspaceSkillBtn = document.getElementById("createWorkspaceSkillBtn");
+const revealWorkspaceDotGithubBtn = document.getElementById("revealWorkspaceDotGithubBtn");
+
 // 100 个趣味昵称池
 const NICKNAMES_POOL = [
 	"碳基领导",
@@ -424,6 +446,183 @@ function updatePowerShellUi(powershell) {
 	}
 }
 
+function updateWorkspaceGuardUi(guard) {
+	if (!guard) {
+		return;
+	}
+
+	if (!guard.hasWorkspace) {
+		if (workspaceGuardStatusBadge) {
+			workspaceGuardStatusBadge.className = "memory-status-badge status-missing";
+			workspaceGuardStatusBadge.textContent = "⚠️ 未打开工作区";
+		}
+		if (workspaceGuardPathDisplay) {
+			workspaceGuardPathDisplay.textContent = "工程根目录: 请先在 VS Code 中打开一个项目文件夹";
+		}
+		if (workspaceProjectSelect) {
+			workspaceProjectSelect.innerHTML = `<option value="">未打开工作区</option>`;
+			workspaceProjectSelect.disabled = true;
+		}
+		if (browseWorkspaceProjectBtn) {
+			browseWorkspaceProjectBtn.disabled = true;
+		}
+		if (workspaceGuardStatsRow) {
+			workspaceGuardStatsRow.style.display = "none";
+		}
+		if (workspaceStackRecommendRow) {
+			workspaceStackRecommendRow.style.display = "none";
+		}
+		if (initWorkspaceInstructionsBtn) {
+			initWorkspaceInstructionsBtn.disabled = true;
+			initWorkspaceInstructionsBtn.textContent = "🚀 一键初始化项目总纲";
+		}
+		if (openWorkspaceInstructionsBtn) {
+			openWorkspaceInstructionsBtn.style.display = "none";
+		}
+		if (injectStackDropdownBtn) {
+			injectStackDropdownBtn.disabled = true;
+		}
+		if (createWorkspaceSkillBtn) {
+			createWorkspaceSkillBtn.disabled = true;
+		}
+		if (revealWorkspaceDotGithubBtn) {
+			revealWorkspaceDotGithubBtn.disabled = true;
+		}
+		return;
+	}
+
+	// 启用操作按钮与选择器
+	if (workspaceProjectSelect) workspaceProjectSelect.disabled = false;
+	if (browseWorkspaceProjectBtn) browseWorkspaceProjectBtn.disabled = false;
+	if (initWorkspaceInstructionsBtn) initWorkspaceInstructionsBtn.disabled = false;
+	if (injectStackDropdownBtn) injectStackDropdownBtn.disabled = false;
+	if (createWorkspaceSkillBtn) createWorkspaceSkillBtn.disabled = false;
+	if (revealWorkspaceDotGithubBtn) revealWorkspaceDotGithubBtn.disabled = false;
+
+	// 渲染目标工程下拉列表
+	if (workspaceProjectSelect) {
+		const candidates = Array.isArray(guard.projectCandidates) ? guard.projectCandidates : [];
+		const currentSelected = guard.selectedProjectRoot || "";
+		workspaceProjectSelect.innerHTML = "";
+
+		for (const cand of candidates) {
+			const opt = document.createElement("option");
+			opt.value = cand.fsPath;
+			let suffix = "";
+			if (cand.isWorkspaceRoot) {
+				suffix = " (工作区根目录)";
+			}
+			if (cand.hasInstructions) {
+				suffix += " [已布防]";
+			} else if (cand.hasDotGithub) {
+				suffix += " [.github]";
+			}
+			opt.textContent = `${cand.name}${suffix}`;
+			if (cand.fsPath === currentSelected) {
+				opt.selected = true;
+			}
+			workspaceProjectSelect.appendChild(opt);
+		}
+
+		// 若当前选中的不在列表中，作为自定义条目追加
+		if (currentSelected && !candidates.some((c) => c.fsPath === currentSelected)) {
+			const customOpt = document.createElement("option");
+			customOpt.value = currentSelected;
+			customOpt.textContent = `${guard.selectedProjectName || "自定义工程"} (自定义)`;
+			customOpt.selected = true;
+			workspaceProjectSelect.appendChild(customOpt);
+		}
+	}
+
+	if (workspaceGuardPathDisplay) {
+		const activeName = guard.selectedProjectName || guard.workspaceName || "未命名";
+		const activePath = guard.selectedProjectRoot || guard.workspaceRoot || "";
+		workspaceGuardPathDisplay.textContent = `目标工程: ${activeName} (${activePath})`;
+	}
+
+	// 状态徽标与描述
+	if (workspaceGuardStatusBadge) {
+		if (guard.defenseLevel === "deep") {
+			workspaceGuardStatusBadge.className = "memory-status-badge status-ready";
+			workspaceGuardStatusBadge.textContent = "🏰 深度布防 (工程总纲 + 规约/技能)";
+		} else if (guard.defenseLevel === "basic") {
+			workspaceGuardStatusBadge.className = "memory-status-badge status-ready";
+			workspaceGuardStatusBadge.textContent = "🛡️ 基础布防 (总纲已就绪)";
+		} else {
+			workspaceGuardStatusBadge.className = "memory-status-badge status-missing";
+			workspaceGuardStatusBadge.textContent = "⚠️ 未布防（未检测到项目总纲）";
+		}
+	}
+
+	// 总纲按钮状态
+	if (initWorkspaceInstructionsBtn) {
+		if (guard.hasInstructions) {
+			initWorkspaceInstructionsBtn.className = "secondary";
+			initWorkspaceInstructionsBtn.textContent = "🔄 重新载入总纲";
+			initWorkspaceInstructionsBtn.title = "重新初始化或复原项目指令总纲模板";
+		} else {
+			initWorkspaceInstructionsBtn.className = "primary";
+			initWorkspaceInstructionsBtn.textContent = "🚀 一键初始化项目总纲";
+			initWorkspaceInstructionsBtn.title = "在选定的目标工程中生成 .github/copilot-instructions.md";
+		}
+	}
+
+	if (openWorkspaceInstructionsBtn) {
+		openWorkspaceInstructionsBtn.style.display = guard.hasInstructions ? "inline-block" : "none";
+	}
+
+	// 资产统计徽标行
+	if (workspaceGuardStatsRow) {
+		workspaceGuardStatsRow.style.display = "flex";
+		if (statInstructionsTag) {
+			if (guard.hasInstructions) {
+				statInstructionsTag.className = "guard-stat-tag tag-active";
+				const lines = guard.instructionsStats ? `${guard.instructionsStats.lineCount}行` : "已就绪";
+				statInstructionsTag.textContent = `总纲: ✅ ${lines}`;
+			} else {
+				statInstructionsTag.className = "guard-stat-tag";
+				statInstructionsTag.textContent = "总纲: ⚠️ 未创建";
+			}
+		}
+		if (statModulesTag) {
+			const count = Array.isArray(guard.instructionFiles) ? guard.instructionFiles.length : 0;
+			statModulesTag.className = count > 0 ? "guard-stat-tag tag-active" : "guard-stat-tag";
+			statModulesTag.textContent = `规约: ${count} 个`;
+		}
+		if (statSkillsTag) {
+			const count = Array.isArray(guard.skills) ? guard.skills.length : 0;
+			statSkillsTag.className = count > 0 ? "guard-stat-tag tag-active" : "guard-stat-tag";
+			statSkillsTag.textContent = `技能: ${count} 个`;
+		}
+		if (statPromptsTag) {
+			const count = Array.isArray(guard.prompts) ? guard.prompts.length : 0;
+			statPromptsTag.className = count > 0 ? "guard-stat-tag tag-active" : "guard-stat-tag";
+			statPromptsTag.textContent = `提示词: ${count} 个`;
+		}
+	}
+
+	// 技术栈嗅探行
+	if (workspaceStackRecommendRow) {
+		const stacks = Array.isArray(guard.detectedStacks) ? guard.detectedStacks : [];
+		if (stacks.length > 0) {
+			workspaceStackRecommendRow.style.display = "flex";
+			const STACK_MAP = {
+				typescript: "TypeScript / JS",
+				csharp: "C# / .NET",
+				python: "Python",
+				cpp: "C / C++",
+				java: "Java",
+			};
+			const names = stacks.map((s) => STACK_MAP[s] || s).join(" · ");
+			if (workspaceDetectedStacksBadge) {
+				workspaceDetectedStacksBadge.textContent = names;
+			}
+		} else {
+			workspaceStackRecommendRow.style.display = "none";
+		}
+	}
+}
+
 // Error message element
 const modelErrorElement = document.getElementById("modelError");
 
@@ -619,6 +818,96 @@ if (setDefaultTerminalProfileBtn) {
 if (openPsDocsBtn) {
 	openPsDocsBtn.addEventListener("click", () => {
 		vscode.postMessage({ type: "openPowerShellDocs" });
+	});
+}
+
+// 项目级工程防线事件监听
+if (workspaceProjectSelect) {
+	workspaceProjectSelect.addEventListener("change", () => {
+		const val = workspaceProjectSelect.value;
+		if (val) {
+			if (workspaceGuardStatusBadge) {
+				workspaceGuardStatusBadge.className = "memory-status-badge";
+				workspaceGuardStatusBadge.textContent = "检测中...";
+			}
+			vscode.postMessage({
+				type: "selectWorkspaceProject",
+				projectRoot: val,
+			});
+		}
+	});
+}
+
+if (browseWorkspaceProjectBtn) {
+	browseWorkspaceProjectBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "browseWorkspaceProjectFolder" });
+	});
+}
+
+if (refreshWorkspaceGuardBtn) {
+	refreshWorkspaceGuardBtn.addEventListener("click", () => {
+		if (workspaceGuardStatusBadge) {
+			workspaceGuardStatusBadge.className = "memory-status-badge";
+			workspaceGuardStatusBadge.textContent = "检测中...";
+		}
+		const currentSelected = workspaceProjectSelect ? workspaceProjectSelect.value : undefined;
+		vscode.postMessage({
+			type: "getWorkspaceGuardStatus",
+			selectedProjectRoot: currentSelected,
+		});
+	});
+}
+
+if (initWorkspaceInstructionsBtn) {
+	initWorkspaceInstructionsBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "initWorkspaceInstructions" });
+	});
+}
+
+if (openWorkspaceInstructionsBtn) {
+	openWorkspaceInstructionsBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "openWorkspaceInstructionsFile" });
+	});
+}
+
+if (injectStackDropdownBtn && injectStackMenu) {
+	injectStackDropdownBtn.addEventListener("click", (e) => {
+		e.stopPropagation();
+		const isHidden = injectStackMenu.style.display === "none" || !injectStackMenu.style.display;
+		injectStackMenu.style.display = isHidden ? "block" : "none";
+	});
+
+	const items = injectStackMenu.querySelectorAll(".dropdown-item");
+	items.forEach((item) => {
+		item.addEventListener("click", (e) => {
+			e.stopPropagation();
+			const stack = item.getAttribute("data-stack");
+			if (stack) {
+				vscode.postMessage({
+					type: "injectStackInstructions",
+					stack: stack,
+				});
+			}
+			injectStackMenu.style.display = "none";
+		});
+	});
+
+	document.addEventListener("click", (e) => {
+		if (!injectStackDropdownBtn.contains(e.target) && !injectStackMenu.contains(e.target)) {
+			injectStackMenu.style.display = "none";
+		}
+	});
+}
+
+if (createWorkspaceSkillBtn) {
+	createWorkspaceSkillBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "createWorkspaceSkill" });
+	});
+}
+
+if (revealWorkspaceDotGithubBtn) {
+	revealWorkspaceDotGithubBtn.addEventListener("click", () => {
+		vscode.postMessage({ type: "revealWorkspaceDotGithub" });
 	});
 }
 
@@ -859,6 +1148,9 @@ window.addEventListener("message", (event) => {
 			// Render powershell status
 			updatePowerShellUi(message.payload.powershell);
 
+			// Render workspace guard status
+			updateWorkspaceGuardUi(message.payload.workspaceGuard);
+
 			// Render model management
 			renderModels();
 			break;
@@ -867,6 +1159,9 @@ window.addEventListener("message", (event) => {
 			break;
 		case "powershellStatus":
 			updatePowerShellUi(message.powershell);
+			break;
+		case "workspaceGuardStatus":
+			updateWorkspaceGuardUi(message.status);
 			break;
 		case "modelsFetched":
 			// Handle the response from fetchModels

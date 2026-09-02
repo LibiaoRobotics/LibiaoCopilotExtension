@@ -760,3 +760,120 @@ button.btn-small,
 	}
 }
 
+/* 项目级工程防线专属样式 */
+.workspace-guard-stats-row {
+	display: flex;
+	gap: 6px;
+	margin-top: 10px;
+	flex-wrap: wrap;
+}
+
+.guard-stat-tag {
+	font-size: 11px;
+	padding: 3px 8px;
+	border-radius: 4px;
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid var(--vscode-editorWidget-border);
+	color: var(--vscode-foreground);
+	font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.guard-stat-tag.tag-active {
+	border-color: var(--vscode-testing-iconPassed);
+	color: var(--vscode-testing-iconPassed);
+	background: rgba(78, 201, 176, 0.08);
+}
+
+.workspace-project-selector-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-top: 10px;
+	flex-wrap: wrap;
+}
+
+.workspace-project-select-group {
+	flex: 1;
+	min-width: 260px;
+	display: flex;
+	gap: 8px;
+}
+
+.workspace-project-dropdown {
+	flex: 1;
+	background: var(--vscode-dropdown-background);
+	color: var(--vscode-dropdown-foreground);
+	border: 1px solid var(--vscode-dropdown-border);
+	border-radius: 4px;
+	padding: 5px 8px;
+	font-size: 12px;
+	outline: none;
+}
+
+.workspace-project-dropdown:focus {
+	border-color: var(--vscode-focusBorder);
+}
+
+.workspace-stack-recommend-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 8px;
+	font-size: 12px;
+	flex-wrap: wrap;
+}
+
+.stack-recommend-label {
+	color: var(--vscode-descriptionForeground);
+}
+
+.stack-detected-badge {
+	font-weight: 600;
+	color: var(--vscode-textLink-foreground, #3794ff);
+	background: rgba(55, 148, 255, 0.1);
+	padding: 2px 8px;
+	border-radius: 4px;
+	border: 1px solid rgba(55, 148, 255, 0.3);
+}
+
+/* 下拉菜单组件 */
+.dropdown-button-group {
+	position: relative;
+	display: inline-block;
+}
+
+.dropdown-menu {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	z-index: 1000;
+	min-width: 230px;
+	background: var(--vscode-dropdown-background, #252526);
+	border: 1px solid var(--vscode-dropdown-border, #3c3c3c);
+	border-radius: 6px;
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+	padding: 4px 0;
+	margin-top: 4px;
+}
+
+.dropdown-item {
+	display: block;
+	width: 100%;
+	text-align: left;
+	background: transparent;
+	border: none;
+	border-radius: 0;
+	padding: 8px 12px;
+	font-size: 12px;
+	color: var(--vscode-dropdown-foreground, #cccccc);
+	cursor: pointer;
+	margin: 0;
+	transition: background 0.1s ease;
+}
+
+.dropdown-item:hover {
+	background: var(--vscode-list-hoverBackground, #2a2d2e);
+	color: var(--vscode-foreground, #ffffff);
+}
+
+
