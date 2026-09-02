@@ -309,4 +309,192 @@ suite("GeminiApi streaming response parser", () => {
 
 		assert.strictEqual(collectText(parts), "正常内容");
 	});
+
+	test("防吞字回归：连续增量包含历史前缀子串时绝不丢失分片", async () => {
+		// 事故复现：第 1 块 "const value = "，第 2 块 "c"，在旧代码中
+		// "const value = ".startsWith("c") 为 true，会误判将 delta 置空吞字
+		const { parts } = await run([
+			{
+				candidates: [
+					{
+						content: {
+							parts: [{ text: "const value = " }],
+							role: "model",
+						},
+					},
+				],
+			},
+			{
+				candidates: [
+					{
+						content: {
+							parts: [{ text: "c" }],
+							role: "model",
+						},
+					},
+				],
+			},
+			{
+				candidates: [
+					{
+						content: {
+							parts: [{ text: "onst" }],
+							role: "model",
+						},
+					},
+				],
+			},
+		]);
+
+		assert.strictEqual(collectText(parts), "const value = const", "子串增量必须完整保留不被吞");
+	});
+
+	test("公司网关快照自适应：累积快照模式下正确提取增量", async () => {
+		// 某些中间网关在每次 SSE chunk 吐出当前全量快照
+		const { parts } = await run([
+			{
+				candidates: [
+					{
+						content: {
+							parts: [{ text: "Hello" }],
+							role: "model",
+						},
+					},
+				],
+			},
+			{
+				candidates: [
+					{
+						content: {
+							parts: [{ text: "Hello world" }],
+							role: "model",
+						},
+					},
+				],
+			},
+			{
+				candidates: [
+					{
+						content: {
+							parts: [{ text: "Hello world!" }],
+							role: "model",
+						},
+					},
+				],
+			},
+		]);
+
+		assert.strictEqual(collectText(parts), "Hello world!", "快照流切片拼接后应与全文一致");
+	});
+
+	test("内容安全策略拦截（SAFETY）时给出明确提示不静默断流", async () => {
+		const { parts } = await run([
+			{
+				candidates: [
+					{
+						content: {
+							parts: [{ text: "部分回答" }],
+							role: "model",
+						},
+						finishReason: "SAFETY",
+					},
+				],
+			},
+		]);
+
+		const text = collectText(parts);
+		assert.ok(text.includes("部分回答"));
+		assert.ok(text.includes("内容安全策略拦截 (SAFETY)"), "应输出友好拦截提示");
+	});
+
+	test("网络流健壮性：TCP 半包跨 chunk 拆分无损拼装", async () => {
+		// 模拟一个完整 SSE chunk 被网络层从中间断开成两截依次到达
+		const part1 = 'data: {"candidates":[{"content":{"parts":[{"text":"跨包拼';
+		const part2 = '装成功"}]}}]}\n\ndata: [DONE]\n\n';
+
+		const stream = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(new TextEncoder().encode(part1));
+				// 模拟第二个数据包延迟到达
+				setTimeout(() => {
+					controller.enqueue(new TextEncoder().encode(part2));
+					controller.close();
+				}, 10);
+			},
+		});
+
+		const api = new GeminiApi("gemini-3.7-flash");
+		const { progress, parts } = recordingProgress();
+		const token = new vscode.CancellationTokenSource().token;
+		await api.processStreamingResponse(stream, progress, token);
+
+		assert.strictEqual(collectText(parts), "跨包拼装成功", "跨 chunk 的半包数据应被完整拼接恢复");
+	});
+
+	test("CancellationToken 取消中断：取消后流即时退出且不抛异常", async () => {
+		const cts = new vscode.CancellationTokenSource();
+		let cancelledStreamClosed = false;
+
+		const stream = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(
+					new TextEncoder().encode(
+						'data: {"candidates":[{"content":{"parts":[{"text":"第一句"}]}}]}\n\n'
+					)
+				);
+				// 不关闭流，保持挂起
+			},
+			cancel() {
+				cancelledStreamClosed = true;
+			},
+		});
+
+		const api = new GeminiApi("gemini-3.7-flash");
+		const { progress, parts } = recordingProgress();
+
+		// 先启动流读取，随后在后台触发取消
+		const promise = api.processStreamingResponse(stream, progress, cts.token);
+		cts.cancel();
+		await promise;
+
+		assert.strictEqual(collectText(parts), "第一句");
+		assert.strictEqual(cancelledStreamClosed, true, "底层的 reader.cancel 必须被触发");
+	});
+
+	test("ThoughtSignature 捕获：流式中捕获工具调用的思考签名并写入缓存", async () => {
+		const metaMap = new Map<string, import("../gemini/geminiApi").GeminiToolCallMeta>();
+		const api = new GeminiApi("gemini-3-pro-preview", metaMap);
+
+		const { parts } = await run(
+			[
+				{
+					candidates: [
+						{
+							content: {
+								parts: [
+									{
+										functionCall: {
+											name: "execute_command",
+											args: { cmd: "ls" },
+										},
+										thoughtSignature: "sig_test_abc_123",
+									},
+								],
+								role: "model",
+							},
+						},
+					],
+				},
+			],
+			api
+		);
+
+		const calls = collectToolCalls(parts);
+		assert.strictEqual(calls.length, 1);
+		assert.strictEqual(metaMap.size, 1);
+		const cached = metaMap.get(calls[0].callId);
+		assert.ok(cached, "元数据缓存中必须存在该 toolCall ID");
+		assert.strictEqual(cached?.name, "execute_command");
+		assert.strictEqual(cached?.thoughtSignature, "sig_test_abc_123", "思考签名必须正确被缓存");
+	});
 });

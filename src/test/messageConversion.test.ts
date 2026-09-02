@@ -122,6 +122,31 @@ suite("Multi-protocol message conversion & request builder", () => {
 				response: { output: "18:30" },
 			});
 		});
+
+		test("ThoughtSignature 跨轮次复用：缓存中的 thoughtSignature 自动附着在 model 的 functionCall 上", () => {
+			const metaMap = new Map<string, import("../gemini/geminiApi").GeminiToolCallMeta>();
+			metaMap.set("call_test_123", {
+				name: "search_code",
+				thoughtSignature: "sig_cached_token_xyz",
+				thought: "分析中...",
+				createdAt: Date.now(),
+			});
+
+			const api = new GeminiApi("gemini-3-pro-preview", metaMap);
+			const messages = [
+				user("请搜索代码"),
+				assistantWithToolCalls([{ callId: "call_test_123", name: "search_code", input: { query: "export" } }]),
+				userWithToolResult("call_test_123", "found 1 result"),
+			];
+
+			const converted = api.convertMessages(messages, { includeReasoningInRequest: false });
+			assert.strictEqual(converted.length, 3);
+			const modelTurn = converted[1];
+			assert.strictEqual(modelTurn.role, "model");
+			const part = modelTurn.parts[0] as Record<string, unknown>;
+			assert.strictEqual(part.thoughtSignature, "sig_cached_token_xyz", "跨轮次必须携带 thoughtSignature");
+			assert.strictEqual(part.thought, "分析中...", "跨轮次必须携带 thought 文本");
+		});
 	});
 
 	suite("AnthropicApi message conversion & cache control", () => {

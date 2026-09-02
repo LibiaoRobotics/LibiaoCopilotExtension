@@ -6,7 +6,7 @@ import {
 	getRecommendedCommitModels,
 	resolveValidCommitModel,
 } from "../utils";
-import { isVersionOlder, runVersionMigrations } from "../versionManager";
+import { VersionManager, isVersionOlder, runVersionMigrations } from "../versionManager";
 
 suite("commitModel recommendations & auto-healing", () => {
 	const qwenFlashModel: HFModelItem = {
@@ -125,6 +125,6 @@ suite("commitModel recommendations & auto-healing", () => {
 
 		await runVersionMigrations(mockContext);
 
-		assert.strictEqual(store.get("libiaoCopilot.lastVersion"), "1.2.5");
+		assert.strictEqual(store.get("libiaoCopilot.lastVersion"), VersionManager.getVersion());
 	});
 });

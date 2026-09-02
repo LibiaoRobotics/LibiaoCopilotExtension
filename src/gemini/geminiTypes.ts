@@ -52,6 +52,12 @@ export interface GeminiToolConfig {
 	};
 }
 
+export interface GeminiThinkingConfig {
+	includeThoughts?: boolean;
+	thinkingLevel?: string;
+	thinkingBudget?: number;
+}
+
 export interface GeminiGenerationConfig {
 	temperature?: number;
 	topP?: number;
@@ -60,6 +66,7 @@ export interface GeminiGenerationConfig {
 	stopSequences?: string[];
 	presencePenalty?: number;
 	frequencyPenalty?: number;
+	thinkingConfig?: GeminiThinkingConfig;
 }
 
 export interface GeminiGenerateContentRequest {

@@ -171,4 +171,32 @@ import { stripUnsupportedGeminiSchemaKeys } from "../gemini/geminiApi";
 		assert.strictEqual(schema.properties.code.type, "string");
 		assert.strictEqual(schema.properties.code.description, "代码内容");
 	});
+
+	test("清洗孤儿 required 属性：不在 properties 中的属性名自动剥离", () => {
+		const schema = {
+			type: "object",
+			properties: {
+				validField: { type: "string" },
+			},
+			required: ["validField", "ghostField1", "ghostField2"],
+		};
+
+		const removed = stripUnsupportedGeminiSchemaKeys(schema);
+		assert.strictEqual(removed, 2, "应剥离 2 个不存在于 properties 的孤儿 required 项");
+		assert.deepStrictEqual(schema.required, ["validField"], "仅保留真实存在的属性");
+	});
+
+	test("清洗孤儿 required 属性：全为孤儿时删除整个 required 字段", () => {
+		const schema = {
+			type: "object",
+			properties: {
+				validField: { type: "string" },
+			},
+			required: ["orphanField"],
+		};
+
+		const removed = stripUnsupportedGeminiSchemaKeys(schema);
+		assert.strictEqual(removed, 1);
+		assert.strictEqual((schema as Record<string, unknown>).required, undefined, "全部为孤儿时 required 字段应被删除");
+	});
 });

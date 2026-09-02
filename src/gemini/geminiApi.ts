@@ -110,6 +110,23 @@ export function stripUnsupportedGeminiSchemaKeys(value: unknown): number {
 		removed += stripUnsupportedGeminiSchemaKeys(obj[key]);
 	}
 
+	// 孤儿 required 属性清洗：Google Gemini protojson 严格要求 required 中的字段必须在 properties 中存在
+	// 避免外部 MCP 或嵌套结构中存在悬空 required 导致网关报 `required[N]: property is not defined` (HTTP 400)
+	if (obj.properties && typeof obj.properties === "object" && Array.isArray(obj.required)) {
+		const propKeys = new Set(Object.keys(obj.properties as Record<string, unknown>));
+		const cleanRequired = (obj.required as unknown[]).filter(
+			(k): k is string => typeof k === "string" && propKeys.has(k)
+		);
+		if (cleanRequired.length !== obj.required.length) {
+			removed += obj.required.length - cleanRequired.length;
+			if (cleanRequired.length > 0) {
+				obj.required = cleanRequired;
+			} else {
+				delete obj.required;
+			}
+		}
+	}
+
 	return removed;
 }
 
@@ -447,6 +464,19 @@ function jsonSchemaToGeminiSchema(
 		out.type = "OBJECT";
 	}
 
+	// 孤儿 required 属性兜底清洗：确保 required 中每个字段在 properties 中均有定义
+	if (out.properties && typeof out.properties === "object" && Array.isArray(out.required)) {
+		const propKeys = new Set(Object.keys(out.properties as Record<string, unknown>));
+		const cleanRequired = (out.required as unknown[]).filter(
+			(k): k is string => typeof k === "string" && propKeys.has(k)
+		);
+		if (cleanRequired.length > 0) {
+			out.required = cleanRequired;
+		} else {
+			delete out.required;
+		}
+	}
+
 	return out;
 }
 
@@ -507,6 +537,46 @@ function openaiToolChoiceToGeminiToolConfig(toolChoice: unknown): GeminiToolConf
 	}
 
 	return null;
+}
+
+export interface StreamDeltaState {
+	soFar: string;
+	isCumulative?: boolean;
+}
+
+/**
+ * 自适应增量计算器：
+ * 适配公司异构网关（部分中间代理发送 Cumulative Snapshot 全文快照，标准网关发送 Delta 增量分片）。
+ * 彻底消除在 textSoFar.startsWith(textJoined) 时无条件置空 delta 导致合法子串被误吞的 Bug。
+ */
+export function computeStreamDelta(currentChunk: string, state: StreamDeltaState): string {
+	if (!currentChunk) {
+		return "";
+	}
+
+	// 1. 明确处于累积快照模式
+	if (state.isCumulative) {
+		if (currentChunk.startsWith(state.soFar)) {
+			const delta = currentChunk.slice(state.soFar.length);
+			state.soFar = currentChunk;
+			return delta;
+		}
+		// 若偶发出现回退或未完全匹配前缀，兜底作为增量追加
+		state.soFar += currentChunk;
+		return currentChunk;
+	}
+
+	// 2. 动态探测累积模式：历史非空、当前 chunk 严格以历史全量为前缀、且长度大于历史
+	if (state.soFar.length > 0 && currentChunk.length > state.soFar.length && currentChunk.startsWith(state.soFar)) {
+		state.isCumulative = true;
+		const delta = currentChunk.slice(state.soFar.length);
+		state.soFar = currentChunk;
+		return delta;
+	}
+
+	// 3. 标准增量模式（绝大多数网关场景）：当前 chunk 本身即为增量
+	state.soFar += currentChunk;
+	return currentChunk;
 }
 
 export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateContentRequest> {
@@ -825,11 +895,16 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 		const decoder = new TextDecoder();
 		let buffer = "";
 
-		let textSoFar = "";
+		const textState: StreamDeltaState = { soFar: "" };
+		const thoughtState: StreamDeltaState = { soFar: "" };
+		const thoughtSummaryState: StreamDeltaState = { soFar: "" };
 		const toolCallKeyToId = new Map<string, string>();
-		let pendingThoughtSoFar = "";
-		let pendingThoughtSummarySoFar = "";
 		let pendingThoughtSignature = "";
+
+		// 监听 VS Code 取消信号，主动中断网络流读取
+		const cancellationSub = token.onCancellationRequested(() => {
+			reader.cancel().catch(() => {});
+		});
 
 		try {
 			while (true) {
@@ -914,32 +989,13 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 										? maybeThought.thought_signature
 										: "";
 							if (thoughtSummaryText) {
-								let delta = "";
-								if (thoughtSummaryText.startsWith(pendingThoughtSummarySoFar)) {
-									delta = thoughtSummaryText.slice(pendingThoughtSummarySoFar.length);
-									pendingThoughtSummarySoFar = thoughtSummaryText;
-								} else if (pendingThoughtSummarySoFar.startsWith(thoughtSummaryText)) {
-									delta = "";
-								} else {
-									delta = thoughtSummaryText;
-									pendingThoughtSummarySoFar += thoughtSummaryText;
-								}
+								const delta = computeStreamDelta(thoughtSummaryText, thoughtSummaryState);
 								if (delta) {
 									this.bufferThinkingContent(delta, progress);
 								}
 							}
 							if (thought) {
-								let delta = "";
-								if (thought.startsWith(pendingThoughtSoFar)) {
-									delta = thought.slice(pendingThoughtSoFar.length);
-									pendingThoughtSoFar = thought;
-								} else if (pendingThoughtSoFar.startsWith(thought)) {
-									delta = "";
-								} else {
-									delta = thought;
-									pendingThoughtSoFar += thought;
-								}
-
+								const delta = computeStreamDelta(thought, thoughtState);
 								if (delta) {
 									this.bufferThinkingContent(delta, progress);
 								}
@@ -972,20 +1028,10 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 						const thoughtRaw =
 							(pObj && typeof pObj.thought === "string" ? pObj.thought : "") ||
 							(fcObj && typeof fcObj.thought === "string" ? fcObj.thought : "") ||
-							pendingThoughtSoFar;
+							thoughtState.soFar;
 
 						if (thoughtRaw) {
-							let delta = "";
-							if (thoughtRaw.startsWith(pendingThoughtSoFar)) {
-								delta = thoughtRaw.slice(pendingThoughtSoFar.length);
-								pendingThoughtSoFar = thoughtRaw;
-							} else if (pendingThoughtSoFar.startsWith(thoughtRaw)) {
-								delta = "";
-							} else {
-								delta = thoughtRaw;
-								pendingThoughtSoFar += thoughtRaw;
-							}
-
+							const delta = computeStreamDelta(thoughtRaw, thoughtState);
 							if (delta) {
 								this.bufferThinkingContent(delta, progress);
 							}
@@ -1022,8 +1068,8 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 
 						if (isNew) {
 							this.reportEndThinking(progress);
-							pendingThoughtSoFar = "";
-							pendingThoughtSummarySoFar = "";
+							thoughtState.soFar = "";
+							thoughtSummaryState.soFar = "";
 							pendingThoughtSignature = "";
 							if (!this._emittedBeginToolCallsHint && this._hasEmittedAssistantText) {
 								progress.report(new vscode.LanguageModelTextPart(" "));
@@ -1049,34 +1095,45 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 						.join("");
 
 					if (textJoined) {
-						let delta = "";
-						if (textJoined.startsWith(textSoFar)) {
-							delta = textJoined.slice(textSoFar.length);
-							textSoFar = textJoined;
-						} else if (textSoFar.startsWith(textJoined)) {
-							delta = "";
-						} else {
-							delta = textJoined;
-							textSoFar += textJoined;
-						}
-
+						const delta = computeStreamDelta(textJoined, textState);
 						if (delta) {
 							this.reportEndThinking(progress);
-							pendingThoughtSoFar = "";
-							pendingThoughtSummarySoFar = "";
+							thoughtState.soFar = "";
+							thoughtSummaryState.soFar = "";
 							pendingThoughtSignature = "";
 							progress.report(new vscode.LanguageModelTextPart(delta));
 							this._hasEmittedAssistantText = true;
 						}
 					}
+
+					// 捕获内容安全拦截与异常阻断，避免用户侧无声截断
+					const finishReason = String(cand?.finishReason || cand?.finish_reason || "").toUpperCase();
+					if (finishReason && ["SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT"].includes(finishReason)) {
+						logger.warn("gemini.stream.blocked", { modelId, finishReason });
+						const notice = `\n\n[提示：Gemini 模型回复被服务端内容安全策略拦截 (${finishReason})]`;
+						this.reportEndThinking(progress);
+						progress.report(new vscode.LanguageModelTextPart(notice));
+						this._hasEmittedAssistantText = true;
+						break;
+					}
 				}
 			}
 			logger.debug("gemini.stream.done", { modelId });
 		} catch (e) {
+			if (token.isCancellationRequested) {
+				logger.debug("gemini.stream.cancelled", { modelId });
+				return;
+			}
 			console.error("[Gemini Provider] Streaming response error:", e);
 			logger.error("gemini.stream.error", { modelId, error: e instanceof Error ? e.message : String(e) });
 			throw e;
 		} finally {
+			cancellationSub.dispose();
+			try {
+				await reader.cancel();
+			} catch {
+				// Ignore reader cancel errors on cleanup
+			}
 			reader.releaseLock();
 			// 冲刷 XML think 挂起缓冲（先于收尾：激活时挂起归入思考缓冲，随收尾同步冲刷）
 			this.flushXmlThinkPending(progress);
