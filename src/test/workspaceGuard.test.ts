@@ -13,6 +13,7 @@ import {
 	buildWorkspaceSkillTemplate,
 	SUPPORTED_STACKS,
 } from "../workspaceGuard";
+import { resolveFileDecoration } from "../workspaceGuardDecoration";
 
 suite("Workspace Guard & Engineering Defense", () => {
 	let testTmpDir: string;
@@ -223,5 +224,76 @@ suite("Workspace Guard & Engineering Defense", () => {
 		assert.ok(skill.includes("2. 🛠️ 标准操作流程 (SOP)"));
 		assert.ok(skill.includes("3. ✅ 强制验证与退出码核对闭环（铁律）"));
 		assert.ok(skill.includes("退出码（Exit Code 必须为 0）"));
+	});
+
+	test("resolveFileDecoration: 资源管理器中对目标工程、只读库、.github 及关键资产的修饰规则决议", () => {
+		const wsRoot = path.join(testTmpDir, "workspace");
+		const targetProject = path.join(wsRoot, "libiao-copilot");
+		const readOnlyRepo = path.join(wsRoot, "vscode-src");
+		const ignored = new Set(["vscode-src"]);
+
+		// 1. 目标工程自身 -> 🏰 徽章与绿色
+		const targetDec = resolveFileDecoration(targetProject, {
+			workspaceRoot: wsRoot,
+			selectedProjectRoot: targetProject,
+			ignoredRepositories: ignored,
+		});
+		assert.ok(targetDec);
+		assert.strictEqual(targetDec.badge, "🏰");
+		assert.ok(targetDec.tooltip?.includes("核心开发工程"));
+
+		// 2. 只读参考库 -> 📖 徽章
+		const roDec = resolveFileDecoration(readOnlyRepo, {
+			workspaceRoot: wsRoot,
+			selectedProjectRoot: targetProject,
+			ignoredRepositories: ignored,
+		});
+		assert.ok(roDec);
+		assert.strictEqual(roDec.badge, "📖");
+		assert.ok(roDec.tooltip?.includes("只读参考工程"));
+
+		// 3. .github 目录 -> AI 徽章
+		const dotGithubPath = path.join(targetProject, ".github");
+		const ghDec = resolveFileDecoration(dotGithubPath, {
+			workspaceRoot: wsRoot,
+			selectedProjectRoot: targetProject,
+			ignoredRepositories: ignored,
+		});
+		assert.ok(ghDec);
+		assert.strictEqual(ghDec.badge, "AI");
+		assert.ok(ghDec.tooltip?.includes("AI 工程防线"));
+
+		// 4. copilot-instructions.md -> 纲 徽章
+		const instructionsFile = path.join(targetProject, ".github", "copilot-instructions.md");
+		const instDec = resolveFileDecoration(instructionsFile, {
+			workspaceRoot: wsRoot,
+			selectedProjectRoot: targetProject,
+			ignoredRepositories: ignored,
+		});
+		assert.ok(instDec);
+		assert.strictEqual(instDec.badge, "纲");
+		assert.ok(instDec.tooltip?.includes("项目指令总纲"));
+
+		// 5. instructions/ts.instructions.md -> 规 徽章
+		const tsInstFile = path.join(targetProject, ".github", "instructions", "ts.instructions.md");
+		const ruleDec = resolveFileDecoration(tsInstFile, {
+			workspaceRoot: wsRoot,
+			selectedProjectRoot: targetProject,
+			ignoredRepositories: ignored,
+		});
+		assert.ok(ruleDec);
+		assert.strictEqual(ruleDec.badge, "规");
+		assert.ok(ruleDec.tooltip?.includes("模块化规约"));
+
+		// 6. skills/db-migration/SKILL.md -> SOP 徽章
+		const skillFile = path.join(targetProject, ".github", "skills", "db-migration", "SKILL.md");
+		const skillDec = resolveFileDecoration(skillFile, {
+			workspaceRoot: wsRoot,
+			selectedProjectRoot: targetProject,
+			ignoredRepositories: ignored,
+		});
+		assert.ok(skillDec);
+		assert.strictEqual(skillDec.badge, "SOP");
+		assert.ok(skillDec.tooltip?.includes("技能 SOP"));
 	});
 });

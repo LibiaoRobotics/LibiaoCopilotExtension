@@ -31,6 +31,7 @@ import {
 	type WorkspaceGuardStatus,
 	type SupportedStack,
 } from "../workspaceGuard";
+import { WorkspaceGuardDecorationProvider } from "../workspaceGuardDecoration";
 
 interface InitPayload {
 	version: string;
@@ -1246,6 +1247,10 @@ export class ConfigViewPanel {
 			activeFile
 		);
 		this.currentSelectedProjectRoot = status.selectedProjectRoot;
+
+		// 联动更新资源管理器文件树装饰器
+		WorkspaceGuardDecorationProvider.getInstance()?.setSelectedProjectRoot(this.currentSelectedProjectRoot);
+
 		return status;
 	}
 
@@ -1263,6 +1268,7 @@ export class ConfigViewPanel {
 			return;
 		}
 		this.currentSelectedProjectRoot = path.resolve(projectRoot);
+		WorkspaceGuardDecorationProvider.getInstance()?.setSelectedProjectRoot(this.currentSelectedProjectRoot);
 		await this.postWorkspaceGuardStatus(this.currentSelectedProjectRoot);
 	}
 

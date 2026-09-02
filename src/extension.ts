@@ -10,6 +10,8 @@ import { TokenizerManager } from "./tokenizer/tokenizerManager";
 import { clearModelListCache } from "./provideModel";
 import { runVersionMigrations } from "./versionManager";
 import { schedulePowerShellPrompt } from "./powershellManager";
+import { WorkspaceGuardDecorationProvider } from "./workspaceGuardDecoration";
+import { resolveTargetProjectRoot } from "./workspaceGuard";
 
 export function activate(context: vscode.ExtensionContext) {
 	const officialExtension = vscode.extensions.getExtension("johnny-zhao.oai-compatible-copilot");
@@ -30,6 +32,15 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Windows 环境下延时检查 PowerShell 7 状态并引导
 	schedulePowerShellPrompt(context);
+
+	// 注册项目级工程防线资源管理器修饰提供者 (FileDecorationProvider)
+	const decorationProvider = WorkspaceGuardDecorationProvider.register(context);
+	if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+		const wsRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
+		const activeFile = vscode.window.activeTextEditor?.document?.uri?.fsPath;
+		const { targetRoot } = resolveTargetProjectRoot(wsRoot, undefined, activeFile);
+		decorationProvider.setSelectedProjectRoot(targetRoot);
+	}
 
 	const tokenCountStatusBarItem: vscode.StatusBarItem = initStatusBar(context);
 	const provider = new HuggingFaceChatModelProvider(context.secrets, tokenCountStatusBarItem);
