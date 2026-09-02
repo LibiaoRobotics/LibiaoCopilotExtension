@@ -33,7 +33,7 @@
 		"git-commit",
 		"thinking"
 	],
-	"version": "1.2.5",
+	"version": "1.2.6",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -364,7 +364,30 @@
 						{
 							"id": "gemini-3.7-flash",
 							"displayName": "Gemini 3.7 Flash",
-							"priceNote": "⭐️强烈推荐⭐️ 综合能力第一梯队，响应极速，主力首选（快！太快了！比特哥前女友变心还快！）",
+							"priceNote": "⚠️退居二线⚠️ 已被 3.8 Flash 全面取代，仅作备用",
+							"owned_by": "libiaorobot",
+							"apiMode": "gemini",
+							"context_length": 1048576,
+							"context_sizes": [
+								262144,
+								524288,
+								1048576
+							],
+							"default_context_size": 524288,
+							"max_tokens": 65536,
+							"reasoning_effort": "auto",
+							"reasoning_efforts": [
+								"auto",
+								"low",
+								"medium",
+								"high"
+							],
+							"vision": true
+						},
+						{
+							"id": "gemini-3.8-flash",
+							"displayName": "Gemini 3.8 Flash",
+							"priceNote": "⭐️强烈推荐⭐️ 综合能力第一梯队，响应极速，主力首选",
 							"owned_by": "libiaorobot",
 							"apiMode": "gemini",
 							"context_length": 1048576,

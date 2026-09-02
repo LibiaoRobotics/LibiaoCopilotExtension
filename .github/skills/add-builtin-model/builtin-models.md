@@ -4,7 +4,7 @@
 
 ---
 
-## 📌 官方 24 款内置模型参数大表
+## 📌 官方 25 款内置模型参数大表
 
 | 模型 ID | 显示名称 | apiMode | 上下文窗口 | 最大输出 | 思考 / Effort 档位 (默认档) | 视觉 | 推荐状态 (priceNote) |
 |---|---|---|---|---|---|---|---|
@@ -18,7 +18,8 @@
 | `gemini-3.1-flash-image` | Gemini 3.1 Flash | openai | 131,072 | 32,768 | — | ✅ | ❌️不推荐❌️ |
 | `gemini-3.5-flash` | Gemini 3.5 Flash | openai | 1,048,576 | 65,536 | low / medium / high (**high**) | ✅ | ❌️不推荐❌️ |
 | `gemini-3.6-flash` | Gemini 3.6 Flash | openai | 1,048,576 | 65,536 | low / medium / high (**high**) | ✅ | — |
-| `gemini-3.7-flash` | Gemini 3.7 Flash | gemini | 1,048,576 | 65,536 | auto / low / medium / high (**auto**) | ✅ | ⭐️强烈推荐⭐️ 综合能力第一梯队，响应极速，主力首选（快！太快了！比特哥前女友变心还快！） |
+| `gemini-3.7-flash` | Gemini 3.7 Flash | gemini | 1,048,576 | 65,536 | auto / low / medium / high (**auto**) | ✅ | ⚠️退居二线⚠️ 已被 3.8 Flash 全面取代，仅作备用 |
+| `gemini-3.8-flash` | Gemini 3.8 Flash | gemini | 1,048,576 | 65,536 | auto / low / medium / high (**auto**) | ✅ | ⭐️强烈推荐⭐️ 综合能力第一梯队，响应极速，主力首选 |
 | `gpt-5.6-luna` | GPT-5.6 Luna | openai-responses | 1,050,000 | 128,000 | low / medium / high / xhigh / max (**medium**) | ✅ | ❌️不推荐❌️ |
 | `gpt-5.6-sol` | GPT-5.6 Sol | openai-responses | 1,050,000 | 128,000 | low / medium / high / xhigh / max (**medium**) | ✅ | — |
 | `gpt-5.6-terra` | GPT-5.6 Terra | openai-responses | 1,050,000 | 128,000 | low / medium / high / xhigh / max (**medium**) | ✅ | ❌️不推荐❌️ |
