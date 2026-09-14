@@ -4,7 +4,7 @@
 
 ---
 
-## 📌 官方 25 款内置模型参数大表
+## 📌 官方 28 款内置模型参数大表
 
 | 模型 ID | 显示名称 | apiMode | 上下文窗口 | 最大输出 | 思考 / Effort 档位 (默认档) | 视觉 | 推荐状态 (priceNote) |
 |---|---|---|---|---|---|---|---|
@@ -14,6 +14,9 @@
 | `deepseek-v4-pro` | DeepSeek Pro | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | ❌️糟糕的性价比❌️ 消耗与计费偏高，产出收益不成正比 |
 | `deepseek-v4-flash` | DeepSeek Flash | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | ❌️路边一条❌️ 不如它的识图版，随时关闭 |
 | `deepseek-v4-flash-vision-exp` | Deepseek Flash 识图版 | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ✅ | ⚠️性价比略尴尬⚠️ 能力、速度、价格都是比下有余但比上不足 |
+| `deepseek-flash-aliyun` | DeepSeek Flash（阿里云） | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | — |
+| `deepseek-pro-aliyun` | DeepSeek Pro（阿里云） | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | — |
+| `deepseek-flash` | DeepSeek Flash（官方） | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | — |
 | `gemini-3.1-pro-preview` | Gemini 3.1 Pro 预览版 | openai | 1,048,576 | 65,536 | low / medium / high (**high**) | ✅ | — |
 | `gemini-3.1-flash-image` | Gemini 3.1 Flash | openai | 131,072 | 32,768 | — | ✅ | ❌️不推荐❌️ |
 | `gemini-3.5-flash` | Gemini 3.5 Flash | openai | 1,048,576 | 65,536 | low / medium / high (**high**) | ✅ | ❌️不推荐❌️ |
@@ -40,5 +43,6 @@
 
 - **Qwen 3.8 / 3.7 系列**：走百炼 Responses 原生端点，只读 `reasoning.effort`；测试图像严禁使用 1x1 极小图防 400。
 - **DeepSeek V4 Pro / Flash**：Responses 中继模式，多轮工具调用必须开启 `"include_reasoning_in_request": true`。
+- **DeepSeek Flash / Pro（阿里云）与 DeepSeek Flash（官方）**：2026-09-14 新增的三条路由（`deepseek-flash-aliyun` / `deepseek-pro-aliyun` / `deepseek-flash`），参数按 V4 Flash / Pro 平移，**尚未做网关连通性验证与成本核查**，故未标注 `priceNote`。
 - **GLM-5.2 / GLM-5.3 / GLM-5.3-Flash**：走 Anthropic 原生端点，通过 `extra.thinking.budget_tokens: 32000` 控温，不读 `reasoning_effort`。GLM-5.3-Flash 为原生多模态（图片/视频/文件），仅 0.4 元/M 输入（GLM-5.3 的 1/20）。
 - **Claude 系列**：Opus 5 默认思考；若关闭思考模式，`reasoning_effort` 仅支持到 `high`。
