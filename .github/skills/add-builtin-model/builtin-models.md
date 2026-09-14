@@ -14,7 +14,7 @@
 | `deepseek-v4-pro` | DeepSeek Pro | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | ❌️糟糕的性价比❌️ 消耗与计费偏高，产出收益不成正比 |
 | `deepseek-v4-flash` | DeepSeek Flash | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | ❌️路边一条❌️ 不如它的识图版，随时关闭 |
 | `deepseek-v4-flash-vision-exp` | DeepSeek Flash（官方） | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ✅ | ⭐️性价比高⭐️ 高速度、低成本 |
-| `deepseek-flash-aliyun` | DeepSeek Flash（阿里云） | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | ⚠️性价比高⚠️ 推荐用官方 |
+| `deepseek-flash-aliyun` | DeepSeek Flash（阿里云） | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ✅ | ⚠️性价比高⚠️ 推荐用官方 |
 | `deepseek-pro-aliyun` | DeepSeek Pro（阿里云） | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ❌ | ❌️糟糕的性价比❌️ 消耗与计费偏高，产出收益不成正比 |
 | `deepseek-flash` | DeepSeek Flash（官方） | openai-responses | 1,000,000 | 384,000 | low / high / xhigh / max (**max**) | ✅ | ⭐️性价比高⭐️ 高速度、低成本 |
 | `gemini-3.1-pro-preview` | Gemini 3.1 Pro 预览版 | openai | 1,048,576 | 65,536 | low / medium / high (**high**) | ✅ | — |
