@@ -1,5 +1,18 @@
 # 更新日志
 
+## 1.3.1
+
+### 新增
+
+- **内置模型新增三款 DeepSeek 路由**：
+  - 新增 `deepseek-flash-aliyun`（DeepSeek Flash（阿里云））、`deepseek-pro-aliyun`（DeepSeek Pro（阿里云））与 `deepseek-flash`（DeepSeek Flash（官方））模型支持，均支持 1M 超大上下文与四档思考强度，内置模型扩充至 28 款。
+
+### 改进
+
+- **内置模型推荐评级与显示名称优化**：
+  - `DeepSeek Flash 识图版` 更名为 `DeepSeek Flash（官方）`，价格标注调整为「⭐️性价比高⭐️ 高速度、低成本」。
+  - `Qwen 3.8 Flash` 价格标注精简为「⭐️最佳性价比⭐️ 兼顾低成本、大窗口与高质量」。
+
 ## 1.3.0
 
 ### 新增

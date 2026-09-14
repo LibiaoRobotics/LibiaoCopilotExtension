@@ -144,7 +144,7 @@ suite("provideModel", () => {
 			// 用户配置未写 vision，但内置表声明 vision: true（deepseek-v4-flash-vision-exp）
 			const model: HFModelItem = { id: "deepseek-v4-flash-vision-exp", owned_by: "libiaorobot" };
 			const info = toModelPickerInfo(model);
-			assert.strictEqual(info.name, `${VISION_EMOJI_PICTURE}Deepseek Flash 识图版`);
+			assert.strictEqual(info.name, `${VISION_EMOJI_PICTURE}DeepSeek Flash（官方）`);
 			assert.strictEqual(info.capabilities.imageInput, true);
 		});
 	});
