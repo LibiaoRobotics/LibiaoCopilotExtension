@@ -5,7 +5,7 @@
 ### 新增
 
 - **内置模型新增三款 DeepSeek 路由**：
-  - 新增 `deepseek-flash-aliyun`（DeepSeek Flash（阿里云））、`deepseek-pro-aliyun`（DeepSeek Pro（阿里云））与 `deepseek-flash`（DeepSeek Flash（官方））模型支持，均支持 1M 超大上下文与四档思考强度，内置模型扩充至 28 款。
+  - 新增 `deepseek-flash-aliyun`（DeepSeek Flash（阿里云））、`deepseek-pro-aliyun`（DeepSeek Pro（阿里云））与 `deepseek-flash`（DeepSeek Flash（官方））模型支持，均支持 1M 超大上下文与四档思考强度，内置模型扩充至 28 款；其中 `DeepSeek Flash（官方）` 支持多模态识图。
 
 ### 改进
 

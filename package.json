@@ -349,7 +349,8 @@
 								"xhigh",
 								"max"
 							],
-							"include_reasoning_in_request": true
+							"include_reasoning_in_request": true,
+							"vision": true
 						},
 						{
 							"id": "gemini-3.1-pro-preview",
