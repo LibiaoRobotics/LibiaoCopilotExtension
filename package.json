@@ -33,7 +33,7 @@
 		"git-commit",
 		"thinking"
 	],
-	"version": "1.3.3",
+	"version": "1.3.4",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -706,8 +706,49 @@
 						},
 						{
 							"id": "glm-5.3-flash",
-							"displayName": "GLM 5.3 Flash",
-							"priceNote": "⚠️白菜价但超慢⚠️ 价格极致低廉，但出字响应严重拖后腿",
+							"displayName": "GLM Flash（官方龟速版）",
+							"owned_by": "libiaorobot",
+							"apiMode": "anthropic",
+							"context_length": 1048576,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 131072,
+							"extra": {
+								"thinking": {
+									"type": "enabled",
+									"budget_tokens": 32000
+								}
+							},
+							"vision": true
+						},
+						{
+							"id": "glm-5.3-flashx",
+							"displayName": "GLM Flash（官方高速版）",
+							"owned_by": "libiaorobot",
+							"apiMode": "anthropic",
+							"context_length": 1048576,
+							"context_sizes": [
+								262144,
+								524288,
+								1000000
+							],
+							"default_context_size": 524288,
+							"max_tokens": 131072,
+							"extra": {
+								"thinking": {
+									"type": "enabled",
+									"budget_tokens": 32000
+								}
+							},
+							"vision": true
+						},
+						{
+							"id": "glm-5.3-flashx-aliyun",
+							"displayName": "GLM Flash（阿里云高速版）",
 							"owned_by": "libiaorobot",
 							"apiMode": "anthropic",
 							"context_length": 1048576,

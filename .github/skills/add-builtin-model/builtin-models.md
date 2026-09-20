@@ -4,7 +4,7 @@
 
 ---
 
-## 📌 官方 29 款内置模型参数大表
+## 📌 官方内置模型参数大表
 
 | 模型 ID | 显示名称 | apiMode | 上下文窗口 | 最大输出 | 思考 / Effort 档位 (默认档) | 视觉 | 推荐状态 (priceNote) |
 |---|---|---|---|---|---|---|---|
@@ -32,8 +32,10 @@
 | `claude-sonnet-5` | Claude Sonnet 5 | openai | 1,000,000 | 128,000 | low / medium / high / xhigh / max (**medium**) | ✅ | — |
 | `MiniMax-M3` | MiniMax M3 | openai | 1,000,000 | 65,536 | — | ✅ | ❌️不推荐❌️ |
 | `glm-5.2` | GLM 5.2 | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ❌ | ❌️路边一条❌️ 代际落后，已被 GLM 5.3 完全取代 |
-| `glm-5.3` | GLM 5.3 | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ❌ | ⭐️性价比略逊一筹⭐️ 旗舰能力过硬，略贵但也算推荐 |
-| `glm-5.3-flash` | GLM 5.3 Flash | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ✅ | ⚠️白菜价但超慢⚠️ 价格极致低廉，但出字响应严重拖后腿 |
+| `glm-5.3` | GLM 5.3（官方） | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ❌ | ⭐️性价比略逊一筹⭐️ 旗舰能力过硬，略贵但也算推荐 |
+| `glm-5.3-flash` | GLM Flash（官方龟速版） | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ✅ | — |
+| `glm-5.3-flashx` | GLM Flash（官方高速版） | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ✅ | — |
+| `glm-5.3-flashx-aliyun` | GLM Flash（阿里云高速版） | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ✅ | — |
 | `glm-5.3-aliyun` | GLM 5.3（阿里云） | anthropic | 1,048,576 | 131,072 | extra.thinking (32K budget) | ❌ | ⭐️性价比略逊一筹⭐️ 旗舰能力过硬，略贵但也算推荐 |
 | `qwen3.7-plus` | Qwen 3.7 Plus | openai-responses | 1,000,000 | 131,072 | minimal / low / medium / high (**high**) | ✅ | ❌️不推荐❌️ |
 | `qwen3.7-max` | Qwen 3.7 Max | openai-responses | 1,000,000 | 65,536 | minimal / low / medium / high (**high**) | ❌ | ❌️不推荐❌️ |
@@ -47,4 +49,6 @@
 - **DeepSeek Flash / Pro（阿里云）与 DeepSeek Flash（官方）**：2026-09-14 新增的三条路由（`deepseek-flash-aliyun` / `deepseek-pro-aliyun` / `deepseek-flash`），参数按 V4 Flash / Pro 平移；其中 `deepseek-flash`（官方）支持多模态识图（已配置 `"vision": true`）。
 - **GLM-5.2 / GLM-5.3 / GLM-5.3-Flash / GLM-5.3（阿里云）**：走 Anthropic 原生端点，通过 `extra.thinking.budget_tokens: 32000` 控温，不读 `reasoning_effort`。GLM-5.3-Flash 为原生多模态（图片/视频/文件），仅 0.4 元/M 输入（GLM-5.3 的 1/20）。
 - **GLM-5.3（阿里云）**：2026-09-16 新增，**除 `id` 与 `displayName` 外全部字段与 `glm-5.3` 完全一致**（含 `include_reasoning_in_request: true`），是同一模型的阿里云路由。真机探测：网关 `/v1/responses` 返回 HTTP 500 `convert_request_failed`（不可用），仅 `/v1/messages` 可用；计费与智谱官方完全持平（输入 8 元 / 缓存 2 元 / 输出 28 元每百万 tokens）；纯文本非多模态（传图返回 200 但模型看不到图，已与 `glm-5.3` 一致设为 `vision: false`）。
+- **GLM Flash 高速版（`glm-5.3-flashx` / `glm-5.3-flashx-aliyun`）**：2026-09-20 新增的两条高速路由，字段按 `glm-5.3-flash` 平移（Anthropic 端点 + `extra.thinking` 32K 预算 + 多模态）。**⚠️ 网关未真机验证**：当日本人 `NEWAPI_KEY` 所属权限组不含任何 `glm-5.3-flash*` 渠道（`/v1/models` 仅暴露 5 款，`glm-5.3-flash` 本体亦返回 `model_not_found`），故 `id` 是否存在于网关、`vision: true` 是否成立均**未验证**，需用全权限 Key 复核。
+- **GLM Flash（官方龟速版）**：即原 `glm-5.3-flash`，2026-09-20 更名为现名并清空 `priceNote`。
 - **Claude 系列**：Opus 5 默认思考；若关闭思考模式，`reasoning_effort` 仅支持到 `high`。

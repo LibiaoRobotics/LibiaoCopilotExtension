@@ -90,5 +90,5 @@ if (-not $env:NEWAPI_KEY) {
 
 - 📘 **[模型参数与 apiMode 决策矩阵](./decision-matrix.md)**：三级溯源、字段计算约束、7 档思考白名单与协议判定树。
 - 📡 **[网关真机探测与验收标准](./gateway-probes.md)**：Responses / Anthropic / OpenAI / Vision 全协议探测模板与验收指标。
-- 📌 **[官方内置模型参数技术档案大表](./builtin-models.md)**：22 款存量内置模型规格大表与厂商网关特性备忘。
+- 📌 **[官方内置模型参数技术档案大表](./builtin-models.md)**：全量内置模型规格大表与厂商网关特性备忘。
 
