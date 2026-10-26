@@ -29,6 +29,7 @@ import {
 	isToolResultPart,
 	collectToolResultText,
 	convertToolsToOpenAI,
+	getHostThinkingOverride,
 	mapRole,
 } from "../utils";
 
@@ -176,20 +177,29 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 			rb.max_tokens = um.max_tokens;
 		}
 
+		// 宿主（Copilot Chat）可以按本次意图显式关闭思考；旧版宿主不下发该字段，
+		// hostThinking 为 undefined，此时完全保持插件自身配置行为。
+		const hostThinking = getHostThinkingOverride(options);
+
 		// OpenAI reasoning configuration
-		if (isReasoningEffortPickerEnabled(um)) {
-			const allowedEfforts = um.reasoning_efforts?.filter(isReasoningEffortValue);
-			rb.reasoning_effort = getConfiguredReasoningEffort(options, um.reasoning_effort, allowedEfforts);
-		} else if (um?.reasoning_effort !== undefined) {
-			rb.reasoning_effort = um.reasoning_effort;
+		// 宿主明确关闭思考时不再发送任何思考参数（包括推理强度选择器的值）。
+		if (hostThinking !== false) {
+			if (isReasoningEffortPickerEnabled(um)) {
+				const allowedEfforts = um.reasoning_efforts?.filter(isReasoningEffortValue);
+				rb.reasoning_effort = getConfiguredReasoningEffort(options, um.reasoning_effort, allowedEfforts);
+			} else if (um?.reasoning_effort !== undefined) {
+				rb.reasoning_effort = um.reasoning_effort;
+			}
 		}
 
 		// enable_thinking (non-OpenRouter only)
+		// 仅在模型配置已声明该开关时才落笔：宿主关闭思考时把它翻成 false，
+		// 绝不为没有该参数的网关凭空新增字段（那会让严格网关直接 400）。
 		const enableThinking = um?.enable_thinking;
 		if (enableThinking !== undefined) {
-			rb.enable_thinking = enableThinking;
+			rb.enable_thinking = hostThinking === false ? false : enableThinking;
 
-			if (um?.thinking_budget !== undefined) {
+			if (hostThinking !== false && um?.thinking_budget !== undefined) {
 				rb.thinking_budget = um.thinking_budget;
 			}
 		}
@@ -197,14 +207,16 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 		// thinking (Zai provider)
 		if (um?.thinking?.type !== undefined) {
 			rb.thinking = {
-				type: um.thinking.type,
+				type: hostThinking === false ? "disabled" : um.thinking.type,
 			};
 		}
 
 		// OpenRouter reasoning configuration
 		if (um?.reasoning !== undefined) {
 			const reasoningConfig: ReasoningConfig = um.reasoning as ReasoningConfig;
-			if (reasoningConfig.enabled !== false) {
+			if (hostThinking === false) {
+				rb.reasoning = { enabled: false };
+			} else if (reasoningConfig.enabled !== false) {
 				const reasoningObj: Record<string, unknown> = {};
 				const effort = reasoningConfig.effort;
 				const maxTokensReasoning = reasoningConfig.max_tokens || 2000; // Default 2000 as per docs

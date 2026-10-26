@@ -15,11 +15,20 @@ const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
 
 const LOG_RETENTION_DAYS = 7;
 const SENSITIVE_HEADER_KEYS = ["Authorization", "x-api-key", "x-goog-api-key"];
+// Debug 级别下流式 chunk 每秒可达数百条，逐条同步落盘会把扩展宿主主线程
+// 钉在同步 I/O 上（实测一次请求可产生数千次 appendFileSync），导致 SSE 数据
+// 在 socket 缓冲区堆积、界面卡住后一次性刷出。改为内存聚合后批量异步写入。
+const FLUSH_INTERVAL_MS = 200;
+const FLUSH_BYTES = 256 * 1024;
 
 class Logger {
 	private _level: LogLevel = "off";
 	private _logDir = "";
 	private _initialized = false;
+	private _buffer: string[] = [];
+	private _bufferBytes = 0;
+	private _flushTimer: ReturnType<typeof setTimeout> | null = null;
+	private _flushing = false;
 
 	/**
 	 * Initialize the logger: read config, ensure log directory exists.
@@ -29,6 +38,8 @@ class Logger {
 		this.reloadConfig();
 		this.ensureLogDir();
 		this._initialized = true;
+		// 过期清理只需在启动时做一次；原先放在 write() 里等于每条日志都扫一遍目录。
+		this.cleanOldLogs();
 	}
 
 	/**
@@ -124,20 +135,80 @@ class Logger {
 			return;
 		}
 
-		const sanitizedData = this.sanitizeData(data);
-		const logEntry = {
+		const line = `${JSON.stringify({
 			ts: new Date().toISOString(),
 			level,
 			tag,
-			data: sanitizedData,
-		};
+			data: this.sanitizeData(data),
+		})}\n`;
 
-		const line = JSON.stringify(logEntry) + "\n";
-		const filePath = this.getLogFilePath();
+		this._buffer.push(line);
+		this._bufferBytes += Buffer.byteLength(line, "utf8");
+		if (this._bufferBytes >= FLUSH_BYTES) {
+			void this.flush();
+			return;
+		}
+		this.scheduleFlush();
+	}
 
+	private scheduleFlush(): void {
+		if (this._flushTimer) {
+			return;
+		}
+		this._flushTimer = setTimeout(() => {
+			this._flushTimer = null;
+			void this.flush();
+		}, FLUSH_INTERVAL_MS);
+		this._flushTimer.unref?.();
+	}
+
+	/**
+	 * Write buffered lines to disk asynchronously.
+	 */
+	async flush(): Promise<void> {
+		if (this._flushTimer) {
+			clearTimeout(this._flushTimer);
+			this._flushTimer = null;
+		}
+		if (this._flushing) {
+			this.scheduleFlush();
+			return;
+		}
+		if (this._buffer.length === 0) {
+			return;
+		}
+
+		this._flushing = true;
+		const payload = this._buffer.join("");
+		this._buffer = [];
+		this._bufferBytes = 0;
 		try {
-			fs.appendFileSync(filePath, line, "utf8");
-			this.cleanOldLogs();
+			await fs.promises.appendFile(this.getLogFilePath(), payload, "utf8");
+		} catch (e) {
+			console.error("[Libiao Copilot Logger] Failed to write log:", e);
+		} finally {
+			this._flushing = false;
+		}
+	}
+
+	/**
+	 * Synchronously drain the buffer. Used from deactivate() where a pending
+	 * async flush would not survive process teardown.
+	 */
+	flushSync(): void {
+		if (this._flushTimer) {
+			clearTimeout(this._flushTimer);
+			this._flushTimer = null;
+		}
+		if (this._buffer.length === 0) {
+			return;
+		}
+
+		const payload = this._buffer.join("");
+		this._buffer = [];
+		this._bufferBytes = 0;
+		try {
+			fs.appendFileSync(this.getLogFilePath(), payload, "utf8");
 		} catch (e) {
 			console.error("[Libiao Copilot Logger] Failed to write log:", e);
 		}

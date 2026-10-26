@@ -21,6 +21,7 @@ import {
 	isToolResultPart,
 	collectToolResultText,
 	convertToolsToOpenAIResponses,
+	getHostThinkingOverride,
 	mapRole,
 } from "../utils";
 
@@ -266,7 +267,9 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 		// - 顶层 `reasoning_effort`：部分网关（实测 new-api 对 qwen3.8-max）只认顶层，
 		//   嵌套会被忽略导致用户选择的 effort 不生效；
 		// 两个字段都写，各网关各取所需（实测不冲突）。
-		if (isReasoningEffortPickerEnabled(um)) {
+		// 宿主（Copilot Chat）显式关闭思考时整体不再下发；旧版宿主无该字段，行为不变。
+		const hostThinking = getHostThinkingOverride(options);
+		if (hostThinking !== false && isReasoningEffortPickerEnabled(um)) {
 			const allowedEfforts = um.reasoning_efforts?.filter(isReasoningEffortValue);
 			const effort = getConfiguredReasoningEffort(options, um.reasoning_effort, allowedEfforts);
 			const existing = isPlainObject(rb.reasoning) ? { ...(rb.reasoning as Record<string, unknown>) } : {};
@@ -275,7 +278,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 				effort,
 			};
 			rb.reasoning_effort = effort;
-		} else if (um?.reasoning_effort !== undefined) {
+		} else if (hostThinking !== false && um?.reasoning_effort !== undefined) {
 			const existing = isPlainObject(rb.reasoning) ? { ...(rb.reasoning as Record<string, unknown>) } : {};
 			rb.reasoning = {
 				...existing,
@@ -290,7 +293,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 		// thinking (Volcengine provider)
 		if (um?.thinking?.type !== undefined) {
 			rb.thinking = {
-				type: um.thinking.type,
+				type: hostThinking === false ? "disabled" : um.thinking.type,
 			};
 		}
 

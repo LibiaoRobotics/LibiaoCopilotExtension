@@ -11,10 +11,11 @@ import {
 
 import type { HFModelItem } from "./types";
 import type { TokenUsage } from "./types";
+import { CustomDataPartMimeTypes } from "./types";
 
 import type { OllamaRequestBody } from "./ollama/ollamaTypes";
 
-import { parseModelId, createRetryConfig, executeWithRetry, normalizeUserModels, getBuiltInModel } from "./utils";
+import { parseModelId, createRetryConfig, executeWithRetry, normalizeUserModels, getBuiltInModel, asRateLimitedError, withRetryAfter } from "./utils";
 
 import { prepareLanguageModelChatInformation, NO_MODELS_PLACEHOLDER_ID } from "./provideModel";
 import { countMessageTokens } from "./provideToken";
@@ -45,7 +46,14 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 	private readonly _geminiToolCallMetaByCallId = new Map<string, GeminiToolCallMeta>();
 	private readonly _openaiResponsesPreviousResponseIdUnsupportedBaseUrls = new Set<string>();
 
-	static readonly OPENAI_RESPONSES_STATEFUL_MARKER_MIME = "application/vnd.oaicopilot.stateful-marker";
+	/**
+	 * 宿主（Copilot Chat）用于跨轮复用的 Responses 状态标记 MIME。
+	 *
+	 * 必须与宿主 `CustomDataPartMimeTypes.StatefulMarker`（`"stateful_marker"`）一致：
+	 * 宿主只识别这一个值，自定义 MIME 会被静默丢弃，`previous_response_id`
+	 * 链式复用随之完全失效（每轮都退化成重发全量历史）。
+	 */
+	static readonly OPENAI_RESPONSES_STATEFUL_MARKER_MIME = CustomDataPartMimeTypes.StatefulMarker;
 
 	/**
 	 * Create a provider using the given secret storage for the API key.
@@ -149,7 +157,12 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 		// 协议模式（供 finally 结算区分 Gemini 独立正文统计）
 		let actualApiMode: string = "openai";
 		// 模型配置（try 内解析 um 后赋值；finally 刷新 tooltip 时需要）
-		let modelConfig: { includeReasoningInRequest: boolean } = { includeReasoningInRequest: false };
+		// includeEncryptedThinking：宿主（较新 Copilot Chat）要求响应携带可跨轮重放的
+		// 加密思考状态（如 Anthropic thinking signature）。旧版宿主不下发该字段，
+		// 因而为 undefined，各协议适配层必须按“不需要”处理。
+		let modelConfig: { includeReasoningInRequest: boolean; includeEncryptedThinking?: boolean } = {
+			includeReasoningInRequest: false,
+		};
 		const requestStartTime = Date.now();
 		try {
 			// get model config from user settings
@@ -197,6 +210,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			// Prepare model configuration
 			modelConfig = {
 				includeReasoningInRequest: um?.include_reasoning_in_request ?? false,
+				includeEncryptedThinking: options.includeEncryptedThinking === true,
 			};
 
 			// Update Token Usage
@@ -280,9 +294,12 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			// sends the full history once — and from the next request on,
 			// compaction applies again because the base URL is marked unsupported.
 			const normalizedBaseUrl = BASE_URL.replace(/\/+$/, "");
+			// 状态标记里的 modelId 必须用完整的 `model.id`：宿主回灌历史时会用
+			// `languageModel.id` 重新编码 marker（`id::configId` 形式），若这里拿
+			// `parsedModelId.baseId` 比对，带 configId 的组合模型将永远匹配不上。
 			const statefulMarker =
 				apiMode === "openai-responses"
-					? findLastOpenAIResponsesStatefulMarker(parsedModelId.baseId, messages)
+					? findLastOpenAIResponsesStatefulMarker(model.id, messages)
 					: null;
 			const willUsePreviousResponseId =
 				statefulMarker !== null &&
@@ -343,8 +360,11 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 					if (!res.ok) {
 						const errorText = await res.text();
 						console.error("[Ollama Provider] Ollama API error response", errorText);
-						throw new Error(
-							`Ollama API error: [${res.status}] ${res.statusText}${errorText ? `\n${errorText}` : ""}\nURL: ${url}`
+						throw withRetryAfter(
+							new Error(
+								`Ollama API error: [${res.status}] ${res.statusText}${errorText ? `\n${errorText}` : ""}\nURL: ${url}`
+							),
+							res
 						);
 					}
 
@@ -357,7 +377,11 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				await ollamaApi.processStreamingResponse(response.body, trackingProgress, token);
 			} else if (apiMode === "anthropic") {
 				// Anthropic API mode
-				const anthropicApi = new AnthropicApi(model.id, um?.cache_control !== false);
+				const anthropicApi = new AnthropicApi(
+					model.id,
+					um?.cache_control !== false,
+					modelConfig.includeEncryptedThinking === true
+				);
 				currentApi = anthropicApi;
 				const anthropicMessages = anthropicApi.convertMessages(effectiveMessages, modelConfig);
 
@@ -385,8 +409,11 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 					if (!res.ok) {
 						const errorText = await res.text();
 						console.error("[Anthropic Provider] Anthropic API error response", errorText);
-						throw new Error(
-							`Anthropic API error: [${res.status}] ${res.statusText}${errorText ? `\n${errorText}` : ""}\nURL: ${url}`
+						throw withRetryAfter(
+							new Error(
+								`Anthropic API error: [${res.status}] ${res.statusText}${errorText ? `\n${errorText}` : ""}\nURL: ${url}`
+							),
+							res
 						);
 					}
 
@@ -402,7 +429,8 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				const openaiResponsesApi = new OpenaiResponsesApi(model.id);
 				currentApi = openaiResponsesApi;
 				const normalizedBaseUrl = BASE_URL.replace(/\/+$/, "");
-				const statefulModelId = parsedModelId.baseId;
+				// 与上面的查找保持一致：marker 载荷里写的必须是完整 model.id。
+				const statefulModelId = model.id;
 
 				// Convert full history once (also extracts system `instructions`).
 				const fullInput = openaiResponsesApi.convertMessages(effectiveMessages, modelConfig);
@@ -467,7 +495,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 							);
 							(error as { status?: number; errorText?: string }).status = res.status;
 							(error as { status?: number; errorText?: string }).errorText = errorText;
-							throw error;
+							throw withRetryAfter(error, res);
 						}
 
 						return res;
@@ -558,8 +586,11 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 					if (!res.ok) {
 						const errorText = await res.text();
 						console.error("[Gemini Provider] Gemini API error response", errorText);
-						throw new Error(
-							`Gemini API error: [${res.status}] ${res.statusText}${errorText ? `\n${errorText}` : ""}\nURL: ${url}`
+						throw withRetryAfter(
+							new Error(
+								`Gemini API error: [${res.status}] ${res.statusText}${errorText ? `\n${errorText}` : ""}\nURL: ${url}`
+							),
+							res
 						);
 					}
 
@@ -598,8 +629,11 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 					if (!res.ok) {
 						const errorText = await res.text();
 						console.error("[OAI Compatible Model Provider] OAI Compatible API error response", errorText);
-						throw new Error(
-							`OAI Compatible API error: [${res.status}] ${res.statusText}${errorText ? `\n${errorText}` : ""}\nURL: ${url}`
+						throw withRetryAfter(
+							new Error(
+								`OAI Compatible API error: [${res.status}] ${res.statusText}${errorText ? `\n${errorText}` : ""}\nURL: ${url}`
+							),
+							res
 						);
 					}
 
@@ -623,7 +657,8 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				errorName: err instanceof Error ? err.name : String(err),
 				errorMessage: err instanceof Error ? err.message : String(err),
 			});
-			throw err;
+			// 429 交给宿主按 `retryAfter` 退避；旧版宿主没有 RateLimited 时原样抛出。
+			throw asRateLimitedError(err);
 		} finally {
 			const durationMs = Date.now() - requestStartTime;
 			logger.info("request.end", { modelId: model.id, durationMs });

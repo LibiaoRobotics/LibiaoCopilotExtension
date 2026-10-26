@@ -12,6 +12,7 @@ import { runVersionMigrations } from "./versionManager";
 import { schedulePowerShellPrompt } from "./powershellManager";
 import { WorkspaceGuardDecorationProvider } from "./workspaceGuardDecoration";
 import { resolveTargetProjectRoot } from "./workspaceGuard";
+import { suppressHarnessDefault } from "./harnessGuard";
 
 export function activate(context: vscode.ExtensionContext) {
 	const officialExtension = vscode.extensions.getExtension("johnny-zhao.oai-compatible-copilot");
@@ -23,6 +24,9 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Initialize logger
 	logger.init();
+
+	// 实验可能把新建会话默认类型推成 agent host，这里压回本地会话（只写用户层，用户仍可改回）
+	void suppressHarnessDefault();
 
 	// 执行版本跃迁单次配置迁移 (One-time Migration)
 	void runVersionMigrations(context);
@@ -166,4 +170,7 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 }
 
-export function deactivate() {}
+export function deactivate() {
+	// 日志走缓冲批量异步落盘，进程退出前必须同步排空，否则尾部日志丢失。
+	logger.flushSync();
+}

@@ -230,6 +230,20 @@ suite("provideModel", () => {
 			assert.strictEqual(info.maxInputTokens, 1_000_000 - 384_000);
 			assert.strictEqual(info.maxOutputTokens, 384_000);
 		});
+
+		test("exposes maxContextWindowTokens 为完整上下文长度（非输入/输出预算）", () => {
+			// 提案字段 `maxContextWindowTokens` 必须等于模型总窗口，而不是输入预算；
+			// 旧宿主不认识该字段会直接忽略，故新增它不会破坏向下兼容。
+			const apiModel: HFModelItem = { id: "deepseek-v4-flash", owned_by: "libiaorobot" };
+			const merged = toDiscoveredModelItem(apiModel);
+			const info = toModelPickerInfo(merged) as { maxContextWindowTokens?: number; maxInputTokens: number };
+
+			assert.strictEqual(info.maxContextWindowTokens, 1_000_000);
+			assert.ok(
+				(info.maxContextWindowTokens ?? 0) > info.maxInputTokens,
+				"总窗口必须大于输入预算（输出 token 也占窗口）"
+			);
+		});
 	});
 
 	suite("getValidContextSizes boundaries", () => {

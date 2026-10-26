@@ -1,20 +1,23 @@
 # Libiao Copilot 仓库指令总纲
 
-本文件定义仓库特有的核心执行红线与领域能力路由。
+本文件只定义**仓库级红线**与**领域能力路由**；具体机制与命令一律下沉到 `instructions/`、`skills/`、`prompts/`、`agents/`。新增规则时优先放入对应子文件，本总纲仅保留一行摘要与链接。
 
 ---
 
 ## 1. 🚨 仓库红线
 
-1. **讨论与行动边界**：严禁擅自发起编辑或修改；默认处于讨论状态，必须收到明确执行指令后方可动手。
-2. **执行目录**：工作区根目录非 Git 仓库，所有命令必须在 `libiao-copilot/` 目录下执行。
-3. **终端与脚本**：CLI/任务必须统一使用 `pwsh`（禁用 Windows PowerShell 5.1）；`.ps1` 脚本必须含 UTF-8 BOM。
-4. **打包与安装**：打包统一为 `npm run build`（保留运行时依赖）；本地安装仅限 `pwsh -File .\scripts\Install-LibiaoCopilot.ps1`（禁止直接使用 `code --install-extension`）。
-5. **网关安全**：默认 `baseUrl` 必须留空，严禁硬编码内部网关地址。
-6. **脚本目录收敛**：严禁在 `scripts/` 根目录下直接新建脚本；所有新增脚本必须按职责归入对应功能子目录（`probes/`、`analyzers/`、`replay/` 或新建自解释子目录），并在 `scripts/README.md` 中同步登记。
-7. **Changelog 用户视角纪律**：`CHANGELOG.md` 必须纯粹以最终用户视角书写（只记录对用户可见的功能、体验改进与缺陷修复）；严禁写入任何内部代码重构、配置源抽离、门禁脚本改造、测试用例或开发者专用的维护提示等开发侧细节。
-8. **海量日志与数据流上下文隔离**：涉及大体量日志排障、长报文/抓包分析、批量诊断时，必须委派独立子智能体（Agent/Subagent）闭环处理，严禁在主会话直接全量加载或大段翻页阅读；主会话只接收提炼后的结构化结论（根因、关键行号与修复方案），防止上下文污染。
-9. **实参锚定与脱离实际防空谈**：凡涉及机制分析、性能评估、架构合理性或重构建议，必须先核验当前工程的真实生效配置与数值边界（如模型实际配置的 `context_length`、`context_sizes`、真实触发水位），严禁脱离现场配置凭空推导；必须严格区分“常态高频路径”与“低频极端兜底”，明确给出触发门槛与概率，严禁将实际几乎不触发的兜底逻辑夸大为日常系统痛点。
+1. **讨论与行动边界**：未收到明确执行指令前保持只读，严禁擅自编辑、重写历史、推送或删除文件。
+2. **执行目录与参考工程**：所有命令必须在 `libiao-copilot/` 下执行；`vscode-src/`、`vscode-docs/` 为**只读参考**，严禁修改或在其下构建。
+3. **终端与脚本**：统一 `pwsh`（禁用 Windows PowerShell 5.1），`.ps1` 必须含 UTF-8 BOM。详见 [powershell-env](.github/instructions/powershell-env.instructions.md)。
+4. **网关安全**：默认 `baseUrl` 必须留空，严禁硬编码内部网关地址。详见 [gateway](.github/instructions/gateway.instructions.md)。
+5. **打包与安装**：打包统一 `npm run build`（不加 `--no-dependencies`）；本地安装仅限 `pwsh -File .\scripts\Install-LibiaoCopilot.ps1`。详见 [powershell-env](.github/instructions/powershell-env.instructions.md)。
+6. **脚本目录收敛**：严禁在 `scripts/` 根目录新建脚本；必须归入 `probes/`、`analyzers/`、`replay/` 或新建自解释子目录，并在 `scripts/README.md` 同步登记。
+7. **Changelog 用户视角纪律**：`CHANGELOG.md` 只记录对用户可见的功能、改进与修复；严禁写入代码重构、配置源抽离、门禁脚本、测试用例等开发侧细节。
+8. **海量日志与数据流上下文隔离**：大体量日志排障、长报文/抓包分析、批量诊断必须委派子智能体闭环处理，主会话只接收提炼后的结构化结论（根因、关键行号、修复方案）。
+9. **实参锚定**：机制分析、性能评估、架构建议必须先核验真实现场配置与数值边界（`context_length`、`context_sizes`、真实触发水位），并严格区分「常态高频路径」与「低频极端兜底」，禁止把几乎不触发的兜底夸大为日常痛点。
+10. **AI 记忆写入边界**：本项目的任何记忆、经验、外部事实与协作约定，**严禁写入 repo memory（`/memories/repo/`）**，只允许写入仓库内 `.github/`。理由：repo memory 绑定本机工作区哈希，换目录即失效、无法随仓库版本化与评审。
+    - 分流：跨文件通用约束 → 本总纲；按路径生效的代码约束 → `instructions/`（必须配 `applyTo`）；多步复杂流程 → `skills/`（必须含验证闭环）；一次性上下文 → 会话内说明，**不落仓库**。
+    - 写入前必须先能回答「不写会导致什么具体错误行为」，答不出则不写；一次性失误不立永久规则。
 
 ---
 
@@ -22,9 +25,13 @@
 
 ### 📘 模块化指示 (`.github/instructions/`)
 
-- **[系统架构与核心机制](.github/instructions/architecture.instructions.md)**：架构分层、模型合并发现、提案 API 与上下文管理。
-- **[多协议流式与思考规范](.github/instructions/streaming-protocols.instructions.md)**：协议适配（OpenAI/Anthropic/Gemini/XML）与思考泄漏守卫。
-- **[PowerShell 运行环境与脚本规约](.github/instructions/powershell-env.instructions.md)**：PowerShell 7 约束与编码防损。
+| 文件 | `applyTo` | 覆盖范围 |
+|---|---|---|
+| [architecture](.github/instructions/architecture.instructions.md) | `**/*.ts` | 架构分层、模型合并发现、提案 API、上下文管理、版本跃迁迁移 |
+| [streaming-protocols](.github/instructions/streaming-protocols.instructions.md) | `src/{openai,anthropic,gemini,ollama}/**/*.ts` | 多协议适配与思考泄漏守卫 |
+| [powershell-env](.github/instructions/powershell-env.instructions.md) | `**/*.{ps1,bat,cmd,json}` | pwsh 约束、编码防损、安装与发版一致性 |
+| [gateway](.github/instructions/gateway.instructions.md) | `scripts/**` | NewAPI 地址/鉴权、Key 权限边界、`model_not_found` 判定红线 |
+| [vscode-host](.github/instructions/vscode-host.instructions.md) | `src/**/*.ts` | BYOK / Agent Host 机制、只读参考仓库、双 bundle 取证纪律 |
 
 ### ⚡ 场景化技能 (`.github/skills/`)
 

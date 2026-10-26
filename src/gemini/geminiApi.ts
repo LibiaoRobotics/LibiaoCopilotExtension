@@ -18,6 +18,7 @@ import {
 } from "../modelConfiguration";
 
 import {
+	getHostThinkingOverride,
 	isImageMimeType,
 	isToolResultPart,
 	collectToolResultText,
@@ -828,7 +829,11 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 		// 注意：Google Gemini API 默认 includeThoughts 为 false（静默思考，不回传思考过程文本，只在 usage 计入 token）；
 		// 必须显式置 includeThoughts: true，客户端才能收到思考流分片并实时渲染思考框。
 		// 当 effort 为 "auto" 时，不设置 thinkingLevel（走 Google 官方默认的动态自适应思考 Dynamic Thinking）。
-		if (um?.reasoning_efforts && um.reasoning_efforts.length > 0) {
+		// 宿主（Copilot Chat）显式关闭思考时整体不下发 thinkingConfig；旧版宿主无该字段，行为保持不变。
+		const hostThinking = getHostThinkingOverride(options);
+		if (hostThinking === false) {
+			// 不请求思考摘要，也不覆盖模型默认的思考档位。
+		} else if (um?.reasoning_efforts && um.reasoning_efforts.length > 0) {
 			const allowedEfforts = um.reasoning_efforts.filter(isReasoningEffortValue);
 			const defaultEffort = isReasoningEffortValue(um.reasoning_effort) ? um.reasoning_effort : undefined;
 			const effort = getConfiguredReasoningEffort(options, defaultEffort, allowedEfforts);

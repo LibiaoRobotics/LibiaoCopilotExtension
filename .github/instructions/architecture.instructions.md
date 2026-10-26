@@ -15,6 +15,8 @@ applyTo: "**/*.ts"
   - `src/ollama/`：Ollama 本地/远程模型协议适配。
 - **提案 API（Proposed API）**：
   - `chatProvider`、`languageModelThinkingPart`、`languageModelSystem`、`languageModelDataPart`（类型见 `src/vscode.proposed.*.d.ts`）。
+  - **兼容声明层 `src/vscode.compat.d.ts`**：在**不升级** `@types/vscode`、**不抬高** `engines.vscode` 的前提下，声明扩展已使用但 vendored 提案文件缺失的可选字段（`maxContextWindowTokens`、`includeEncryptedThinking` 等）。运行时一律按可选处理，旧宿主不提供时行为不变。
+  - **`languageModelCapabilities` 提案（`capabilities.apiType`）不得启用**：宿主对 `capabilities.apiType !== undefined` 会调用 `checkProposedApiEnabled(extension, 'languageModelCapabilities')` 并**抛出**，该检查位于逐个模型的 `map` 内 —— 宿主存在该提案但未对扩展开启（手动安装 VSIX、argv.json 未写入）时，整份模型列表注册失败，模型选择器一个模型都不剩。
 
 ## 2. 模型合并发现机制 (`src/provideModel.ts`)
 - **配置与探针合并**：`libiaoCopilot.models` 为元数据层，按 `apiMode|baseUrl` 分组探测各组真实 `/models` 列表。

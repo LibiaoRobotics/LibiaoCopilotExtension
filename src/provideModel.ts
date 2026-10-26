@@ -240,6 +240,7 @@ export async function prepareLanguageModelChatInformation(
 					version: "1.0.0",
 					maxInputTokens: maxInput,
 					maxOutputTokens: maxOutput,
+					maxContextWindowTokens: contextLen,
 					isUserSelectable: true,
 					...(configurationSchema ? { configurationSchema } : {}),
 					capabilities: {
@@ -272,6 +273,7 @@ export async function prepareLanguageModelChatInformation(
 					version: "1.0.0",
 					maxInputTokens: maxInput,
 					maxOutputTokens: maxOutput,
+					maxContextWindowTokens: contextLen,
 					isUserSelectable: true,
 					...(configurationSchema ? { configurationSchema } : {}),
 					capabilities: {
@@ -324,6 +326,7 @@ export function toModelPickerInfo(m: HFModelItem, icon: VisionIcon = "picture"):
 		version: "1.0.0",
 		maxInputTokens: maxInput,
 		maxOutputTokens: maxOutput,
+		maxContextWindowTokens: contextLen,
 		isUserSelectable: true,
 		...(configurationSchema ? { configurationSchema } : {}),
 		capabilities: {

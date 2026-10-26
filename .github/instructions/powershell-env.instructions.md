@@ -16,3 +16,12 @@ applyTo: "**/*.{ps1,bat,cmd,json}"
   $errs = @(); [System.Management.Automation.Language.Parser]::ParseFile('.\script.ps1', [ref]$null, [ref]$errs) | Out-Null; if ($errs.Count -eq 0) { Write-Host 'Syntax OK' } else { $errs }
   ```
 - 涉及 Emoji（👁️ / 🖼️ / ⚠️）的写入操作，必须采用 Unicode 码点转义写入并核验。
+
+## 3. 本地安装与版本一致性
+- `Install-LibiaoCopilot.ps1` 对 `%USERPROFILE%\.vscode\extensions` 下的多版本目录只**检测并警告**，**不自动删除**旧版本。
+- 因此「脚本退出码 0」≠「新版已生效」：必须提醒用户完全退出 VS Code 后手动删除旧版本目录，否则验收会看到旧版本行为。
+- 本地安装只能走 `pwsh -File .\scripts\Install-LibiaoCopilot.ps1`，禁用 `code --install-extension`。
+
+## 4. 打包与版本号
+- 打包统一为 `npm run build`（保留运行时依赖），严禁加 `--no-dependencies`。
+- `package-lock.json` 的 `version` 字段长期滞后（如 1.1.1 而 `package.json` 为 1.3.x），发版时不要误改它。

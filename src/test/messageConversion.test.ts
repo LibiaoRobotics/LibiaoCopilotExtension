@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { AnthropicApi } from "../anthropic/anthropicApi";
 import type { AnthropicRequestBody } from "../anthropic/anthropicTypes";
 import { GeminiApi } from "../gemini/geminiApi";
+import type { HFModelItem } from "../types";
 import { convertToolsToOpenAI, convertToolsToOpenAIResponses } from "../utils";
 
 /**
@@ -236,6 +237,111 @@ suite("Multi-protocol message conversion & request builder", () => {
 			}
 
 			assert.ok(ccCount <= 4, `总 cache_control 数量不能超过 Anthropic 官方上限 4，当前: ${ccCount}`);
+		});
+
+		test("思考块签名回放：带 signature 的历史思考原样回填且位于正文之前", () => {
+			const api = new AnthropicApi("claude-3-7-sonnet", false);
+			const messages: vscode.LanguageModelChatRequestMessage[] = [
+				user("继续"),
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [
+						new vscode.LanguageModelThinkingPart("先分析一下", "tk_1", { signature: "sig-abc" }),
+						new vscode.LanguageModelTextPart("这是回答"),
+					],
+				},
+			];
+
+			const converted = api.convertMessages(messages, { includeReasoningInRequest: false });
+			const assistant = converted.find((m) => m.role === "assistant");
+			assert.ok(assistant && Array.isArray(assistant.content));
+
+			const blocks = assistant.content as Array<{ type: string; thinking?: string; signature?: string; text?: string }>;
+			assert.strictEqual(blocks[0].type, "thinking", "Anthropic 要求思考块位于助手内容的最前面");
+			assert.strictEqual(blocks[0].thinking, "先分析一下");
+			assert.strictEqual(blocks[0].signature, "sig-abc", "签名必须原样回放，否则请求会 400");
+			assert.strictEqual(blocks[1].type, "text");
+			assert.strictEqual(blocks[1].text, "这是回答");
+		});
+
+		test("无签名且未开启 include_reasoning_in_request 时不伪造 thinking 块", () => {
+			const api = new AnthropicApi("claude-3-7-sonnet", false);
+			const messages: vscode.LanguageModelChatRequestMessage[] = [
+				user("继续"),
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [
+						new vscode.LanguageModelThinkingPart("没有签名的思考", "tk_2"),
+						new vscode.LanguageModelTextPart("回答"),
+					],
+				},
+			];
+
+			const converted = api.convertMessages(messages, { includeReasoningInRequest: false });
+			const assistant = converted.find((m) => m.role === "assistant");
+			assert.ok(assistant && Array.isArray(assistant.content));
+
+			for (const block of assistant.content as Array<{ type: string }>) {
+				assert.notStrictEqual(block.type, "thinking", "缺少 signature 的思考块不能回放");
+			}
+		});
+
+		test("redacted_thinking：加密思考数据原样回放", () => {
+			const api = new AnthropicApi("claude-3-7-sonnet", false);
+			const messages: vscode.LanguageModelChatRequestMessage[] = [
+				user("继续"),
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [
+						new vscode.LanguageModelThinkingPart("", "tk_3", { redactedData: "encrypted-blob" }),
+						new vscode.LanguageModelTextPart("回答"),
+					],
+				},
+			];
+
+			const converted = api.convertMessages(messages, { includeReasoningInRequest: false });
+			const assistant = converted.find((m) => m.role === "assistant");
+			assert.ok(assistant && Array.isArray(assistant.content));
+
+			const first = (assistant.content as Array<{ type: string; data?: string }>)[0];
+			assert.strictEqual(first.type, "redacted_thinking");
+			assert.strictEqual(first.data, "encrypted-blob");
+		});
+
+		test("宿主关闭思考（modelOptions._enableThinking=false）时摘除 extra 里的 thinking", () => {
+			const api = new AnthropicApi("claude-3-7-sonnet", false);
+			const model = {
+				id: "claude-3-7-sonnet",
+				extra: { thinking: { type: "enabled", budget_tokens: 2048 } },
+			} as unknown as HFModelItem;
+
+			const withThinkingOff = api.prepareRequestBody(
+				{ model: "claude-3-7-sonnet", max_tokens: 4096, messages: [] },
+				model,
+				{
+					modelOptions: { _enableThinking: false },
+					toolMode: vscode.LanguageModelChatToolMode.Auto,
+				} as unknown as vscode.ProvideLanguageModelChatResponseOptions
+			);
+			assert.strictEqual(
+				(withThinkingOff as unknown as Record<string, unknown>).thinking,
+				undefined,
+				"宿主显式关闭思考时必须不发送 thinking"
+			);
+
+			// 旧版宿主不下发该字段 → 保持插件自身配置行为不变
+			const withoutHostOverride = api.prepareRequestBody(
+				{ model: "claude-3-7-sonnet", max_tokens: 4096, messages: [] },
+				model,
+				{ toolMode: vscode.LanguageModelChatToolMode.Auto } as unknown as vscode.ProvideLanguageModelChatResponseOptions
+			);
+			assert.deepStrictEqual(
+				(withoutHostOverride as unknown as Record<string, unknown>).thinking,
+				{ type: "enabled", budget_tokens: 2048 }
+			);
 		});
 	});
 

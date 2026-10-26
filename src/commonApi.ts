@@ -64,6 +64,15 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 	/** Timer for delayed flushing of thinking buffer. */
 	protected _thinkingFlushTimer: NodeJS.Timeout | null = null;
 
+	/**
+	 * 待附加到当前思考序列上的加密状态（例如 Anthropic 的 thinking `signature`）。
+	 *
+	 * 必须在思考结束哨兵之前以一个内容分片上报：宿主的思考归档逻辑对
+	 * `{ vscode_reasoning_done: true }` 哨兵会刻意**不**覆盖 metadata，
+	 * 挂在哨兵上会直接丢失。
+	 */
+	private _pendingThinkingMetadata: Record<string, unknown> | null = null;
+
 	/** System prompts to include in requests. */
 	protected _systemContent: string | undefined;
 
@@ -251,11 +260,20 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 	 */
 	protected reportEndThinking(progress: Progress<LanguageModelResponsePart2>) {
 		if (!this._currentThinkingId) {
+			// 没有进行中的思考序列：丢弃悬空的加密状态，避免污染后续序列。
+			this._pendingThinkingMetadata = null;
 			return;
 		}
 		// Always clean up state after attempting to end the thinking sequence
 		try {
 			this.flushThinkingBuffer(progress);
+			// 加密思考状态必须先于结束哨兵上报：宿主对
+			// `{ vscode_reasoning_done: true }` 哨兵不会合并 metadata。
+			const pendingMetadata = this._pendingThinkingMetadata;
+			if (pendingMetadata) {
+				this._pendingThinkingMetadata = null;
+				progress.report(new LanguageModelThinkingPart("", this._currentThinkingId, pendingMetadata));
+			}
 			// End the current thinking sequence with empty content and same ID.
 			// 携带官方结束哨兵 { vscode_reasoning_done: true }（对齐官方扩展
 			// languageModelAccess.ts 姿势）：宿主 BYOK 处理器显式识别该元数据作为
@@ -265,12 +283,21 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 			console.error("[OAI Compatible Model Provider] Failed to end thinking sequence:", e);
 		}
 		this._currentThinkingId = null;
+		this._pendingThinkingMetadata = null;
 		// Clear thinking buffer and timer since sequence ended
 		this._thinkingBuffer = "";
 		if (this._thinkingFlushTimer) {
 			clearTimeout(this._thinkingFlushTimer);
 			this._thinkingFlushTimer = null;
 		}
+	}
+
+	/**
+	 * 登记将在本段思考结束时随内容分片上报的加密状态。
+	 * 传 null 表示清除（适配层在宿主未请求加密状态时不应调用此方法）。
+	 */
+	protected setPendingThinkingMetadata(metadata: Record<string, unknown> | null): void {
+		this._pendingThinkingMetadata = metadata;
 	}
 
 	/**

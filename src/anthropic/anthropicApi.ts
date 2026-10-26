@@ -20,7 +20,14 @@ import type {
 	AnthropicStreamChunk,
 } from "./anthropicTypes";
 
-import { isImageMimeType, isToolResultPart, collectToolResultText, convertToolsToOpenAI, mapRole } from "../utils";
+import {
+	getHostThinkingOverride,
+	isImageMimeType,
+	isToolResultPart,
+	collectToolResultText,
+	convertToolsToOpenAI,
+	mapRole,
+} from "../utils";
 
 import { CommonApi } from "../commonApi";
 import { logger } from "../logger";
@@ -41,9 +48,20 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 	 */
 	private _sawNativeThinkingBlock = false;
 
-	constructor(modelId: string, cacheControlEnabled = true) {
+	/**
+	 * 当前 thinking 块的 `signature`。Anthropic 要求重放思考块时**原样带回**签名，
+	 * 缺签名或被改写都会让整个请求 400。仅当宿主请求加密思考状态
+	 * （`includeEncryptedThinking`）时才通过 thinking 分片 metadata 上报。
+	 */
+	private _currentThinkingSignature: string | null = null;
+
+	/** 宿主（较新 Copilot Chat）是否要求响应携带可跨轮重放的加密思考状态。 */
+	private readonly _includeEncryptedThinking: boolean;
+
+	constructor(modelId: string, cacheControlEnabled = true, includeEncryptedThinking = false) {
 		super(modelId);
 		this._cacheControlEnabled = cacheControlEnabled;
+		this._includeEncryptedThinking = includeEncryptedThinking;
 	}
 
 	/**
@@ -92,6 +110,9 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			const toolCalls: AnthropicToolUseBlock[] = [];
 			const toolResults: AnthropicToolResultBlock[] = [];
 			const thinkingParts: string[] = [];
+			// 加密思考状态：signature 用于正常 thinking 块，redactedData 用于加密块。
+			let thinkingSignature: string | undefined;
+			let redactedThinkingData: string | undefined;
 			// Cache breakpoints emitted by the host (Copilot) via LanguageModelDataPart(mimeType="cache_control").
 			// We mark the position in the constructed content-block list where each breakpoint should land.
 			// Breakpoints appearing before any other content fall back to the first block; after-all
@@ -135,6 +156,15 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 				} else if (part instanceof vscode.LanguageModelThinkingPart) {
 					const content = Array.isArray(part.value) ? part.value.join("") : part.value;
 					thinkingParts.push(content);
+					const metadata = part.metadata as Record<string, unknown> | undefined;
+					if (metadata) {
+						if (!thinkingSignature && typeof metadata.signature === "string" && metadata.signature) {
+							thinkingSignature = metadata.signature;
+						}
+						if (!redactedThinkingData && typeof metadata.redactedData === "string" && metadata.redactedData) {
+							redactedThinkingData = metadata.redactedData;
+						}
+					}
 					collectedParts++;
 				}
 			}
@@ -155,6 +185,34 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			// Build content blocks for user/assistant messages
 			const contentBlocks: AnthropicContentBlock[] = [];
 
+			// Add thinking content for assistant messages.
+			// Anthropic 要求思考块位于助手消息内容的最前面（thinking 启用时），
+			// 因此必须先于 text / image 落位。
+			if (role === "assistant") {
+				if (redactedThinkingData) {
+					// 加密思考块只能原样回放（上游据此恢复被隐藏的推理过程）。
+					contentBlocks.push({
+						type: "redacted_thinking",
+						data: redactedThinkingData,
+					});
+				}
+				if (joinedThinking && thinkingSignature) {
+					// 带签名的思考块：签名必须与思考文本一起原样回放，否则 Anthropic 直接 400。
+					contentBlocks.push({
+						type: "thinking",
+						thinking: joinedThinking,
+						signature: thinkingSignature,
+					});
+				} else if (modelConfig.includeReasoningInRequest) {
+					// 无签名时的旧行为（用户显式开启 include_reasoning_in_request）：
+					// 保留占位思考块，避免对既有可用配置造成回归。
+					contentBlocks.push({
+						type: "thinking",
+						thinking: joinedThinking || "Next step.",
+					});
+				}
+			}
+
 			// Add text content
 			if (joinedText) {
 				contentBlocks.push({
@@ -173,14 +231,6 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 						media_type: imagePart.mimeType,
 						data: base64Data,
 					},
-				});
-			}
-
-			// Add thinking content for assistant messages
-			if (role === "assistant" && modelConfig.includeReasoningInRequest) {
-				contentBlocks.push({
-					type: "thinking",
-					thinking: joinedThinking || "Next step.",
 				});
 			}
 
@@ -313,6 +363,12 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 					}
 				}
 			}
+		}
+
+		// 宿主（Copilot Chat）显式关闭思考：`thinking` 只能由 extra 配置注入，
+		// 这里统一摘除。旧版宿主不下发该字段，行为保持不变。
+		if (getHostThinkingOverride(options) === false) {
+			delete (rb as { thinking?: unknown }).thinking;
 		}
 
 		// Anthropic accepts at most 4 `cache_control` breakpoints per request. The host (Copilot)
@@ -575,6 +631,7 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			if (chunk.content_block.type === "thinking") {
 				// Start thinking block（原生思考块标记：后续 text_delta 按干净正文直接发射）
 				this._sawNativeThinkingBlock = true;
+				this._currentThinkingSignature = null;
 				if (chunk.content_block.thinking) {
 					this.bufferThinkingContent(chunk.content_block.thinking, progress);
 				}
@@ -643,10 +700,16 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 					await this.tryEmitBufferedToolCall(idx, progress);
 				}
 			} else if (chunk.delta.type === "signature_delta" && chunk.delta.signature) {
-				// Signature for thinking block - ignore for now
-				// Could store for verification if needed later
+				// Anthropic 的思考签名：重放历史轮次时必须原样带回，否则请求 400。
+				this._currentThinkingSignature = (this._currentThinkingSignature ?? "") + chunk.delta.signature;
 			}
 		} else if (chunk.type === "content_block_stop" || chunk.type === "message_stop") {
+			// 思考块的签名在 content_block_stop 之前送达；在结束思考序列前交给基类，
+			// 由 reportEndThinking 于结束哨兵之前以内容分片上报。
+			if (this._includeEncryptedThinking && this._currentThinkingSignature) {
+				this.setPendingThinkingMetadata({ signature: this._currentThinkingSignature });
+			}
+			this._currentThinkingSignature = null;
 			// End of message - ensure thinking is ended and flush all tool calls
 			await this.flushToolCallBuffers(progress, false);
 			this.reportEndThinking(progress);

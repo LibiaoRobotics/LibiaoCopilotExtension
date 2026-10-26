@@ -38,6 +38,16 @@ export interface AnthropicThinkingBlock {
 	cache_control?: AnthropicCacheControl;
 }
 
+/**
+ * 被上游加密（redacted）的思考块，只能原样回放，不能改写。
+ * @see https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking
+ */
+export interface AnthropicRedactedThinkingBlock {
+	type: "redacted_thinking";
+	data: string;
+	cache_control?: AnthropicCacheControl;
+}
+
 export interface AnthropicToolUseBlock {
 	type: "tool_use";
 	id: string;
@@ -58,6 +68,7 @@ export type AnthropicContentBlock =
 	| AnthropicTextBlock
 	| AnthropicImageBlock
 	| AnthropicThinkingBlock
+	| AnthropicRedactedThinkingBlock
 	| AnthropicToolUseBlock
 	| AnthropicToolResultBlock;
 

@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import type { HFModelItem, RetryConfig } from "./types";
+import { CustomDataPartMimeTypes } from "./types";
 import { OpenAIFunctionToolDef } from "./openai/openaiTypes";
 
 import { logger } from "./logger";
@@ -262,8 +263,15 @@ export function collectToolResultText(pr: { content?: ReadonlyArray<unknown> }):
 			text += c.value;
 		} else if (typeof c === "string") {
 			text += c;
-		} else if (c instanceof vscode.LanguageModelDataPart && c.mimeType === "cache_control") {
-			/* ignore */
+		} else if (c instanceof vscode.LanguageModelDataPart) {
+			// 缓存断点是传输层标记，对模型不可见，直接丢弃。
+			if (c.mimeType === CustomDataPartMimeTypes.CacheControl) {
+				continue;
+			}
+			// 二进制 DataPart（工具返回的截图等）绝不能被 JSON.stringify：
+			// Uint8Array 会被展开成 { "0":137, "1":80, ... } 的数字表，
+			// 一张截图就能把上下文撑爆，同时丢掉图片语义。
+			text += `[${c.mimeType} data omitted]`;
 		} else {
 			try {
 				text += JSON.stringify(c);
@@ -378,4 +386,81 @@ export async function executeWithRetry<T>(fn: () => Promise<T>, retryConfig: Ret
 		lastError: lastError ? { name: lastError.name, message: lastError.message } : String(lastError),
 	});
 	throw lastError || new Error("Retry failed");
+}
+
+/**
+ * 读取宿主（Copilot Chat）随请求下发的思考开关。
+ *
+ * Copilot 在代理循环里会根据本次意图决定是否允许思考，并通过
+ * `modelOptions._enableThinking` 透传到 BYOK/扩展提供的模型。旧版宿主不会
+ * 填充该字段，此时返回 `undefined`，调用方必须保持插件自身的模型配置行为不变。
+ */
+export function getHostThinkingOverride(
+	options?: Pick<vscode.ProvideLanguageModelChatResponseOptions, "modelOptions">
+): boolean | undefined {
+	const value = options?.modelOptions?._enableThinking;
+	return typeof value === "boolean" ? value : undefined;
+}
+
+/**
+ * 解析 `Retry-After` 响应头（秒数或 HTTP 日期）为毫秒；无法解析时返回 undefined。
+ */
+export function parseRetryAfterMs(headerValue: string | null | undefined): number | undefined {
+	if (!headerValue) {
+		return undefined;
+	}
+	const trimmed = headerValue.trim();
+	if (!trimmed) {
+		return undefined;
+	}
+	const seconds = Number(trimmed);
+	if (Number.isFinite(seconds)) {
+		// 纯数字一律按秒解释；负数视为非法，不再回退到日期解析（`-5` 会被 Date.parse 当成年份）。
+		return seconds >= 0 ? Math.round(seconds * 1000) : undefined;
+	}
+	const dateMs = Date.parse(trimmed);
+	if (Number.isFinite(dateMs)) {
+		return Math.max(0, dateMs - Date.now());
+	}
+	return undefined;
+}
+
+/**
+ * 把服务端建议的重试等待时间挂到错误对象上，供 {@link asRateLimitedError} 转交宿主。
+ * 无 `Retry-After` 头时原样返回，不改变既有错误语义。
+ */
+export function withRetryAfter<T extends Error>(error: T, res: Response | undefined): T {
+	const retryAfterMs = parseRetryAfterMs(res?.headers?.get?.("retry-after"));
+	if (retryAfterMs !== undefined) {
+		(error as T & { retryAfterMs?: number }).retryAfterMs = retryAfterMs;
+	}
+	return error;
+}
+
+/**
+ * 把 429 失败尽量包装成 `LanguageModelError.RateLimited`，让宿主按服务端建议的
+ * `retryAfter` 退避，而不是把它当作普通错误立即重试。
+ *
+ * 该静态方法只存在于较新的 VS Code；旧版宿主上不存在该符号，此时原样抛出原错误，
+ * 保证向后兼容（不得直接引用 `vscode.LanguageModelError.RateLimited`）。
+ */
+export function asRateLimitedError(error: unknown): unknown {
+	const err = error instanceof Error ? error : new Error(String(error));
+	const status = (err as { status?: unknown }).status;
+	const isRateLimited = status === 429 || /\[429\]/.test(err.message);
+	if (!isRateLimited) {
+		return err;
+	}
+
+	const rateLimitedFactory = (
+		vscode.LanguageModelError as unknown as {
+			RateLimited?: (message?: string, retryAfter?: number) => Error;
+		}
+	).RateLimited;
+	if (typeof rateLimitedFactory !== "function") {
+		return err;
+	}
+
+	const retryAfterMs = (err as { retryAfterMs?: unknown }).retryAfterMs;
+	return rateLimitedFactory(err.message, typeof retryAfterMs === "number" ? retryAfterMs : undefined);
 }
