@@ -7,14 +7,19 @@ interface UpdateCall {
 	value: boolean;
 }
 
-/** 记录写调用的假配置；`values` 用 "section.key" 作键。 */
+/** 记录写调用的假配置；`values` 是有效值，`globalValues` 是用户层显式值。 */
 class MockConfigApi implements HarnessConfigApi {
 	readonly updates: UpdateCall[] = [];
 	readonly values = new Map<string, boolean | undefined>();
+	readonly globalValues = new Map<string, boolean | undefined>();
 	failOn: string | undefined;
 
 	get(section: string, key: string): boolean | undefined {
 		return this.values.get(`${section}.${key}`);
+	}
+
+	getGlobalValue(section: string, key: string): boolean | undefined {
+		return this.globalValues.get(`${section}.${key}`);
 	}
 
 	async update(section: string, key: string, value: boolean): Promise<void> {
@@ -24,6 +29,7 @@ class MockConfigApi implements HarnessConfigApi {
 		}
 		this.updates.push({ section, key, value });
 		this.values.set(fullKey, value);
+		this.globalValues.set(fullKey, value);
 	}
 }
 
@@ -90,5 +96,31 @@ suite("Harness Guard Tests", () => {
 
 		assert.deepStrictEqual(secondRun, []);
 		assert.strictEqual(api.updates.length, 2, "总写入次数应仍为第一次的两条");
+	});
+
+	test("suppressHarnessDefault: 用户在用户层显式开启 agent host 时不抢回", async () => {
+		const api = new MockConfigApi();
+		api.values.set("chat.defaultToCopilotHarness", true);
+		api.globalValues.set("chat.defaultToCopilotHarness", true);
+		api.values.set("chat.editor.preferCopilotHarness", true);
+
+		const corrected = await suppressHarnessDefault(api);
+
+		assert.deepStrictEqual(corrected, ["chat.editor.preferCopilotHarness"], "显式开启的开关应被跳过");
+		assert.ok(
+			!api.updates.some((u) => u.key === "defaultToCopilotHarness"),
+			"不应覆盖用户显式设置的 true"
+		);
+	});
+
+	test("suppressHarnessDefault: 实验层推高但用户层未设置时写入 false", async () => {
+		const api = new MockConfigApi();
+		api.values.set("chat.editor.preferCopilotHarness", true);
+		// globalValues 保持未设置，模拟实验注入 DEFAULT 层
+
+		const corrected = await suppressHarnessDefault(api);
+
+		assert.deepStrictEqual(corrected, ["chat.editor.preferCopilotHarness"]);
+		assert.strictEqual(api.globalValues.get("chat.editor.preferCopilotHarness"), false);
 	});
 });
