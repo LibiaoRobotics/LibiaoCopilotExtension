@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta http-equiv="Content-Security-Policy" content="%CSP_SOURCE%" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>企微联动</title>
+		<link rel="stylesheet" href="%CSS_URI%" />
+	</head>
+	<body>
+		<section id="setupSection">
+			<div class="section-header">
+				<h2>环境就绪</h2>
+				<div class="section-actions">
+					<button id="createHook" type="button">初始化到此项目</button>
+					<button id="recheckPowerShell" class="secondary" type="button">重新检测</button>
+				</div>
+			</div>
+			<div class="section-description">
+				只处理当前工作区第一个文件夹下的 <code>.github/hooks</code>，其他目录与用户级 hook 目录都不读取。
+				创建前必须检测到 PowerShell 7：hook 由 pwsh 执行，缺它生成出来的文件不会发出任何通知。
+			</div>
+
+			<ul class="readiness-list" id="readinessList"></ul>
+
+			<div class="notice warn" id="readinessMessage" hidden></div>
+
+			<div class="notice">
+				<span class="notice-label">PowerShell</span>
+				<span id="powerShellText"></span>
+				<button id="installPowerShell" class="secondary inline" type="button" hidden>安装 PowerShell 7</button>
+			</div>
+
+			<div class="notice">
+				<span class="notice-label">hook 目录</span>
+				<code id="hookDirPath"></code>
+			</div>
+
+			<div class="notice" id="scriptVersionNotice" hidden>
+				<span class="notice-label">脚本版本</span>
+				<span id="scriptVersionText"></span>
+				<button id="updateScript" class="secondary inline" type="button" hidden>更新脚本</button>
+			</div>
+		</section>
+
+		<section id="notifySection">
+			<div class="section-header">
+				<h2>通知参数</h2>
+				<div class="section-actions">
+					<button id="save">保存配置</button>
+					<button id="openConfigFile" class="secondary" type="button">打开配置文件</button>
+				</div>
+			</div>
+			<div class="section-description">
+				每轮对话结束时，由工作区的 Stop hook（<code>.github/hooks/WechatNotify.ps1</code>）读取本页参数并推送到企业微信群。
+				保存后下一轮对话结束即生效，无需重载窗口。
+			</div>
+
+			<div class="field">
+				<label class="checkbox-label" for="enabled">
+					<input id="enabled" type="checkbox" class="checkbox" />
+					<span>启用通知</span>
+				</label>
+				<div class="field-description">关闭时 hook 会直接退出，不发送任何请求。</div>
+			</div>
+
+			<div class="field">
+				<label for="webhook">Webhook 地址</label>
+				<div class="field-description">企业微信群机器人的 webhook 完整地址，以 <code>?key=</code> 结尾。</div>
+				<div class="row">
+					<input id="webhook" type="password" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." />
+					<button id="toggleWebhook" class="secondary" type="button">显示</button>
+					<button id="testWebhook" class="secondary" type="button" data-keep-enabled>测试连通性</button>
+				</div>
+				<div class="notice" id="testResultNotice" hidden>
+					<span class="notice-label">连通性</span>
+					<span id="testResultText"></span>
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="field">
+					<label for="minDurationSeconds">最小耗时（秒）</label>
+					<div class="field-description">本轮对话耗时未达到该值时不发送通知。</div>
+					<input id="minDurationSeconds" type="number" min="0" max="86400" step="1" />
+				</div>
+				<div class="field">
+					<label for="sessionSummaryChars">会话摘要字数</label>
+					<div class="field-description">会话标题缺失时，用首条消息截断到该字数作为标题。</div>
+					<input id="sessionSummaryChars" type="number" min="1" max="2000" step="1" />
+				</div>
+			</div>
+
+			<div class="notice" id="configPathNotice">
+				<span class="notice-label">配置文件</span>
+				<code id="configPath"></code>
+				<span class="muted" id="configPathHint"></span>
+			</div>
+
+			<div class="notice muted">
+				保存会重写该文件，文件中的自定义注释不会保留。Webhook 以明文存放，该文件已被 <code>.gitignore</code> 排除，请勿提交。
+			</div>
+		</section>
+
+		<script src="%SCRIPT_URI%" nonce="%NONCE%"></script>
+	</body>
+</html>

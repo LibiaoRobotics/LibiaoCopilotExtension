@@ -2,6 +2,17 @@ import * as vscode from "vscode";
 import { LanguageModelChatInformation, LanguageModelChatRequestMessage, LanguageModelChatTool } from "vscode";
 import { countMessageTokens, countToolTokens } from "./provideToken";
 import type { SessionStats } from "./sessionStats";
+import type { WechatNotifyConfigState } from "./wechatNotifyConfig";
+import {
+	resolveWechatNotifyStatus,
+	type WechatNotifyHookPresence,
+	type WechatNotifyScriptInfo,
+	type WechatNotifyStatus,
+} from "./wechatNotifyHookSetup";
+import {
+	WECHAT_NOTIFY_JSON_FILE_NAME,
+	WECHAT_NOTIFY_SCRIPT_FILE_NAME,
+} from "./wechatNotifyPaths";
 
 export function initStatusBar(context: vscode.ExtensionContext): vscode.StatusBarItem {
 	// Create status bar item for token count display
@@ -14,6 +25,133 @@ export function initStatusBar(context: vscode.ExtensionContext): vscode.StatusBa
 	// Show the status bar item initially
 	tokenCountStatusBarItem.show();
 	return tokenCountStatusBarItem;
+}
+
+/**
+ * 企微联动图标。priority 小于 Token Count 的 100 —— 该值越大越靠左，
+ * 因此 99 才会排在 Token Count 右侧。
+ */
+export function initWechatNotifyStatusBar(context: vscode.ExtensionContext): vscode.StatusBarItem {
+	const wechatNotifyStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+	wechatNotifyStatusBarItem.name = "企微联动";
+	wechatNotifyStatusBarItem.text = "$(circle-slash) 企微联动";
+	wechatNotifyStatusBarItem.tooltip = "企微联动 - 点击打开配置界面";
+	wechatNotifyStatusBarItem.command = "libiaoCopilot.openWechatNotifyConfig";
+	context.subscriptions.push(wechatNotifyStatusBarItem);
+	wechatNotifyStatusBarItem.show();
+	return wechatNotifyStatusBarItem;
+}
+
+/** 主状态 → 图标。$(warning) 只留给"配了但发不出去"的故障态 */
+const WECHAT_NOTIFY_STATUS_ICON: Record<WechatNotifyStatus, string> = {
+	active: "$(bell)",
+	disabled: "$(bell-slash)",
+	"not-created": "$(circle-slash)",
+	"no-workspace": "$(circle-slash)",
+	incomplete: "$(warning)",
+	"no-webhook": "$(warning)",
+};
+
+/** 主状态 → tooltip 首行文案，补足图标表达不了的细节 */
+const WECHAT_NOTIFY_STATUS_TEXT: Record<WechatNotifyStatus, string> = {
+	active: "已启用，通知会正常发送",
+	disabled: "未启用，不会发送通知",
+	"not-created": "当前项目尚未创建，点开面板可一键初始化",
+	incomplete: "hook 文件不完整，通知不会触发",
+	"no-workspace": "未打开工作区，无法联动",
+	"no-webhook": "已勾选启用但没填 Webhook，通知发不出去",
+};
+
+/** 这些状态用灰色图标，避免和真正需要处理的故障抢注意力 */
+const WECHAT_NOTIFY_DIM_STATUS: ReadonlySet<WechatNotifyStatus> = new Set<WechatNotifyStatus>([
+	"disabled",
+	"not-created",
+	"no-workspace",
+]);
+
+/**
+ * 用当前配置刷新图标。
+ *
+ * 这里不探测 pwsh —— 探测要 spawn 进程且未安装时吃满超时，状态栏刷新频率高，
+ * 只依据文件存在性与脚本版本（廉价读文件）。
+ *
+ * 主状态互斥决定图标；"待升级"是叠加标记，只用箭头后缀 + tooltip 提示，
+ * 不算故障，不抢 $(warning) 的语义。
+ *
+ * workspaceReady 不传时按 configPath 推断：配置文件路径拿不到就说明没打开工作区。
+ */
+export function updateWechatNotifyStatusBar(
+	item: vscode.StatusBarItem,
+	state: WechatNotifyConfigState,
+	presence?: WechatNotifyHookPresence,
+	script?: WechatNotifyScriptInfo,
+	workspaceReady = state.configPath !== undefined
+): void {
+	const { settings, exists, configPath } = state;
+	const webhookConfigured = settings.webhook.trim().length > 0;
+
+	// 未传 presence 的旧调用按"文件齐备"处理，保持降级行为不变
+	const currentPresence: WechatNotifyHookPresence = presence ?? { json: true, script: true, config: true };
+	const missingHookFiles: string[] = [];
+	if (presence) {
+		if (!presence.json) {
+			missingHookFiles.push(WECHAT_NOTIFY_JSON_FILE_NAME);
+		}
+		if (!presence.script) {
+			missingHookFiles.push(WECHAT_NOTIFY_SCRIPT_FILE_NAME);
+		}
+	}
+
+	const status = resolveWechatNotifyStatus({
+		workspaceReady,
+		presence: currentPresence,
+		enabled: settings.enabled,
+		webhook: settings.webhook,
+	});
+	// 只有真正在用的状态才叠升级标记：故障态已经占了 $(warning)，再叠箭头只会让两种信号互相干扰
+	const scriptMarkable = status === "active" || status === "disabled";
+	const scriptPending =
+		scriptMarkable && (script?.status === "outdated" || script?.status === "unknown");
+
+	const icon = WECHAT_NOTIFY_STATUS_ICON[status];
+	item.text = scriptPending ? `${icon} 企微联动 $(arrow-up)` : `${icon} 企微联动`;
+	item.color = WECHAT_NOTIFY_DIM_STATUS.has(status)
+		? new vscode.ThemeColor("disabledForeground")
+		: undefined;
+
+	const configPathText = configPath ? `\`${configPath}\`` : "未打开工作区";
+	const configFileLine = `配置文件：${configPathText}${exists ? "" : "（不存在，使用默认值）"}`;
+	const hookLine = missingHookFiles.length === 0
+		? presence
+			? "Hook：已就绪"
+			: undefined
+		: `Hook：缺少 ${missingHookFiles.join("、")}，通知不会触发`;
+	const scriptLine = !scriptMarkable || !script
+		? undefined
+		: script.status === "outdated"
+			? `脚本：${script.installedVersion} → ${script.templateVersion}，可在面板点「更新脚本」`
+			: script.status === "unknown"
+				? "脚本：未检测到版本号，可能是旧版，可在面板点「更新脚本」"
+				: script.identical
+					? undefined
+					: `脚本：${script.installedVersion}（已是最新，含你的本地修改）`;
+	const tooltip = new vscode.MarkdownString(
+		[
+			`$(bell) **企微联动** — ${WECHAT_NOTIFY_STATUS_TEXT[status]}`,
+			`Webhook：${webhookConfigured ? "已配置" : "未配置"}  `,
+			hookLine ? `${hookLine}  ` : undefined,
+			scriptLine ? `${scriptLine}  ` : undefined,
+			`最小耗时：${settings.minDurationSeconds} 秒  `,
+			`摘要字数：${settings.sessionSummaryChars} 字  `,
+			configFileLine + "  ",
+			"",
+			"$(gear) 点击打开配置界面",
+		]
+			.filter((line): line is string => line !== undefined)
+			.join("\n")
+	);
+	tooltip.supportThemeIcons = true;
+	item.tooltip = tooltip;
 }
 
 /**

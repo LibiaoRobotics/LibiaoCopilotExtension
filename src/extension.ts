@@ -1,8 +1,11 @@
 import * as vscode from "vscode";
 import { HuggingFaceChatModelProvider } from "./provider";
 import type { HFModelItem } from "./types";
-import { initStatusBar } from "./statusBar";
+import { initStatusBar, initWechatNotifyStatusBar, updateWechatNotifyStatusBar } from "./statusBar";
 import { ConfigViewPanel } from "./views/configView";
+import { WechatNotifyViewPanel } from "./views/wechatNotifyView";
+import { readWechatNotifyConfigState } from "./wechatNotifyConfig";
+import { readWechatNotifyHookPresence, readWechatNotifyScriptInfo } from "./wechatNotifyHookService";
 import { logger } from "./logger";
 import { normalizeUserModels } from "./utils";
 import { abortCommitGeneration, generateCommitMsg } from "./gitCommit/commitMessageGenerator";
@@ -47,6 +50,35 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	const tokenCountStatusBarItem: vscode.StatusBarItem = initStatusBar(context);
+
+	// 企微联动图标：读的是工作区里的 hook 配置文件，与 WechatNotify.ps1 同源
+	const wechatNotifyStatusBarItem: vscode.StatusBarItem = initWechatNotifyStatusBar(context);
+	const refreshWechatNotifyStatusBar = async () => {
+		const [configState, hookPresence, scriptInfo] = await Promise.all([
+			readWechatNotifyConfigState(),
+			readWechatNotifyHookPresence(),
+			readWechatNotifyScriptInfo(context.extensionUri),
+		]);
+		const workspaceReady = Boolean(vscode.workspace.workspaceFolders?.length);
+		updateWechatNotifyStatusBar(wechatNotifyStatusBarItem, configState, hookPresence, scriptInfo, workspaceReady);
+	};
+	void refreshWechatNotifyStatusBar();
+
+	// hooks 目录下的文件可能被手工编辑或删除，不监听的话图标会长期显示过时状态
+	const rootFolder = vscode.workspace.workspaceFolders?.[0];
+	if (rootFolder) {
+		const notifyConfigWatcher = vscode.workspace.createFileSystemWatcher(
+			new vscode.RelativePattern(rootFolder, ".github/hooks/*")
+		);
+		const onNotifyConfigChanged = () => {
+			void refreshWechatNotifyStatusBar();
+		};
+		notifyConfigWatcher.onDidChange(onNotifyConfigChanged);
+		notifyConfigWatcher.onDidCreate(onNotifyConfigChanged);
+		notifyConfigWatcher.onDidDelete(onNotifyConfigChanged);
+		context.subscriptions.push(notifyConfigWatcher);
+	}
+
 	const provider = new HuggingFaceChatModelProvider(context.secrets, tokenCountStatusBarItem);
 	// Register the Hugging Face provider under the vendor id used in package.json
 	context.subscriptions.push(vscode.lm.registerLanguageModelChatProvider("libiao-copilot", provider));
@@ -139,6 +171,14 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.commands.registerCommand("libiaoCopilot.openConfig", async () => {
 			ConfigViewPanel.openPanel(context.extensionUri, context.secrets, context.globalStorageUri);
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("libiaoCopilot.openWechatNotifyConfig", () => {
+			WechatNotifyViewPanel.openPanel(context.extensionUri, () => {
+				void refreshWechatNotifyStatusBar();
+			});
 		})
 	);
 

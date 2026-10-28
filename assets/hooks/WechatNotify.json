@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \".github/hooks/WechatNotify.ps1\"",
+        "timeout": 15
+      }
+    ]
+  }
+}

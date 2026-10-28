@@ -33,7 +33,7 @@
 		"git-commit",
 		"thinking"
 	],
-	"version": "1.4.0",
+	"version": "1.5.0",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -71,6 +71,11 @@
 				"command": "libiaoCopilot.openConfig",
 				"category": "Libiao Copilot",
 				"title": "打开配置界面"
+			},
+			{
+				"command": "libiaoCopilot.openWechatNotifyConfig",
+				"category": "Libiao Copilot",
+				"title": "打开企微联动配置"
 			},
 			{
 				"command": "libiaoCopilot.generateGitCommitMessage",
