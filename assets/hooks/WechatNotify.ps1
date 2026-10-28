@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 
 # 脚本版本（语义化）。扩展拿它和内置模板比对，判断工作区副本是否为旧版。
 # 改动本脚本的行为后请同步递增此版本号，否则升级提醒会错判。
-$ScriptVersion = '1.2.4'
+$ScriptVersion = '1.2.5'
 
 $StateFile = Join-Path $env:TEMP 'libiao-copilot-wechatnotify.state'
 $LogFile = Join-Path $env:TEMP 'libiao-copilot-wechatnotify.log'
@@ -70,15 +70,49 @@ function Get-ModelName($SelectedModel) {
 	return ''
 }
 
-function Get-LastCredits([string] $Text) {
-	# 只取文本中最后一个 copilotCredits 字面量：精确重放补丁在 PowerShell 里做不到，取最新值即可
-	$creditMatches = [regex]::Matches($Text, '"copilotCredits"\s*:\s*([0-9][0-9.eE+-]*)')
-	if ($creditMatches.Count -eq 0) { return $null }
-	$value = 0.0
-	$styles = [System.Globalization.NumberStyles]::Float
-	$culture = [System.Globalization.CultureInfo]::InvariantCulture
-	if ([double]::TryParse($creditMatches[$creditMatches.Count - 1].Groups[1].Value, $styles, $culture, [ref] $value)) { return $value }
+function Get-LastCredits($Session) {
+	if ($null -eq $Session.requests -or $Session.requests.Count -eq 0) { return $null }
+	$value = $Session.requests[-1].copilotCredits
+	if ($value -is [valuetype] -and $value -isnot [bool] -and [double]::IsFinite([double] $value) -and $value -ge 0) { return [double] $value }
 	return $null
+}
+
+function Read-SessionState([string] $LogPath) {
+	if ([System.IO.Path]::GetExtension($LogPath) -eq '.json') {
+		$text = [System.IO.File]::ReadAllText($LogPath, [System.Text.Encoding]::UTF8)
+		return ($text.TrimStart([char] 0xFEFF) | ConvertFrom-Json -AsHashtable)
+	}
+
+	$session = $null
+	foreach ($line in [System.IO.File]::ReadLines($LogPath)) {
+		try { $entry = $line.TrimStart([char] 0xFEFF) | ConvertFrom-Json -AsHashtable } catch { continue }
+		if ($entry.kind -eq 0) { $session = $entry.v; continue }
+		if ($null -eq $session -or $entry.k -isnot [array]) { continue }
+		if ($entry.k.Count -eq 0) {
+			if ($entry.kind -eq 1) { $session = $entry.v }
+			continue
+		}
+		$parent = $session
+		for ($index = 0; $index -lt $entry.k.Count - 1; $index++) {
+			$parent = $parent[$entry.k[$index]]
+		}
+		$key = $entry.k[-1]
+		switch ($entry.kind) {
+			1 { $parent[$key] = $entry.v }
+			2 {
+				$items = [System.Collections.Generic.List[object]]::new()
+				$items.AddRange([object[]] $parent[$key])
+				if ($entry.Contains('i')) {
+					$offset = [int] $entry.i
+					$items.RemoveRange($offset, $items.Count - $offset)
+				}
+				if ($entry.Contains('v')) { $items.AddRange([object[]] $entry.v) }
+				$parent[$key] = $items.ToArray()
+			}
+			3 { $parent.Remove($key) }
+		}
+	}
+	return $session
 }
 
 function Get-SessionInfo([string] $TranscriptPath, [string] $SessionId) {
@@ -96,47 +130,12 @@ function Get-SessionInfo([string] $TranscriptPath, [string] $SessionId) {
 		}
 		if ($null -eq $logPath) { return $null }
 
-		$info = [pscustomobject]@{ title = ''; selectedModel = ''; credits = $null }
-
-		# 关闭 chat.useLogSessionStorage 时只有扁平 JSON
-		if ([System.IO.Path]::GetExtension($logPath) -eq '.json') {
-			$text = [System.IO.File]::ReadAllText($logPath, [System.Text.Encoding]::UTF8)
-			$session = $text.TrimStart([char] 0xFEFF) | ConvertFrom-Json
-			$info.title = [string] $session.customTitle
-			$info.selectedModel = Get-ModelName $session.inputState.selectedModel
-			$info.credits = Get-LastCredits $text
-			return $info
+		$session = Read-SessionState $logPath
+		return [pscustomobject]@{
+			title = [string] $session.customTitle
+			selectedModel = Get-ModelName $session.inputState.selectedModel
+			credits = Get-LastCredits $session
 		}
-
-		# .jsonl 是补丁流。精确重放需要在 PSCustomObject 上按路径还原，PowerShell 做不到，
-		# 改为预筛：只解析可能含目标字段的行，取最后一次出现的值。
-		foreach ($line in [System.IO.File]::ReadLines($logPath)) {
-			if ($line -notmatch 'customTitle|selectedModel|copilotCredits') { continue }
-
-			$lineCredits = Get-LastCredits $line
-			if ($null -ne $lineCredits) { $info.credits = $lineCredits }
-
-			try { $entry = $line | ConvertFrom-Json } catch { continue }
-
-			# kind=0 为初始完整会话快照
-			if ($entry.kind -eq 0) {
-				if (-not [string]::IsNullOrWhiteSpace($entry.v.customTitle)) { $info.title = [string] $entry.v.customTitle }
-				$name = Get-ModelName $entry.v.inputState.selectedModel
-				if ($name) { $info.selectedModel = $name }
-				continue
-			}
-
-			# kind=1 为属性覆盖
-			if ($entry.kind -ne 1 -or $entry.k -isnot [array]) { continue }
-			if ($entry.k.Count -eq 1 -and $entry.k[0] -eq 'customTitle') {
-				$info.title = [string] $entry.v
-			} elseif ($entry.k.Count -eq 2 -and $entry.k[0] -eq 'inputState' -and $entry.k[1] -eq 'selectedModel') {
-				$name = Get-ModelName $entry.v
-				if ($name) { $info.selectedModel = $name }
-			}
-		}
-
-		return $info
 	} catch {
 		Write-WechatNotifyLog ('读取会话信息失败：{0}' -f $_.Exception.Message)
 		return $null
