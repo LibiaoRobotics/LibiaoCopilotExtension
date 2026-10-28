@@ -10,7 +10,7 @@
 	<body>
 		<section id="introSection" hidden>
 			<div class="section-description">
-				企微联动会在每轮对话结束时，通过企业微信群消息推送模块把本轮耗时、会话标题与所用模型发到群里，让你离开电脑也能知道任务是否跑完。
+				<span class="intro-lead">企微联动会在每轮对话结束时，通过企业微信群消息推送模块把本轮耗时、会话标题与所用模型发到群里，让你离开电脑也能知道任务是否跑完。</span>
 				<div class="section-warning">
 					注意：创建会在当前工作区的 <code>.github/hooks/</code> 目录下生成该功能所依赖的必备文件，请勿删除或改名。
 				</div>
@@ -20,14 +20,10 @@
 
 		<section id="mainSection" hidden>
 			<div class="section-header">
-				<h2>通知参数</h2>
+				<h2>群消息推送参数</h2>
 				<div class="section-actions">
 					<span id="saveHint" class="save-hint"></span>
-					<button id="openConfigFile" class="secondary" type="button">打开配置文件</button>
 				</div>
-			</div>
-			<div class="section-description">
-				每轮对话结束时，由工作区的 Stop hook（<code>.github/hooks/WechatNotify.ps1</code>）读取本页参数并推送到企业微信群。下方改动会即时保存，无需手动提交。
 			</div>
 
 			<div class="notice warn" id="powerShellNotice" hidden>
@@ -45,14 +41,12 @@
 			<div class="field">
 				<label class="checkbox-label" for="enabled">
 					<input id="enabled" type="checkbox" class="checkbox" />
-					<span>启用通知</span>
+					<span>启用</span>
 				</label>
-				<div class="field-description">关闭时 hook 会直接退出，不发送任何请求。Webhook 为空时同样按未启用处理。</div>
 			</div>
 
 			<div class="field">
-				<label for="webhook">Webhook 地址</label>
-				<div class="field-description">企业微信群消息推送模块的 webhook 完整地址，以 <code>?key=</code> 结尾。</div>
+				<label for="webhook">企业微信群消息推送模块的 webhook 完整地址，以 <code>?key=</code> 结尾。</label>
 				<div class="row">
 					<input id="webhook" type="password" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." />
 					<button id="toggleWebhook" class="secondary" type="button">显示</button>
@@ -64,15 +58,15 @@
 				</div>
 			</div>
 
-			<details class="steps-card">
+			<details class="steps-card" id="webhookHelp">
 				<summary>如何获取 Webhook 地址</summary>
 				<ol class="steps">
-					<li>在企业微信里新建一个群聊。</li>
-					<li>把多余的成员移出，群里只留自己一个人 —— 既不打扰同事，通知内容也不会外流。</li>
+					<li>在企业微信里新建一个群聊（⚠️注意：不能是外部群）。</li>
+					<li>可以把多余的成员移出，群里只留自己一个人 —— 既不打扰同事，通知内容也不会外流。</li>
 					<li>打开这个群的群设置，找到「消息推送」。</li>
 					<li>点添加，选择「自定义消息推送」。</li>
 					<li>
-						给它起个名称（比如「VS Code 对话通知」）并确认，创建完成后这个界面上会给出 Webhook 地址，整条复制后填到上面即可。
+						给它起个名称（比如「VS Code 通知」），并且这个界面上会给出 Webhook 地址，整条复制后填到上面即可。
 					</li>
 				</ol>
 			</details>
@@ -80,7 +74,7 @@
 			<div class="row">
 				<div class="field">
 					<label for="minDurationSeconds">最小耗时（秒）</label>
-					<div class="field-description">本轮对话耗时未达到该值时不发送通知。</div>
+					<div class="field-description">本轮对话耗时达到该值时才推送消息。</div>
 					<div class="input-with-hint">
 						<input id="minDurationSeconds" type="number" min="0" max="86400" step="1" />
 						<span class="field-hint" id="minDurationHuman"></span>
@@ -94,13 +88,10 @@
 			</div>
 
 			<div class="notice" id="configPathNotice">
+				<button id="openConfigFile" class="secondary lead" type="button">打开配置文件</button>
 				<span class="notice-label">配置文件</span>
 				<code id="configPath"></code>
 				<span class="muted" id="configPathHint"></span>
-			</div>
-
-			<div class="notice muted">
-				面板改动会即时写入该文件，文件中手写的注释不会保留。Webhook 以明文存放，该文件已被 <code>.gitignore</code> 排除，请勿提交。
 			</div>
 		</section>
 

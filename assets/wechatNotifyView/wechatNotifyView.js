@@ -11,6 +11,7 @@ const elements = {
 	mainSection: document.getElementById("mainSection"),
 	enabled: document.getElementById("enabled"),
 	webhook: document.getElementById("webhook"),
+	webhookHelp: document.getElementById("webhookHelp"),
 	toggleWebhook: document.getElementById("toggleWebhook"),
 	minDurationSeconds: document.getElementById("minDurationSeconds"),
 	minDurationHuman: document.getElementById("minDurationHuman"),
@@ -62,7 +63,7 @@ function showSaveHint(text) {
 	elements.saveHint.classList.toggle("visible", Boolean(text));
 }
 
-// 秒数难以直观感受，换算成天/小时/分/秒；零头单位省略，全零时保留「0 秒」
+// 秒数难以直观感受，换算成天/小时/分钟/秒；零头单位省略，全零时保留「0 秒」
 function formatDuration(seconds) {
 	const total = Math.max(0, Math.trunc(seconds));
 	if (total === 0) {
@@ -70,7 +71,7 @@ function formatDuration(seconds) {
 	}
 	let rest = total;
 	const parts = [];
-	for (const [size, label] of [[86400, "天"], [3600, "小时"], [60, "分"], [1, "秒"]]) {
+	for (const [size, label] of [[86400, "天"], [3600, "小时"], [60, "分钟"], [1, "秒"]]) {
 		const value = Math.floor(rest / size);
 		rest -= value * size;
 		if (value > 0) {
@@ -83,6 +84,12 @@ function formatDuration(seconds) {
 function renderMinDurationHint() {
 	const seconds = parseInteger(elements.minDurationSeconds, DEFAULT_MIN_DURATION_SECONDS);
 	elements.minDurationHuman.textContent = "= " + formatDuration(seconds);
+}
+
+// webhook 为空时给获取步骤卡片加流动光效；卡片展开后提示已达成，不再闪
+function renderWebhookHelpHint() {
+	const empty = elements.webhook.value.trim() === "";
+	elements.webhookHelp.classList.toggle("glowing", empty && !elements.webhookHelp.open);
 }
 
 function scheduleAutoSave(delay) {
@@ -169,6 +176,7 @@ function applyState(config, setup) {
 		elements.enabled.checked = settings.enabled;
 	}
 	renderMinDurationHint();
+	renderWebhookHelpHint();
 	lastSavedSignature = JSON.stringify(settings);
 
 	elements.configPath.textContent = config.configPath || "未打开工作区";
@@ -219,8 +227,11 @@ elements.testWebhook.addEventListener("click", () => {
 elements.webhook.addEventListener("input", () => {
 	// 地址改过之后，上一次的测试结论就不再对应当前地址，直接收起来
 	elements.testResultNotice.hidden = true;
+	renderWebhookHelpHint();
 	scheduleAutoSave(AUTO_SAVE_DELAY_MS);
 });
+
+elements.webhookHelp.addEventListener("toggle", renderWebhookHelpHint);
 
 // 失焦与勾选、数值改动都是离散操作，直接落盘；只有连续打字才走防抖
 elements.webhook.addEventListener("change", flushAutoSave);

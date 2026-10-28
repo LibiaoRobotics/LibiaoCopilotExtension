@@ -51,6 +51,52 @@ section {
 	margin-bottom: 16px;
 	line-height: 1.6;
 }
+/* 引导首句：放大 + 滚动高光 + 缓入缓出的明暗呼吸，长时间停留不刺眼 */
+.intro-lead {
+	font-size: 1.22em;
+	font-weight: 600;
+	letter-spacing: 0.3px;
+	background-image: linear-gradient(
+		100deg,
+		var(--vscode-textLink-foreground) 0%,
+		var(--vscode-textLink-foreground) 32%,
+		var(--vscode-focusBorder) 42%,
+		var(--vscode-editorWarning-foreground, #cca700) 50%,
+		var(--vscode-focusBorder) 58%,
+		var(--vscode-textLink-foreground) 68%,
+		var(--vscode-textLink-foreground) 100%
+	);
+	background-size: 240% 100%;
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+	animation: introLeadFlow 3.6s linear infinite, introLeadBreathe 3s ease-in-out infinite;
+}
+@keyframes introLeadFlow {
+	from {
+		background-position: 240% 50%;
+	}
+	to {
+		background-position: 0% 50%;
+	}
+}
+/* 明暗幅度收窄到 0.78，靠 ease-in-out 平滑过渡，不再做瞬变跳变 */
+@keyframes introLeadBreathe {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.78;
+	}
+}
+/* 关闭动画偏好下仍保留放大与静态高光 */
+@media (prefers-reduced-motion: reduce) {
+	.intro-lead {
+		animation: none;
+		background-position: 34% 50%;
+	}
+}
 .section-warning {
 	margin-top: 8px;
 	color: var(--vscode-editorWarning-foreground, #cca700);
@@ -177,6 +223,11 @@ button.inline {
 	margin-left: 8px;
 	padding: 4px 8px;
 }
+/* 位于「配置文件」一栏左侧的动作按钮 */
+button.lead {
+	margin-right: 10px;
+	padding: 4px 10px;
+}
 button:disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
@@ -186,10 +237,95 @@ section.locked {
 	opacity: 0.6;
 }
 .steps-card {
+	position: relative;
 	margin-bottom: 16px;
 	border: 1px solid var(--vscode-editorWidget-border);
 	border-radius: 10px;
 	background: var(--vscode-editor-background);
+}
+/* webhook 为空时沿边框流动的一道光，提示用户展开上面的获取步骤 */
+.steps-card.glowing {
+	border-color: var(--vscode-editorWarning-foreground, #cca700);
+	animation: stepsCardPulse 1.3s ease-in-out infinite;
+}
+.steps-card.glowing::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	padding: 2px;
+	border-radius: inherit;
+	background: linear-gradient(
+		100deg,
+		transparent 12%,
+		#ffd400 24%,
+		#fff59a 32%,
+		#ffb300 40%,
+		transparent 54%,
+		transparent 100%
+	);
+	background-size: 280% 280%;
+	animation: stepsCardGlow 1.1s linear infinite;
+	-webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+	-webkit-mask-composite: xor;
+	mask-composite: exclude;
+	pointer-events: none;
+}
+/* 说明文字本身也滚一道黄光，比单边框更难被忽略 */
+.steps-card.glowing > summary {
+	background-image: linear-gradient(
+		100deg,
+		#d9a800 0%,
+		#ffd400 22%,
+		#fffbd6 34%,
+		#ffd400 46%,
+		#d9a800 68%,
+		#d9a800 100%
+	);
+	background-size: 260% 100%;
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+	animation: stepsCardTextFlow 1.5s linear infinite;
+}
+@keyframes stepsCardGlow {
+	from {
+		background-position: 0% 50%;
+	}
+	to {
+		background-position: 280% 50%;
+	}
+}
+@keyframes stepsCardTextFlow {
+	from {
+		background-position: 260% 50%;
+	}
+	to {
+		background-position: 0% 50%;
+	}
+}
+/* 呼吸式外发光，强化“这里需要你处理”的紧迫感 */
+@keyframes stepsCardPulse {
+	0%,
+	100% {
+		box-shadow: 0 0 0 rgba(255, 212, 0, 0);
+	}
+	50% {
+		box-shadow: 0 0 10px 1px rgba(255, 212, 0, 0.55);
+	}
+}
+/* 关闭动画偏好下仍保留静态黄色高亮，不丢失提示作用 */
+@media (prefers-reduced-motion: reduce) {
+	.steps-card.glowing,
+	.steps-card.glowing::after,
+	.steps-card.glowing > summary {
+		animation: none;
+	}
+	.steps-card.glowing::after {
+		background-position: 50% 50%;
+	}
+	.steps-card.glowing > summary {
+		background-position: 30% 50%;
+	}
 }
 .steps-card > summary {
 	padding: 10px 12px;

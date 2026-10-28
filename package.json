@@ -33,9 +33,9 @@
 		"git-commit",
 		"thinking"
 	],
-	"version": "1.5.0",
+	"version": "1.5.1",
 	"engines": {
-		"vscode": "^1.120.0"
+		"vscode": "^1.134.0"
 	},
 	"activationEvents": [
 		"onStartupFinished"
@@ -49,6 +49,16 @@
 		"chatProvider"
 	],
 	"contributes": {
+		"chatAgents": [
+			{
+				"path": "./assets/agents/Explore.agent.md"
+			}
+		],
+		"chatInstructions": [
+			{
+				"path": "./assets/instructions/subagent-delegation.instructions.md"
+			}
+		],
 		"languageModelChatProviders": [
 			{
 				"vendor": "libiao-copilot",

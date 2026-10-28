@@ -73,6 +73,22 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 	 */
 	private _pendingThinkingMetadata: Record<string, unknown> | null = null;
 
+	/**
+	 * 本请求中已上报的思考序列数量。
+	 *
+	 * 用于区分「主思考」与网关在正文中间插入的思考碎片：首个序列必定上报，
+	 * 后续短序列抑制。碎片的害处不是内容无意义，而是每上报一片就打断宿主
+	 * 相邻 markdown 的合并，把一次回答炸成上千个 response part，
+	 * 让渲染器逐 part 全量重解析正文。
+	 */
+	protected _thinkingSeqCount = 0;
+
+	/** 当前思考序列已上报的字符数（含已 flush 部分），用于碎片长度判定。 */
+	protected _thinkingSeqChars = 0;
+
+	/** 碎片抑制阈值：非首个思考序列的字符数低于该值时静默丢弃。 */
+	protected static readonly MIN_FRAGMENT_THINKING_CHARS = 40;
+
 	/** System prompts to include in requests. */
 	protected _systemContent: string | undefined;
 
@@ -264,21 +280,29 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 			this._pendingThinkingMetadata = null;
 			return;
 		}
+		// 碎片抑制：首个思考序列必定上报；后续短序列是网关在正文中间的散碎
+		// reasoning，上报它们只会切断正文、放大 part 数，不携带可用信息。
+		const suppressFragment =
+			this._thinkingSeqCount > 0 &&
+			this._thinkingSeqChars + this._thinkingBuffer.length < CommonApi.MIN_FRAGMENT_THINKING_CHARS;
 		// Always clean up state after attempting to end the thinking sequence
 		try {
-			this.flushThinkingBuffer(progress);
-			// 加密思考状态必须先于结束哨兵上报：宿主对
-			// `{ vscode_reasoning_done: true }` 哨兵不会合并 metadata。
-			const pendingMetadata = this._pendingThinkingMetadata;
-			if (pendingMetadata) {
-				this._pendingThinkingMetadata = null;
-				progress.report(new LanguageModelThinkingPart("", this._currentThinkingId, pendingMetadata));
+			if (!suppressFragment) {
+				this.flushThinkingBuffer(progress);
+				// 加密思考状态必须先于结束哨兵上报：宿主对
+				// `{ vscode_reasoning_done: true }` 哨兵不会合并 metadata。
+				const pendingMetadata = this._pendingThinkingMetadata;
+				if (pendingMetadata) {
+					this._pendingThinkingMetadata = null;
+					progress.report(new LanguageModelThinkingPart("", this._currentThinkingId, pendingMetadata));
+				}
+				// End the current thinking sequence with empty content and same ID.
+				// 携带官方结束哨兵 { vscode_reasoning_done: true }（对齐官方扩展
+				// languageModelAccess.ts 姿势）：宿主 BYOK 处理器显式识别该元数据作为
+				// 思考结束信号，不再依赖"空值不合并"的隐式规则兜底。
+				progress.report(new LanguageModelThinkingPart("", this._currentThinkingId, { vscode_reasoning_done: true }));
+				this._thinkingSeqCount++;
 			}
-			// End the current thinking sequence with empty content and same ID.
-			// 携带官方结束哨兵 { vscode_reasoning_done: true }（对齐官方扩展
-			// languageModelAccess.ts 姿势）：宿主 BYOK 处理器显式识别该元数据作为
-			// 思考结束信号，不再依赖"空值不合并"的隐式规则兜底。
-			progress.report(new LanguageModelThinkingPart("", this._currentThinkingId, { vscode_reasoning_done: true }));
 		} catch (e) {
 			console.error("[OAI Compatible Model Provider] Failed to end thinking sequence:", e);
 		}
@@ -286,6 +310,7 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 		this._pendingThinkingMetadata = null;
 		// Clear thinking buffer and timer since sequence ended
 		this._thinkingBuffer = "";
+		this._thinkingSeqChars = 0;
 		if (this._thinkingFlushTimer) {
 			clearTimeout(this._thinkingFlushTimer);
 			this._thinkingFlushTimer = null;
@@ -322,8 +347,12 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 		// Append to thinking buffer
 		this._thinkingBuffer += text;
 
-		// Schedule flush with 100ms delay
-		if (!this._thinkingFlushTimer) {
+		// 短内容不启动定时器：网关会在正文中间塞进几字到几十字的思考碎片，
+		// 一旦按 100ms 节奏发出去就已成既定 part，随后的碎片抑制也收不回来。
+		// 让它们停在缓冲里等待累积或序列结束，才能真正做到不打断正文。
+		const worthFlushing =
+			this._thinkingBuffer.length >= CommonApi.MIN_FRAGMENT_THINKING_CHARS || this._thinkingSeqChars > 0;
+		if (worthFlushing && !this._thinkingFlushTimer) {
 			this._thinkingFlushTimer = setTimeout(() => {
 				this.flushThinkingBuffer(progress);
 			}, 100);
@@ -345,6 +374,7 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 		if (this._thinkingBuffer && this._currentThinkingId) {
 			const text = this._thinkingBuffer;
 			this._thinkingBuffer = "";
+			this._thinkingSeqChars += text.length;
 			progress.report(new LanguageModelThinkingPart(text, this._currentThinkingId));
 		}
 	}
