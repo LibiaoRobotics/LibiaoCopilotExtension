@@ -34,7 +34,7 @@ export function initStatusBar(context: vscode.ExtensionContext): vscode.StatusBa
 export function initWechatNotifyStatusBar(context: vscode.ExtensionContext): vscode.StatusBarItem {
 	const wechatNotifyStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
 	wechatNotifyStatusBarItem.name = "企微联动";
-	wechatNotifyStatusBarItem.text = "$(circle-slash) 企微联动";
+	wechatNotifyStatusBarItem.text = "$(circle-outline) 企微联动";
 	wechatNotifyStatusBarItem.tooltip = "企微联动 - 点击打开配置界面";
 	wechatNotifyStatusBarItem.command = "libiaoCopilot.openWechatNotifyConfig";
 	context.subscriptions.push(wechatNotifyStatusBarItem);
@@ -42,14 +42,18 @@ export function initWechatNotifyStatusBar(context: vscode.ExtensionContext): vsc
 	return wechatNotifyStatusBarItem;
 }
 
-/** 主状态 → 图标。$(warning) 只留给"配了但发不出去"的故障态 */
+/**
+ * 主状态 → 图标。$(warning) 只留给"配了但发不出去"的故障态。
+ *
+ * 未创建用空心圆而非 $(circle-slash)：禁用符会让用户以为功能坏了，
+ * 而实际只是还没初始化，点一下即可用。
+ */
 const WECHAT_NOTIFY_STATUS_ICON: Record<WechatNotifyStatus, string> = {
 	active: "$(bell)",
 	disabled: "$(bell-slash)",
-	"not-created": "$(circle-slash)",
+	"not-created": "$(circle-outline)",
 	"no-workspace": "$(circle-slash)",
 	incomplete: "$(warning)",
-	"no-webhook": "$(warning)",
 };
 
 /** 主状态 → tooltip 首行文案，补足图标表达不了的细节 */
@@ -59,13 +63,24 @@ const WECHAT_NOTIFY_STATUS_TEXT: Record<WechatNotifyStatus, string> = {
 	"not-created": "当前项目尚未创建，点开面板可一键初始化",
 	incomplete: "hook 文件不完整，通知不会触发",
 	"no-workspace": "未打开工作区，无法联动",
-	"no-webhook": "已勾选启用但没填 Webhook，通知发不出去",
 };
 
-/** 这些状态用灰色图标，避免和真正需要处理的故障抢注意力 */
+/** 勾了启用却没填 webhook 时按未启用处理，这里说清是为什么，免得用户以为开关失灵 */
+function describeStatus(status: WechatNotifyStatus, webhookConfigured: boolean): string {
+	if (status === "disabled" && !webhookConfigured) {
+		return "未启用（Webhook 为空，按未启用处理），不会发送通知";
+	}
+	return WECHAT_NOTIFY_STATUS_TEXT[status];
+}
+
+/**
+ * 这些状态用灰色图标，避免和真正需要处理的故障抢注意力。
+ *
+ * not-created 不在其中：灰色 + 禁用符的双重否定会读成"功能失效"，
+ * 而它其实是可一键初始化的正常起点，用正常前景色即可。
+ */
 const WECHAT_NOTIFY_DIM_STATUS: ReadonlySet<WechatNotifyStatus> = new Set<WechatNotifyStatus>([
 	"disabled",
-	"not-created",
 	"no-workspace",
 ]);
 
@@ -137,7 +152,7 @@ export function updateWechatNotifyStatusBar(
 					: `脚本：${script.installedVersion}（已是最新，含你的本地修改）`;
 	const tooltip = new vscode.MarkdownString(
 		[
-			`$(bell) **企微联动** — ${WECHAT_NOTIFY_STATUS_TEXT[status]}`,
+			`$(bell) **企微联动** — ${describeStatus(status, webhookConfigured)}`,
 			`Webhook：${webhookConfigured ? "已配置" : "未配置"}  `,
 			hookLine ? `${hookLine}  ` : undefined,
 			scriptLine ? `${scriptLine}  ` : undefined,

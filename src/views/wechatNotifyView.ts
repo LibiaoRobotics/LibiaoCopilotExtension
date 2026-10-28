@@ -18,9 +18,8 @@ import { sendWechatNotifyTest } from "../wechatNotifyTest";
 type IncomingMessage =
 	| { type: "requestInit" }
 	| { type: "save"; settings: Partial<WechatNotifySettings> }
-	| { type: "create"; settings: Partial<WechatNotifySettings> }
+	| { type: "create" }
 	| { type: "updateScript" }
-	| { type: "recheckPowerShell" }
 	| { type: "installPowerShell" }
 	| { type: "openConfigFile" }
 	| { type: "testWebhook"; webhook: string };
@@ -34,8 +33,8 @@ function describeCreateResult(result: WechatNotifyCreateResult): string {
 		parts.push(`跳过 ${result.skipped.join("、")}（已存在，未覆盖）`);
 	}
 	return parts.length > 0
-		? `企微联动 hook 初始化完成：${parts.join("；")}。`
-		: "企微联动 hook 已就绪，无需改动。";
+		? `企微联动已就绪：${parts.join("；")}。填入 Webhook 后即开始推送。`
+		: "企微联动已就绪，无需改动。";
 }
 
 function describeUpdateResult(result: WechatNotifyUpdateResult): string {
@@ -65,6 +64,8 @@ export class WechatNotifyViewPanel {
 		if (WechatNotifyViewPanel.currentPanel) {
 			WechatNotifyViewPanel.currentPanel.onSaved = onSaved;
 			WechatNotifyViewPanel.currentPanel.panel.reveal(column);
+			// 面板可能开着很久：重新打开时复测环境，用户刚装完 pwsh 不必重载窗口
+			void WechatNotifyViewPanel.currentPanel.postState(true);
 			return;
 		}
 
@@ -98,6 +99,8 @@ export class WechatNotifyViewPanel {
 					vscode.window.showErrorMessage(
 						err instanceof Error ? err.message : `处理企微联动配置时发生意外错误[${message.type}]。`
 					);
+					// 操作失败时把界面拉回磁盘真实状态，避免停在"创建中…"这类中间态
+					void this.postState();
 				});
 			},
 			null,
@@ -134,14 +137,20 @@ export class WechatNotifyViewPanel {
 				await writeWechatNotifyConfig(message.settings);
 				await this.postState();
 				this.onSaved();
-				void vscode.window.showInformationMessage("企微联动配置已保存，下一轮对话结束即生效。");
+				// 自动保存不弹窗：每次改动都弹一个“已保存”只会淹没真正需要看的信息
+				await this.panel.webview.postMessage({ type: "saved" });
 				break;
 			}
 			case "create": {
-				const result = await createWechatNotifyHook(this.extensionUri, message.settings);
+				const result = await createWechatNotifyHook(this.extensionUri);
 				await this.postState();
 				this.onSaved();
 				void vscode.window.showInformationMessage(describeCreateResult(result));
+				if (result.gitIgnore === "failed") {
+					void vscode.window.showWarningMessage(
+						"写入 .gitignore 失败，请手动忽略 .github/hooks/WechatNotify.local.psd1，避免明文 webhook 被提交。"
+					);
+				}
 				break;
 			}
 			case "updateScript": {
@@ -151,9 +160,6 @@ export class WechatNotifyViewPanel {
 				void vscode.window.showInformationMessage(describeUpdateResult(result));
 				break;
 			}
-			case "recheckPowerShell":
-				await this.postState(true);
-				break;
 			case "installPowerShell":
 				await launchPowerShellInstaller();
 				break;
@@ -180,7 +186,7 @@ export class WechatNotifyViewPanel {
 			() => false
 		);
 		if (!exists) {
-			void vscode.window.showWarningMessage("配置文件尚未创建，请先在面板中点击「初始化到此项目」或「保存配置」。");
+			void vscode.window.showWarningMessage("配置文件尚未创建，请先在面板中点击「创建企微联动」。");
 			return;
 		}
 		await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));

@@ -8,52 +8,38 @@
 		<link rel="stylesheet" href="%CSS_URI%" />
 	</head>
 	<body>
-		<section id="setupSection">
-			<div class="section-header">
-				<h2>环境就绪</h2>
-				<div class="section-actions">
-					<button id="createHook" type="button">初始化到此项目</button>
-					<button id="recheckPowerShell" class="secondary" type="button">重新检测</button>
+		<section id="introSection" hidden>
+			<div class="section-description">
+				企微联动会在每轮对话结束时，通过企业微信群消息推送模块把本轮耗时、会话标题与所用模型发到群里，让你离开电脑也能知道任务是否跑完。
+				<div class="section-warning">
+					注意：创建会在当前工作区的 <code>.github/hooks/</code> 目录下生成该功能所依赖的必备文件，请勿删除或改名。
 				</div>
 			</div>
-			<div class="section-description">
-				只处理当前工作区第一个文件夹下的 <code>.github/hooks</code>，其他目录与用户级 hook 目录都不读取。
-				创建前必须检测到 PowerShell 7：hook 由 pwsh 执行，缺它生成出来的文件不会发出任何通知。
-			</div>
-
-			<ul class="readiness-list" id="readinessList"></ul>
-
-			<div class="notice warn" id="readinessMessage" hidden></div>
-
-			<div class="notice">
-				<span class="notice-label">PowerShell</span>
-				<span id="powerShellText"></span>
-				<button id="installPowerShell" class="secondary inline" type="button" hidden>安装 PowerShell 7</button>
-			</div>
-
-			<div class="notice">
-				<span class="notice-label">hook 目录</span>
-				<code id="hookDirPath"></code>
-			</div>
-
-			<div class="notice" id="scriptVersionNotice" hidden>
-				<span class="notice-label">脚本版本</span>
-				<span id="scriptVersionText"></span>
-				<button id="updateScript" class="secondary inline" type="button" hidden>更新脚本</button>
-			</div>
+			<button id="createHook" type="button">创建企微联动</button>
 		</section>
 
-		<section id="notifySection">
+		<section id="mainSection" hidden>
 			<div class="section-header">
 				<h2>通知参数</h2>
 				<div class="section-actions">
-					<button id="save">保存配置</button>
+					<span id="saveHint" class="save-hint"></span>
 					<button id="openConfigFile" class="secondary" type="button">打开配置文件</button>
 				</div>
 			</div>
 			<div class="section-description">
-				每轮对话结束时，由工作区的 Stop hook（<code>.github/hooks/WechatNotify.ps1</code>）读取本页参数并推送到企业微信群。
-				保存后下一轮对话结束即生效，无需重载窗口。
+				每轮对话结束时，由工作区的 Stop hook（<code>.github/hooks/WechatNotify.ps1</code>）读取本页参数并推送到企业微信群。下方改动会即时保存，无需手动提交。
+			</div>
+
+			<div class="notice warn" id="powerShellNotice" hidden>
+				<span class="notice-label">环境不匹配</span>
+				<span id="powerShellText"></span>
+				<button id="installPowerShell" class="secondary inline" type="button" data-keep-enabled>安装 PowerShell 7</button>
+			</div>
+
+			<div class="notice warn" id="scriptNotice" hidden>
+				<span class="notice-label">脚本需升级</span>
+				<span id="scriptVersionText"></span>
+				<button id="updateScript" class="secondary inline" type="button" data-keep-enabled>更新脚本</button>
 			</div>
 
 			<div class="field">
@@ -61,12 +47,12 @@
 					<input id="enabled" type="checkbox" class="checkbox" />
 					<span>启用通知</span>
 				</label>
-				<div class="field-description">关闭时 hook 会直接退出，不发送任何请求。</div>
+				<div class="field-description">关闭时 hook 会直接退出，不发送任何请求。Webhook 为空时同样按未启用处理。</div>
 			</div>
 
 			<div class="field">
 				<label for="webhook">Webhook 地址</label>
-				<div class="field-description">企业微信群机器人的 webhook 完整地址，以 <code>?key=</code> 结尾。</div>
+				<div class="field-description">企业微信群消息推送模块的 webhook 完整地址，以 <code>?key=</code> 结尾。</div>
 				<div class="row">
 					<input id="webhook" type="password" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." />
 					<button id="toggleWebhook" class="secondary" type="button">显示</button>
@@ -78,11 +64,27 @@
 				</div>
 			</div>
 
+			<details class="steps-card">
+				<summary>如何获取 Webhook 地址</summary>
+				<ol class="steps">
+					<li>在企业微信里新建一个群聊。</li>
+					<li>把多余的成员移出，群里只留自己一个人 —— 既不打扰同事，通知内容也不会外流。</li>
+					<li>打开这个群的群设置，找到「消息推送」。</li>
+					<li>点添加，选择「自定义消息推送」。</li>
+					<li>
+						给它起个名称（比如「VS Code 对话通知」）并确认，创建完成后这个界面上会给出 Webhook 地址，整条复制后填到上面即可。
+					</li>
+				</ol>
+			</details>
+
 			<div class="row">
 				<div class="field">
 					<label for="minDurationSeconds">最小耗时（秒）</label>
 					<div class="field-description">本轮对话耗时未达到该值时不发送通知。</div>
-					<input id="minDurationSeconds" type="number" min="0" max="86400" step="1" />
+					<div class="input-with-hint">
+						<input id="minDurationSeconds" type="number" min="0" max="86400" step="1" />
+						<span class="field-hint" id="minDurationHuman"></span>
+					</div>
 				</div>
 				<div class="field">
 					<label for="sessionSummaryChars">会话摘要字数</label>
@@ -98,7 +100,7 @@
 			</div>
 
 			<div class="notice muted">
-				保存会重写该文件，文件中的自定义注释不会保留。Webhook 以明文存放，该文件已被 <code>.gitignore</code> 排除，请勿提交。
+				面板改动会即时写入该文件，文件中手写的注释不会保留。Webhook 以明文存放，该文件已被 <code>.gitignore</code> 排除，请勿提交。
 			</div>
 		</section>
 

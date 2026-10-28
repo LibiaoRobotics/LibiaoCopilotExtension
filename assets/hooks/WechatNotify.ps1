@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 
 # 脚本版本（语义化）。扩展拿它和内置模板比对，判断工作区副本是否为旧版。
 # 改动本脚本的行为后请同步递增此版本号，否则升级提醒会错判。
-$ScriptVersion = '1.2.3'
+$ScriptVersion = '1.2.4'
 
 $StateFile = Join-Path $env:TEMP 'libiao-copilot-wechatnotify.state'
 $LogFile = Join-Path $env:TEMP 'libiao-copilot-wechatnotify.log'
@@ -21,7 +21,7 @@ function Write-WechatNotifyLog([string] $Message) {
 # 默认关闭，因此其他成员克隆仓库后不配置也不会发出通知。
 $Enabled = $false
 $Webhook = ''
-$MinDurationSeconds = 30
+$MinDurationSeconds = 600
 $SessionSummaryChars = 60
 
 $configFile = Join-Path $PSScriptRoot 'WechatNotify.local.psd1'

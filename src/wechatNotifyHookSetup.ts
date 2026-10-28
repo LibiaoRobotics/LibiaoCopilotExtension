@@ -54,6 +54,8 @@ export interface WechatNotifyScriptInfo {
 
 export interface WechatNotifySetupState {
 	level: WechatNotifySetupLevel;
+	/** 三件套是否齐备；false 时面板只显示介绍与创建按钮 */
+	created: boolean;
 	workspaceReady: boolean;
 	hookDirPath: string | undefined;
 	items: WechatNotifyHookFileItem[];
@@ -172,7 +174,7 @@ export function buildWechatNotifyHookFileItems(
 }
 
 const POWER_SHELL_NOT_FOUND_DETAIL =
-	"未检测到 PowerShell 7（pwsh）。可能是尚未安装，或安装在非标准路径——安装后点「重新检测」。";
+	"未检测到 PowerShell 7（pwsh）。可能是尚未安装，或安装在非标准路径——装好后重新打开本面板即可复检。";
 export function describePowerShellRequirement(installed: boolean, version: string): string {
 	if (!installed) {
 		return POWER_SHELL_NOT_FOUND_DETAIL;
@@ -257,6 +259,7 @@ export function evaluateWechatNotifySetup(input: {
 }): WechatNotifySetupState {
 	const items = buildWechatNotifyHookFileItems(input.presence);
 	const base = {
+		created: input.presence.json && input.presence.script && input.presence.config,
 		workspaceReady: input.workspaceReady,
 		hookDirPath: input.hookDirPath,
 		items,
@@ -285,8 +288,8 @@ export function evaluateWechatNotifySetup(input: {
 		.filter((item) => item.key !== "config" && !item.exists)
 		.map((item) => item.fileName);
 	const message = missing.length >= 2
-		? `当前项目尚未创建企微联动 hook（缺少 ${missing.join("、")}），点击「初始化到此项目」生成。`
-		: `缺少 ${missing.join("、")}，通知不会触发。点击「初始化到此项目」补齐。`;
+		? `当前项目尚未创建企微联动 hook（缺少 ${missing.join("、")}），点击「创建企微联动」生成。`
+		: `缺少 ${missing.join("、")}，通知不会触发。点击「创建企微联动」补齐。`;
 
 	return {
 		...base,
@@ -304,7 +307,7 @@ export type WechatNotifyStatus =
 	| "no-workspace"
 	| "not-created"
 	| "incomplete"
-	| "no-webhook"
+
 	| "disabled"
 	| "active";
 
@@ -330,9 +333,10 @@ export function resolveWechatNotifyStatus(input: {
 	if (!json || !script) {
 		return "incomplete";
 	}
-	if (!input.enabled) {
+	// 没填 webhook 的「启用」等于没启用：hook 里同样会因 Webhook 为空直接退出，
+	// 这里若显示成已启用，状态栏就会与实际行为相反。
+	if (!input.enabled || input.webhook.trim().length === 0) {
 		return "disabled";
 	}
-	// 勾了启用却没填 webhook：意图与实际行为相反，必须报警而不是静默当成"已启用"
-	return input.webhook.trim().length > 0 ? "active" : "no-webhook";
+	return "active";
 }

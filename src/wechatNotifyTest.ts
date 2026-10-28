@@ -1,5 +1,5 @@
 /**
- * 企业微信群机器人连通性测试。
+ * 企业微信群消息推送模块连通性测试。
  *
  * 只在面板点按钮时跑一次，不进 hook 链路，也不读写 psd1。
  * 单独成文件是为了能脱离扩展宿主直接跑真实 HTTP 验证。
@@ -12,7 +12,7 @@ export interface WechatNotifyTestResult {
 	ok: boolean;
 	/** 可直接展示给用户的结论，失败时说明原因 */
 	detail: string;
-	/** 群机器人返回的 errcode；没拿到响应时为 undefined */
+	/** 推送模块返回的 errcode；没拿到响应时为 undefined */
 	errcode?: number;
 	/** 从发起到拿到响应的毫秒数 */
 	elapsedMs: number;
@@ -25,7 +25,7 @@ const WECHAT_ERRCODE_HINTS: Record<number, string> = {
 	40001: "key 无效或已被重置",
 	40058: "请求参数不合法",
 	45009: "调用过于频繁，被企业微信限流",
-	93000: "Webhook 地址无效，机器人可能已被移出群聊或 key 已失效",
+	93000: "Webhook 地址无效，推送模块可能已被移出群聊或 key 已失效",
 };
 
 const MAX_BODY_CHARS = 200;
@@ -36,7 +36,7 @@ function truncate(text: string): string {
 }
 
 /**
- * 打日志前抹掉 key —— webhook 的 key 就是机器人凭据，等同于密码，不能落盘。
+ * 打日志前抹掉 key —— webhook 的 key 就是推送模块凭据，等同于密码，不能落盘。
  */
 export function maskWechatNotifyWebhook(raw: string): string {
 	return raw.replace(/([?&]key=)[^&\s]*/gi, "$1***");
@@ -72,7 +72,7 @@ export function buildWechatNotifyTestContent(now: Date): string {
 export function checkWechatNotifyWebhook(raw: string): WechatNotifyWebhookCheck {
 	const trimmed = (raw ?? "").trim();
 	if (!trimmed) {
-		return { ok: false, reason: "Webhook 地址为空，请先填写企业微信群机器人的 webhook。" };
+		return { ok: false, reason: "Webhook 地址为空，请先填写企业微信群消息推送模块的 webhook。" };
 	}
 	let parsed: URL;
 	try {
@@ -87,7 +87,7 @@ export function checkWechatNotifyWebhook(raw: string): WechatNotifyWebhookCheck 
 		return { ok: false, reason: `Webhook 地址的协议是 ${parsed.protocol}，只支持 http 或 https。` };
 	}
 	if (!parsed.searchParams.get("key")) {
-		return { ok: false, reason: "Webhook 地址缺少 key 参数，完整地址应以 ?key=机器人密钥 结尾。" };
+		return { ok: false, reason: "Webhook 地址缺少 key 参数，完整地址应以 ?key=推送模块密钥 结尾。" };
 	}
 	return { ok: true, url: parsed.toString() };
 }

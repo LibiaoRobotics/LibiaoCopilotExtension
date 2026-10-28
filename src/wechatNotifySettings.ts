@@ -16,7 +16,7 @@ export interface WechatNotifySettings {
 export const DEFAULT_WECHAT_NOTIFY_SETTINGS: WechatNotifySettings = {
 	enabled: false,
 	webhook: "",
-	minDurationSeconds: 30,
+	minDurationSeconds: 600,
 	sessionSummaryChars: 60,
 };
 

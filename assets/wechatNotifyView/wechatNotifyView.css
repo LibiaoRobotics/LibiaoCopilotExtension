@@ -35,11 +35,25 @@ section {
 	display: flex;
 	gap: 8px;
 	flex-wrap: wrap;
+	align-items: center;
+}
+.save-hint {
+	font-size: 0.86em;
+	color: var(--vscode-descriptionForeground);
+	opacity: 0;
+	transition: opacity 0.2s ease-in-out;
+}
+.save-hint.visible {
+	opacity: 1;
 }
 .section-description {
 	color: var(--vscode-descriptionForeground);
 	margin-bottom: 16px;
 	line-height: 1.6;
+}
+.section-warning {
+	margin-top: 8px;
+	color: var(--vscode-editorWarning-foreground, #cca700);
 }
 .field {
 	margin-bottom: 16px;
@@ -117,6 +131,20 @@ button:hover {
 	flex: 1;
 	min-width: 240px;
 }
+.input-with-hint {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.input-with-hint input {
+	flex: 1;
+	min-width: 0;
+}
+.field-hint {
+	white-space: nowrap;
+	font-size: 0.92em;
+	color: var(--vscode-descriptionForeground);
+}
 .notice {
 	margin-top: 12px;
 	padding: 10px 12px;
@@ -133,28 +161,6 @@ button:hover {
 }
 .muted {
 	color: var(--vscode-descriptionForeground);
-}
-.readiness-list {
-	list-style: none;
-	margin: 0 0 4px;
-	padding: 0;
-}
-.readiness-item {
-	display: flex;
-	align-items: baseline;
-	gap: 8px;
-	padding: 4px 0;
-	flex-wrap: wrap;
-}
-.readiness-icon {
-	font-weight: 700;
-	font-family: var(--vscode-editor-font-family);
-}
-.readiness-icon.ok {
-	color: var(--vscode-testing-iconPassed, #3fb950);
-}
-.readiness-icon.missing {
-	color: var(--vscode-errorForeground, #f85149);
 }
 .notice.warn {
 	border-color: var(--vscode-inputValidation-warningBorder, #cca700);
@@ -178,4 +184,28 @@ button:disabled {
 }
 section.locked {
 	opacity: 0.6;
+}
+.steps-card {
+	margin-bottom: 16px;
+	border: 1px solid var(--vscode-editorWidget-border);
+	border-radius: 10px;
+	background: var(--vscode-editor-background);
+}
+.steps-card > summary {
+	padding: 10px 12px;
+	font-weight: 600;
+	cursor: pointer;
+	user-select: none;
+}
+.steps-card > summary:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	border-radius: 10px;
+}
+.steps-card .steps {
+	margin: 0;
+	padding: 0 16px 12px 34px;
+	line-height: 1.7;
+}
+.steps-card .steps li {
+	margin-bottom: 4px;
 }

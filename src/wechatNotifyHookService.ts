@@ -18,6 +18,7 @@ import {
 	WECHAT_NOTIFY_JSON_FILE_NAME,
 	WECHAT_NOTIFY_SCRIPT_FILE_NAME,
 } from "./wechatNotifyPaths";
+import { ensureWechatNotifyIgnored, type WechatNotifyGitIgnoreStatus } from "./wechatNotifyGitIgnore";
 import type { WechatNotifySettings } from "./wechatNotifySettings";
 
 /** 扩展内置的 hook 模板目录：.vscodeignore 排除了 .github/**，模板只能放在 assets 下 */
@@ -30,6 +31,8 @@ let powerShellCache: WechatNotifyPowerShellInfo | undefined;
 export interface WechatNotifyCreateResult {
 	created: string[];
 	skipped: string[];
+	/** psd1 是否已进入 git 忽略列表 */
+	gitIgnore: WechatNotifyGitIgnoreStatus;
 }
 
 export interface WechatNotifyUpdateResult {
@@ -183,21 +186,21 @@ export async function readWechatNotifySetupState(
 }
 
 /**
- * 在 .github/hooks 下创建三件套。
+ * 在 .github/hooks 下创建三件套，并把 psd1 写进 git 忽略列表。
  *
  * 逐文件幂等：已存在的文件一律跳过并回报，绝不覆盖——psd1 存着用户真实
  * webhook，ps1 可能被改过，静默重写等于毁配置。
+ *
+ * 新建的 psd1 一律 Enabled = $true：用户点创建就是要用这个功能，
+ * 具体能不能发出去由 webhook 是否填写决定。缺 pwsh 不拦创建——
+ * 文件不需要 pwsh 就能落地，环境不匹配由面板创建后单独提示。
  */
 export async function createWechatNotifyHook(
 	extensionUri: vscode.Uri,
-	settings: Partial<WechatNotifySettings> | undefined
+	settings?: Partial<WechatNotifySettings>
 ): Promise<WechatNotifyCreateResult> {
-	let setup = await readWechatNotifySetupState(extensionUri);
-	if (!setup.canModify && setup.workspaceReady) {
-		// 用户可能刚装完 pwsh，创建前强制复检一次，避免被 60 秒缓存误拦
-		setup = await readWechatNotifySetupState(extensionUri, true);
-	}
-	if (!setup.canModify) {
+	const setup = await readWechatNotifySetupState(extensionUri);
+	if (!setup.workspaceReady) {
 		throw new Error(setup.message);
 	}
 
@@ -242,16 +245,19 @@ export async function createWechatNotifyHook(
 		created.push(WECHAT_NOTIFY_JSON_FILE_NAME);
 	}
 
-	// 3. 本地参数：已存在就跳过，用户的 webhook 不能被面板默认值冲掉
+	// 3. 忽略列表：先加规则再写明文 webhook，避免中途失败把密文留在入库状态
+	const gitIgnore = await ensureWechatNotifyIgnored();
+
+	// 4. 本地参数：已存在就跳过，用户的 webhook 不能被面板默认值冲掉
 	const configUri = vscode.Uri.joinPath(dir, WECHAT_NOTIFY_CONFIG_FILE_NAME);
 	if (await fileExists(configUri)) {
 		skipped.push(WECHAT_NOTIFY_CONFIG_FILE_NAME);
 	} else {
-		await writeWechatNotifyConfig(settings);
+		await writeWechatNotifyConfig({ ...settings, enabled: true });
 		created.push(WECHAT_NOTIFY_CONFIG_FILE_NAME);
 	}
 
-	return { created, skipped };
+	return { created, skipped, gitIgnore };
 }
 
 /** 备份文件名：同一秒内多次更新时追加序号，绝不覆盖已有备份 */
@@ -289,7 +295,7 @@ export async function updateWechatNotifyScript(extensionUri: vscode.Uri): Promis
 		if (!isFileNotFound) {
 			logger.warn("wechatNotify.hook.read", { path: scriptUri.fsPath, error: describeError(error) });
 		}
-		throw new Error(`${WECHAT_NOTIFY_SCRIPT_FILE_NAME} 尚未创建，请先点「初始化到此项目」。`);
+		throw new Error(`${WECHAT_NOTIFY_SCRIPT_FILE_NAME} 尚未创建，请先点「创建企微联动」。`);
 	}
 	const installedText = new TextDecoder("utf-8").decode(installedBytes);
 
