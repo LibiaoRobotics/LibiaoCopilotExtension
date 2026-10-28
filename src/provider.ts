@@ -33,6 +33,81 @@ import { logger } from "./logger";
 import { manageContext, type ContextManagementMode } from "./contextManager";
 import { getConfiguredContextSize } from "./modelConfiguration";
 
+/** 各适配层承载会话历史的请求体字段名：OpenAI/Anthropic/Ollama 用 messages，
+ * Responses 用 input，Gemini 用 contents。 */
+const HISTORY_PAYLOAD_KEYS: readonly string[] = ["input", "messages", "contents"];
+
+/** 统计任意 JSON 结构中的字符总量（含内联图片的 base64 数据）。 */
+function measureTextChars(value: unknown): number {
+	if (typeof value === "string") {
+		return value.length;
+	}
+	if (Array.isArray(value)) {
+		let total = 0;
+		for (const item of value) {
+			total += measureTextChars(item);
+		}
+		return total;
+	}
+	if (value && typeof value === "object") {
+		let total = 0;
+		for (const item of Object.values(value as Record<string, unknown>)) {
+			total += measureTextChars(item);
+		}
+		return total;
+	}
+	return 0;
+}
+
+/** 取历史项的角色（Responses 的 function_call 等项没有 role，退化为 type）。 */
+function describeHistoryItemRole(item: unknown): string {
+	if (!item || typeof item !== "object") {
+		return "?";
+	}
+	const record = item as Record<string, unknown>;
+	if (typeof record.role === "string" && record.role) {
+		return record.role;
+	}
+	if (typeof record.type === "string" && record.type) {
+		return record.type;
+	}
+	return "?";
+}
+
+/**
+ * 把请求体里的会话历史压缩成骨架后再落盘。
+ *
+ * 整份历史会随每个请求重复写入 debug 日志，单请求 0.4~1.0MB、单日 900MB+，
+ * 其中历史载荷占 46%，量级随会话长度线性增长。调参所需（reasoning、tools、
+ * schema 等）全在其他字段上原样保留，历史本身换成条数/角色/字符数分布即可定位规模。
+ * 结果带 `omittedHint`，避免读日志时误以为请求只发了这几项。
+ * 导出仅供单元测试覆盖。
+ */
+export function summarizeRequestBodyForLog(requestBody: unknown): unknown {
+	if (!requestBody || typeof requestBody !== "object" || Array.isArray(requestBody)) {
+		return requestBody;
+	}
+	const summary: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(requestBody as Record<string, unknown>)) {
+		if (HISTORY_PAYLOAD_KEYS.includes(key) && Array.isArray(value)) {
+			const roles: Record<string, number> = {};
+			for (const item of value) {
+				const role = describeHistoryItemRole(item);
+				roles[role] = (roles[role] ?? 0) + 1;
+			}
+			summary[key] = {
+				count: value.length,
+				roles,
+				chars: measureTextChars(value),
+				omittedHint: "history omitted",
+			};
+		} else {
+			summary[key] = value;
+		}
+	}
+	return summary;
+}
+
 /**
  * VS Code Chat provider backed by Hugging Face Inference Providers.
  */
@@ -348,7 +423,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				const url = `${BASE_URL.replace(/\/+$/, "")}/api/chat`;
 				logger.debug("request.body", {
 					url: url,
-					requestBody: ollamaRequestBody,
+					requestBody: summarizeRequestBodyForLog(ollamaRequestBody),
 				});
 				const response = await executeWithRetry(async () => {
 					const res = await fetch(url, {
@@ -398,7 +473,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				// The base URL carries the API version prefix (e.g.
 				// https://api.anthropic.com/v1); we append the Messages endpoint.
 				const url = `${normalizedBaseUrl}/messages`;
-				logger.debug("request.body", { url, requestBody });
+				logger.debug("request.body", { url, requestBody: summarizeRequestBodyForLog(requestBody) });
 				const response = await executeWithRetry(async () => {
 					const res = await fetch(url, {
 						method: "POST",
@@ -469,7 +544,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				}
 				// send Responses API request with retry
 				const url = `${normalizedBaseUrl}/responses`;
-				logger.debug("request.body", { url, requestBody });
+				logger.debug("request.body", { url, requestBody: summarizeRequestBodyForLog(requestBody) });
 
 				// If the user explicitly set `previous_response_id` via `extra`, don't apply stateful slicing.
 				let addedPreviousResponseId = false;
@@ -571,7 +646,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				requestBody = geminiApi.prepareRequestBody(requestBody, um, options);
 
 				const url = buildGeminiGenerateContentUrl(BASE_URL, parsedModelId.baseId, true);
-				logger.debug("request.body", { url, requestBody });
+				logger.debug("request.body", { url, requestBody: summarizeRequestBodyForLog(requestBody) });
 				if (!url) {
 					throw new Error("Invalid Gemini base URL configuration.");
 				}
@@ -618,7 +693,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 
 				// send chat request with retry
 				const url = `${BASE_URL.replace(/\/+$/, "")}/chat/completions`;
-				logger.debug("request.body", { url, requestBody });
+				logger.debug("request.body", { url, requestBody: summarizeRequestBodyForLog(requestBody) });
 				const response = await executeWithRetry(async () => {
 					const res = await fetch(url, {
 						method: "POST",

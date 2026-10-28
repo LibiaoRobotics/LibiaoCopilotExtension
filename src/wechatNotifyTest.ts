@@ -60,7 +60,6 @@ export function buildWechatNotifyTestContent(now: Date): string {
 	return [
 		"🔔 企微联动连通性测试",
 		"这是从 VS Code 面板手动发出的测试消息，不是对话结束通知。",
-		"来源：GitHub Copilot Chat",
 		`时间：${formatLocalDateTime(now)}`,
 	].join("\n");
 }

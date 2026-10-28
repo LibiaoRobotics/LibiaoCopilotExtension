@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 
 # 脚本版本（语义化）。扩展拿它和内置模板比对，判断工作区副本是否为旧版。
 # 改动本脚本的行为后请同步递增此版本号，否则升级提醒会错判。
-$ScriptVersion = '1.2.5'
+$ScriptVersion = '1.2.6'
 
 $StateFile = Join-Path $env:TEMP 'libiao-copilot-wechatnotify.state'
 $LogFile = Join-Path $env:TEMP 'libiao-copilot-wechatnotify.log'
@@ -229,7 +229,6 @@ try {
 	if ($credits) {
 		$lines += ('Credits：{0}' -f $credits)
 	}
-	$lines += '来源：GitHub Copilot Chat'
 	$lines += ('时间：{0}' -f $endTime.ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss'))
 	$content = $lines -join "`n"
 
