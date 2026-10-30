@@ -6,14 +6,19 @@ import type { WechatNotifyConfigState } from "../wechatNotifyConfig";
 import type { WechatNotifyHookPresence, WechatNotifyScriptInfo } from "../wechatNotifyHookSetup";
 
 /**
- * 回归测试：企微联动状态栏文案。
+ * 回归测试：企微联动状态栏文案与颜色。
  *
- * 「未创建」的 × 图标不带状态色，光看符号读不出全部信息，
- * 所以文字必须自己说明——否则用户会以为联动已在工作。
+ * 「未创建」用黄色 × 加「企微未联动」双信号：黄色提醒需要动手，
+ * 文字说清还没接上——只靠图标的话用户容易以为联动已在工作。
  */
 
 function fakeItem(): vscode.StatusBarItem {
 	return { text: "", color: undefined, tooltip: undefined } as unknown as vscode.StatusBarItem;
+}
+
+/** ThemeColor 的主题色 id，没设色时为 undefined */
+function colorId(item: vscode.StatusBarItem): string | undefined {
+	return (item.color as { id?: string } | undefined)?.id;
 }
 
 function stateWith(settings: Partial<WechatNotifySettings>): WechatNotifyConfigState {
@@ -28,7 +33,7 @@ const READY_PRESENCE: WechatNotifyHookPresence = { json: true, script: true, con
 const MISSING_PRESENCE: WechatNotifyHookPresence = { json: false, script: false, config: false };
 
 suite("企微联动状态栏文案", () => {
-	test("未创建：图标为 ×，文案为「企微未联动」", () => {
+	test("未创建：图标与文字均为黄色，文案为「企微未联动」", () => {
 		const item = fakeItem();
 		updateWechatNotifyStatusBar(
 			item,
@@ -36,9 +41,10 @@ suite("企微联动状态栏文案", () => {
 			MISSING_PRESENCE
 		);
 		assert.strictEqual(item.text, "$(close) 企微未联动");
+		assert.strictEqual(colorId(item), "charts.yellow");
 	});
 
-	test("已启用：图标 bell，文案仍是「企微联动」", () => {
+	test("已启用：图标 bell，文案仍是「企微联动」，且不叠状态色", () => {
 		const item = fakeItem();
 		updateWechatNotifyStatusBar(
 			item,
@@ -46,12 +52,14 @@ suite("企微联动状态栏文案", () => {
 			READY_PRESENCE
 		);
 		assert.strictEqual(item.text, "$(bell) 企微联动");
+		assert.strictEqual(colorId(item), undefined);
 	});
 
-	test("未启用：图标 bell-slash，文案仍是「企微联动」", () => {
+	test("未启用：图标 bell-slash，文案仍是「企微联动」，用灰色", () => {
 		const item = fakeItem();
 		updateWechatNotifyStatusBar(item, stateWith({ enabled: false, webhook: "" }), READY_PRESENCE);
 		assert.strictEqual(item.text, "$(bell-slash) 企微联动");
+		assert.strictEqual(colorId(item), "disabledForeground");
 	});
 
 	test("未打开工作区：图标 circle-slash，文案仍是「企微联动」", () => {
@@ -75,5 +83,6 @@ suite("企微联动状态栏文案", () => {
 			outdatedScript
 		);
 		assert.strictEqual(item.text, "$(close) 企微未联动");
+		assert.strictEqual(colorId(item), "charts.yellow");
 	});
 });

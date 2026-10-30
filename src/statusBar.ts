@@ -48,7 +48,7 @@ export function initWechatNotifyStatusBar(context: vscode.ExtensionContext): vsc
  * 未创建用 $(close)（×）：一眼就能读出"这个项目还没接上"这个否定义，
  * 形状也与已启用的 $(bell) 差别够大，小尺寸下不会和 $(bell-slash) 混淆。
  * 不用 $(circle-slash)：那是禁用符，会把"待初始化"误读成"功能坏了"。
- * 未创建的 × 不叠状态色（见 WECHAT_NOTIFY_DIM_STATUS），避免真被当成故障。
+ * × 用黄色强调（见 WECHAT_NOTIFY_ATTENTION_FOREGROUND）：它需要用户动手，但还没到故障程度。
  */
 const WECHAT_NOTIFY_STATUS_ICON: Record<WechatNotifyStatus, string> = {
 	active: "$(bell)",
@@ -78,13 +78,20 @@ function describeStatus(status: WechatNotifyStatus, webhookConfigured: boolean):
 /**
  * 这些状态用灰色图标，避免和真正需要处理的故障抢注意力。
  *
- * not-created 不在其中：灰色 + 禁用符的双重否定会读成"功能失效"，
- * 而它其实是可一键初始化的正常起点，用正常前景色即可。
+ * not-created 不在其中：灰色 + × 的双重否定会读成"功能失效"，
+ * 而它其实是可一键初始化的正常起点，改用黄色提醒（见 WECHAT_NOTIFY_ATTENTION_FOREGROUND）。
  */
 const WECHAT_NOTIFY_DIM_STATUS: ReadonlySet<WechatNotifyStatus> = new Set<WechatNotifyStatus>([
 	"disabled",
 	"no-workspace",
 ]);
+
+/**
+ * 未创建用黄色状态图标与文字：它需要用户动手初始化，值得看一眼，
+ * 但还不是故障——不换 $(warning) 也不加背景色，避免与真正发不出去的情况抢信号。
+ * 取 charts.yellow 而不取语义色：后者（如 editorWarning.foreground）在浅色主题下偏橙，不一定读成黄。
+ */
+const WECHAT_NOTIFY_ATTENTION_FOREGROUND = "charts.yellow";
 
 /**
  * 用当前配置刷新图标。
@@ -131,12 +138,14 @@ export function updateWechatNotifyStatusBar(
 		scriptMarkable && (script?.status === "outdated" || script?.status === "unknown");
 
 	const icon = WECHAT_NOTIFY_STATUS_ICON[status];
-	// not-created 的图标不带状态色，文字必须自己说清"还没接上"，否则读起来像已生效。
+	// 未创建时图标与文字都用黄色，且文字必须自己说清"还没接上"，否则读起来像已生效。
 	const label = status === "not-created" ? "企微未联动" : "企微联动";
 	item.text = scriptPending ? `${icon} ${label} $(arrow-up)` : `${icon} ${label}`;
-	item.color = WECHAT_NOTIFY_DIM_STATUS.has(status)
-		? new vscode.ThemeColor("disabledForeground")
-		: undefined;
+	item.color = status === "not-created"
+		? new vscode.ThemeColor(WECHAT_NOTIFY_ATTENTION_FOREGROUND)
+		: WECHAT_NOTIFY_DIM_STATUS.has(status)
+			? new vscode.ThemeColor("disabledForeground")
+			: undefined;
 
 	const configPathText = configPath ? `\`${configPath}\`` : "未打开工作区";
 	const configFileLine = `配置文件：${configPathText}${exists ? "" : "（不存在，使用默认值）"}`;
