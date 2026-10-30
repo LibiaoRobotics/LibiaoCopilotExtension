@@ -34,7 +34,7 @@ export function initStatusBar(context: vscode.ExtensionContext): vscode.StatusBa
 export function initWechatNotifyStatusBar(context: vscode.ExtensionContext): vscode.StatusBarItem {
 	const wechatNotifyStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
 	wechatNotifyStatusBarItem.name = "企微联动";
-	wechatNotifyStatusBarItem.text = "$(broadcast) 企微联动";
+	wechatNotifyStatusBarItem.text = "$(close) 企微联动";
 	wechatNotifyStatusBarItem.tooltip = "企微联动 - 点击打开配置界面";
 	wechatNotifyStatusBarItem.command = "libiaoCopilot.openWechatNotifyConfig";
 	context.subscriptions.push(wechatNotifyStatusBarItem);
@@ -45,14 +45,15 @@ export function initWechatNotifyStatusBar(context: vscode.ExtensionContext): vsc
 /**
  * 主状态 → 图标。$(warning) 只留给"配了但发不出去"的故障态。
  *
- * 未创建用 $(broadcast) 而非空心圆：圆圈是零语义符号，读不出功能也不出状态；
- * broadcast 的外扩弧线直指"往外推送"这个动作，与已启用的 $(bell) 成族但形状差异大，
- * 小尺寸下不会和 $(bell-slash) 互相混淆。也不用 $(circle-slash)：禁用符会让人以为功能坏了。
+ * 未创建用 $(close)（×）：一眼就能读出"这个项目还没接上"这个否定义，
+ * 形状也与已启用的 $(bell) 差别够大，小尺寸下不会和 $(bell-slash) 混淆。
+ * 不用 $(circle-slash)：那是禁用符，会把"待初始化"误读成"功能坏了"。
+ * 未创建的 × 不叠状态色（见 WECHAT_NOTIFY_DIM_STATUS），避免真被当成故障。
  */
 const WECHAT_NOTIFY_STATUS_ICON: Record<WechatNotifyStatus, string> = {
 	active: "$(bell)",
 	disabled: "$(bell-slash)",
-	"not-created": "$(broadcast)",
+	"not-created": "$(close)",
 	"no-workspace": "$(circle-slash)",
 	incomplete: "$(warning)",
 };

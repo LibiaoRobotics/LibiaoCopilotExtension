@@ -8,7 +8,7 @@ import type { WechatNotifyHookPresence, WechatNotifyScriptInfo } from "../wechat
 /**
  * 回归测试：企微联动状态栏文案。
  *
- * 「未创建」的图标不带状态色，光看 $(broadcast) 读不出还没接上，
+ * 「未创建」的 × 图标不带状态色，光看符号读不出全部信息，
  * 所以文字必须自己说明——否则用户会以为联动已在工作。
  */
 
@@ -28,14 +28,14 @@ const READY_PRESENCE: WechatNotifyHookPresence = { json: true, script: true, con
 const MISSING_PRESENCE: WechatNotifyHookPresence = { json: false, script: false, config: false };
 
 suite("企微联动状态栏文案", () => {
-	test("未创建：保留广播图标，文案为「企微未联动」", () => {
+	test("未创建：图标为 ×，文案为「企微未联动」", () => {
 		const item = fakeItem();
 		updateWechatNotifyStatusBar(
 			item,
 			stateWith({ enabled: true, webhook: "https://example.com/hook" }),
 			MISSING_PRESENCE
 		);
-		assert.strictEqual(item.text, "$(broadcast) 企微未联动");
+		assert.strictEqual(item.text, "$(close) 企微未联动");
 	});
 
 	test("已启用：图标 bell，文案仍是「企微联动」", () => {
@@ -74,6 +74,6 @@ suite("企微联动状态栏文案", () => {
 			MISSING_PRESENCE,
 			outdatedScript
 		);
-		assert.strictEqual(item.text, "$(broadcast) 企微未联动");
+		assert.strictEqual(item.text, "$(close) 企微未联动");
 	});
 });

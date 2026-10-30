@@ -55,13 +55,19 @@ function formatLocalDateTime(date: Date): string {
 /**
  * 测试正文刻意与真实通知区分：真实通知首行是「⏱️ 本轮对话已结束」，
  * 这里明说是手动测试，避免围观的人以为又结束了一轮。
+ *
+ * sourceName 是发起测试的项目（工作区目录名），与真实通知的「项目：」同口径：
+ * 群里同时接了好几个项目时，光看时间戳分不出这条是谁发的。
+ * 拿不到项目名时就整行不写，不刷「来源：未知」凑行数。
  */
-export function buildWechatNotifyTestContent(now: Date): string {
-	return [
-		"🔔 企微联动连通性测试",
-		"这是从 VS Code 面板手动发出的测试消息，不是对话结束通知。",
-		`时间：${formatLocalDateTime(now)}`,
-	].join("\n");
+export function buildWechatNotifyTestContent(now: Date, sourceName?: string): string {
+	const lines = ["🔔 企微联动连通性测试", "这是从 VS Code 面板手动发出的测试消息，不是对话结束通知。"];
+	const source = sourceName?.trim();
+	if (source) {
+		lines.push(`来源：${source}`);
+	}
+	lines.push(`时间：${formatLocalDateTime(now)}`);
+	return lines.join("\n");
 }
 
 /**
@@ -148,7 +154,7 @@ function describeFetchError(error: unknown, timedOut: boolean, timeoutMs: number
  */
 export async function sendWechatNotifyTest(
 	webhook: string,
-	options?: { now?: Date; timeoutMs?: number }
+	options?: { now?: Date; timeoutMs?: number; sourceName?: string }
 ): Promise<WechatNotifyTestResult> {
 	const check = checkWechatNotifyWebhook(webhook);
 	if (!check.ok) {
@@ -156,7 +162,7 @@ export async function sendWechatNotifyTest(
 	}
 
 	const timeoutMs = options?.timeoutMs ?? WECHAT_NOTIFY_TEST_TIMEOUT_MS;
-	const content = buildWechatNotifyTestContent(options?.now ?? new Date());
+	const content = buildWechatNotifyTestContent(options?.now ?? new Date(), options?.sourceName);
 	const maskedUrl = maskWechatNotifyWebhook(check.url);
 
 	const controller = new AbortController();

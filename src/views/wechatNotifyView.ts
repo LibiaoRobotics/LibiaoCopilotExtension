@@ -1,3 +1,4 @@
+import * as path from "path";
 import * as vscode from "vscode";
 import {
 	readWechatNotifyConfigState,
@@ -41,6 +42,20 @@ function describeUpdateResult(result: WechatNotifyUpdateResult): string {
 	const from = result.previousVersion || "旧版";
 	const to = result.templateVersion || "最新";
 	return `企微联动脚本已更新：${from} → ${to}。`;
+}
+
+/**
+ * 测试消息的「来源」：取工作区根目录名，与 WechatNotify.ps1 推导出的
+ * 「项目：」同口径（那边也是脚本所在目录往上两级的叶名）。
+ * 用磁盘目录名而不是 workspaceFolders.name：后者可被工作区文件改写。
+ * 未打开工作区时返回 undefined，正文里就整行不写。
+ */
+function resolveNotifySourceName(): string | undefined {
+	const folder = vscode.workspace.workspaceFolders?.[0];
+	if (!folder) {
+		return undefined;
+	}
+	return path.basename(folder.uri.fsPath) || folder.name || undefined;
 }
 
 /**
@@ -167,7 +182,9 @@ export class WechatNotifyViewPanel {
 				break;
 			case "testWebhook": {
 				// 用界面上当前填的地址测，不要求先保存：先验证再落盘才不会把错地址存进 psd1
-				const result = await sendWechatNotifyTest(message.webhook);
+				const result = await sendWechatNotifyTest(message.webhook, {
+					sourceName: resolveNotifySourceName(),
+				});
 				await this.panel.webview.postMessage({ type: "testResult", result });
 				break;
 			}
