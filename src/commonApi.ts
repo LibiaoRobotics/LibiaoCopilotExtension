@@ -13,6 +13,23 @@ import { tryParseJSONObject } from "./utils";
 import { logger } from "./logger";
 import { VersionManager } from "./versionManager";
 
+/**
+ * 提交信息流的异常收尾原因：
+ * - `length`：服务端因输出上限截断（finish_reason=length / response.incomplete）。
+ * - `unexpected-end`：连接先断开，且没有收到任何终止信号。
+ * - `failed`：服务端显式报告 response.failed。
+ */
+export type CommitStreamIncompleteReason = "length" | "unexpected-end" | "failed";
+
+/**
+ * 提交信息生成（非工具调用场景）的流式块。
+ * `replace` 用于以服务端权威全文覆盖此前增量拼接的内容，避免末尾丢字。
+ */
+export type CommitStreamChunk =
+	| { type: "text"; text: string }
+	| { type: "replace"; text: string }
+	| { type: "incomplete"; reason: CommitStreamIncompleteReason };
+
 export abstract class CommonApi<TMessage, TRequestBody> {
 	/**
 	 * Buffer for assembling streamed tool calls by index.
@@ -151,15 +168,17 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 	 * @param messages The messages to send.
 	 * @param baseUrl The base URL for the API.
 	 * @param apiKey The API key to use.
-	 * @returns An async iterable of text chunks.
+	 * @param signal 取消信号：用于真正中断挂起的网络请求（仅流式实现会使用）。
+	 * @returns An async iterable of text/replace/incomplete chunks.
 	 */
 	abstract createMessage(
 		model: HFModelItem,
 		systemPrompt: string,
 		messages: { role: string; content: string }[],
 		baseUrl: string,
-		apiKey: string
-	): AsyncGenerator<{ type: "text"; text: string }>;
+		apiKey: string,
+		signal?: AbortSignal
+	): AsyncGenerator<CommitStreamChunk>;
 
 	/**
 	 * Try to emit a buffered tool call when a valid name and JSON arguments are available.

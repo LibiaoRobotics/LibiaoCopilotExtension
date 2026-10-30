@@ -5,6 +5,7 @@ import { OpenaiApi } from "../openai/openaiApi";
 import { OpenaiResponsesApi } from "../openai/openaiResponsesApi";
 import { AnthropicApi } from "../anthropic/anthropicApi";
 import { OllamaApi } from "../ollama/ollamaApi";
+import { GeminiApi } from "../gemini/geminiApi";
 import {
 	normalizeUserModels,
 	parseModelId,
@@ -14,6 +15,7 @@ import {
 	resolveValidCommitModel,
 } from "../utils";
 import { logger } from "../logger";
+import { CommitStreamIncompleteReason } from "../commonApi";
 
 /**
  * Git commit message generator module
@@ -22,10 +24,22 @@ import { logger } from "../logger";
 let commitGenerationAbortController: AbortController | undefined;
 
 /** Minimal structural type for a repository from the vscode.git extension API. */
+interface GitRepositoryState {
+	indexChanges?: unknown[];
+	workingTreeChanges?: unknown[];
+	untrackedChanges?: unknown[];
+	mergeChanges?: unknown[];
+}
+
 interface GitRepository {
 	rootUri: vscode.Uri;
 	inputBox: { value: string };
+	state?: GitRepositoryState;
+	status?: () => Promise<void>;
 }
+
+/** 提交信息 prompt 里 diff 部分的字符上限（超过则明显标记截断，而不是静默削掉）。 */
+const MAX_DIFF_PROMPT_CHARS = 100000;
 
 const DEFAULT_PROMPT = {
 	system:
@@ -53,6 +67,7 @@ export async function generateCommitMsg(secrets: vscode.SecretStorage, scm?: vsc
 				throw new Error("Repository not found for provided SCM");
 			}
 
+			await refreshRepositoryState(repository);
 			await generateCommitMsgForRepository(secrets, repository);
 			return;
 		}
@@ -65,11 +80,20 @@ export async function generateCommitMsg(secrets: vscode.SecretStorage, scm?: vsc
 }
 
 async function orchestrateWorkspaceCommitMsgGeneration(secrets: vscode.SecretStorage, repos: GitRepository[]) {
-	const reposWithChanges = await filterForReposWithChanges(repos);
+	const { repos: reposWithChanges, errors } = await filterForReposWithChanges(repos);
 
 	if (reposWithChanges.length === 0) {
-		vscode.window.showInformationMessage(`No changes found in any workspace repositories.`);
+		if (errors.length > 0) {
+			// 有仓库是因为读改动失败才没入选：必须把真实原因告诉用户，不能谎报「没有改动」。
+			vscode.window.showErrorMessage(`无法读取待提交改动：\n${errors.join("\n")}`);
+		} else {
+			vscode.window.showInformationMessage(`工作区内的仓库都没有待提交的改动。`);
+		}
 		return;
+	}
+
+	if (errors.length > 0) {
+		logger.error("commit.repoScan.partial", { errors: errors.join(" | ") });
 	}
 
 	if (reposWithChanges.length === 1) {
@@ -101,21 +125,57 @@ async function orchestrateWorkspaceCommitMsgGeneration(secrets: vscode.SecretSto
 	}
 }
 
-async function filterForReposWithChanges(repos: GitRepository[]) {
-	const reposWithChanges: GitRepository[] = [];
+/** 强制刷新仓库状态，避免外部 git 操作导致的 state 滞后。 */
+async function refreshRepositoryState(repo: GitRepository): Promise<void> {
+	if (typeof repo.status !== "function") {
+		return;
+	}
+	try {
+		await repo.status();
+	} catch (error) {
+		// 刷新失败不影响判断：后面的 CLI diff 仍会给出结果。
+		console.warn(`[Libiao Copilot] 刷新仓库状态失败 ${repo.rootUri.fsPath}:`, error);
+	}
+}
 
-	// Check which repositories have changes
+/** 仓库是否存在待提交的改动（暂存/未暂存/未跟踪/合并冲突任一非空）。 */
+function hasRepositoryChanges(repo: GitRepository): boolean {
+	const state = repo.state;
+	if (!state) {
+		return false;
+	}
+	return [state.indexChanges, state.workingTreeChanges, state.untrackedChanges, state.mergeChanges].some(
+		(group) => Array.isArray(group) && group.length > 0
+	);
+}
+
+async function filterForReposWithChanges(repos: GitRepository[]): Promise<{ repos: GitRepository[]; errors: string[] }> {
+	const reposWithChanges: GitRepository[] = [];
+	const errors: string[] = [];
+
 	for (const repo of repos) {
+		const repoName = repo.rootUri.fsPath.split(path.sep).pop() || repo.rootUri.fsPath;
+
+		// 以 vscode.git 的仓库状态作为权威判据：它有改动就一定有东西可提交，
+		// 不再依赖 diff 文本是否为空（旧逻辑会因删除文件、未跟踪文件、无提交仓库而误判）。
+		await refreshRepositoryState(repo);
+		if (hasRepositoryChanges(repo)) {
+			reposWithChanges.push(repo);
+			continue;
+		}
+
+		// 状态里看不到改动时，再用 CLI diff 复核一次，避免 state 未及时同步时丢掉真实改动。
 		try {
 			const gitDiff = await getGitDiff(repo.rootUri.fsPath);
 			if (gitDiff) {
 				reposWithChanges.push(repo);
 			}
-		} catch {
-			// Skip repositories with errors (no changes, etc.)
+		} catch (error) {
+			errors.push(`${repoName}: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
-	return reposWithChanges;
+
+	return { repos: reposWithChanges, errors };
 }
 
 async function promptRepoSelection(repos: GitRepository[]) {
@@ -140,29 +200,41 @@ async function promptRepoSelection(repos: GitRepository[]) {
 async function generateCommitMsgForRepository(secrets: vscode.SecretStorage, repository: GitRepository) {
 	const inputBox = repository.inputBox;
 	const repoPath = repository.rootUri.fsPath;
+	const repoName = repoPath.split(path.sep).pop() || "repository";
+
 	const gitDiff = await getGitDiff(repoPath);
 
 	if (!gitDiff) {
-		throw new Error(`No changes in repository ${repoPath.split(path.sep).pop() || "repository"} for commit message`);
+		if (hasRepositoryChanges(repository)) {
+			throw new Error(`仓库 ${repoName} 有改动但未能生成 diff，请检查是否被 .gitignore 或 git 配置排除。`);
+		}
+		vscode.window.showInformationMessage(`仓库 ${repoName} 没有待提交的改动。`);
+		return;
 	}
 
 	await vscode.window.withProgress(
 		{
 			location: vscode.ProgressLocation.SourceControl,
-			title: `Generating commit message for ${repoPath.split(path.sep).pop() || "repository"}...`,
+			title: `Generating commit message for ${repoName}...`,
 			cancellable: true,
 		},
-		() => performCommitMsgGeneration(secrets, gitDiff, inputBox)
+		(_progress, token) => performCommitMsgGeneration(secrets, gitDiff, inputBox, token)
 	);
+}
+
+function isAbortError(error: unknown): boolean {
+	return error instanceof Error && (error.name === "AbortError" || /abort/i.test(error.message));
 }
 
 async function performCommitMsgGeneration(
 	secrets: vscode.SecretStorage,
 	gitDiff: string,
-	inputBox: { value: string }
+	inputBox: { value: string },
+	token?: vscode.CancellationToken
 ) {
 	const startTime = Date.now();
 	let modelId: string | undefined;
+	const cancellationSubscription = token?.onCancellationRequested(() => abortCommitGeneration());
 	try {
 		vscode.commands.executeCommand("setContext", "libiaoCopilot.isGeneratingCommit", true);
 		const config = vscode.workspace.getConfiguration();
@@ -182,7 +254,9 @@ async function performCommitMsgGeneration(
 		}
 
 		const truncatedDiff =
-			gitDiff.length > 5000 ? gitDiff.substring(0, 5000) + "\n\n[Diff truncated due to size]" : gitDiff;
+			gitDiff.length > MAX_DIFF_PROMPT_CHARS
+				? `${gitDiff.substring(0, MAX_DIFF_PROMPT_CHARS)}\n\n[Diff truncated: 超出 ${MAX_DIFF_PROMPT_CHARS} 字符上限，后续改动未包含]`
+				: gitDiff;
 		prompts.push(truncatedDiff);
 		const prompt = prompts.join("\n\n");
 
@@ -246,6 +320,8 @@ async function performCommitMsgGeneration(
 			apiInstance = new AnthropicApi(modelId);
 		} else if (apiMode === "ollama") {
 			apiInstance = new OllamaApi(modelId);
+		} else if (apiMode === "gemini") {
+			apiInstance = new GeminiApi(modelId);
 		} else if (apiMode === "openai-responses") {
 			apiInstance = new OpenaiResponsesApi(modelId);
 		} else {
@@ -254,29 +330,79 @@ async function performCommitMsgGeneration(
 		}
 
 		commitGenerationAbortController = new AbortController();
-		const stream = apiInstance.createMessage(selectedModel, systemPrompt, messages, baseUrl, apiKey);
+		const abortController = commitGenerationAbortController;
+		const stream = apiInstance.createMessage(
+			selectedModel,
+			systemPrompt,
+			messages,
+			baseUrl,
+			apiKey,
+			abortController.signal
+		);
 
 		let response = "";
+		let incompleteReason: CommitStreamIncompleteReason | undefined;
+
+		// inputBox.value 的读回可能滞后再写入，文本一律由 response 派生，避免尾部被裁掉。
+		const renderToInputBox = () => {
+			inputBox.value = removeThinkTags(extractCommitMessage(response));
+		};
+
 		for await (const chunk of stream) {
-			commitGenerationAbortController.signal.throwIfAborted();
+			if (abortController.signal.aborted) {
+				break;
+			}
 			if (chunk.type === "text") {
 				response += chunk.text;
-				inputBox.value = extractCommitMessage(response);
+				renderToInputBox();
+			} else if (chunk.type === "replace") {
+				// 服务端在收尾时给出权威全文，直接覆盖增量拼接结果，避免末尾缺字。
+				response = chunk.text;
+				renderToInputBox();
+			} else if (chunk.type === "incomplete") {
+				incompleteReason = chunk.reason;
 			}
 		}
 
-		inputBox.value = removeThinkTags(inputBox.value);
+		const finalMessage = removeThinkTags(extractCommitMessage(response));
+		inputBox.value = finalMessage;
 
-		if (!inputBox.value) {
+		if (!finalMessage) {
 			throw new Error("empty API response");
 		}
 
-		logger.info("commit.end", { modelId, durationMs: Date.now() - startTime });
+		logger.info("commit.end", {
+			modelId,
+			durationMs: Date.now() - startTime,
+			outputChars: response.length,
+			renderedChars: finalMessage.length,
+			diffChars: gitDiff.length,
+			incompleteReason: incompleteReason ?? "none",
+			tailPreview: finalMessage.slice(-80),
+		});
+
+		// 静默截断是「提交信息断了一截」的主因：结束时不完整就必须告知用户。
+		if (incompleteReason === "length") {
+			void vscode.window.showWarningMessage(
+				`提交信息可能未生成完整（模型输出达到上限，已生成 ${finalMessage.length} 字）。请检查内容后再提交，或重新生成。`
+			);
+		} else if (incompleteReason === "unexpected-end") {
+			void vscode.window.showWarningMessage("提交信息流式响应意外中断，当前内容可能不完整，请重新生成。");
+		} else if (incompleteReason === "failed") {
+			void vscode.window.showWarningMessage("服务端报告本次生成未正常完成，当前内容可能不完整，请重新生成。");
+		}
 	} catch (error) {
+		if (isAbortError(error)) {
+			// 用户主动取消：保留已生成的部分内容，不再弹错误。
+			logger.info("commit.aborted", { modelId: modelId ?? "unknown" });
+			return;
+		}
 		const errorMessage = error instanceof Error ? error.message : String(error);
 		logger.error("commit.error", { modelId: modelId ?? "unknown", error: errorMessage });
 		vscode.window.showErrorMessage(`Failed to generate commit message: ${errorMessage}`);
 	} finally {
+		cancellationSubscription?.dispose();
+		commitGenerationAbortController = undefined;
 		vscode.commands.executeCommand("setContext", "libiaoCopilot.isGeneratingCommit", false);
 	}
 }

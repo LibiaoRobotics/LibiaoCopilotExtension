@@ -40,8 +40,7 @@ function describeCreateResult(result: WechatNotifyCreateResult): string {
 function describeUpdateResult(result: WechatNotifyUpdateResult): string {
 	const from = result.previousVersion || "旧版";
 	const to = result.templateVersion || "最新";
-	const backup = result.backupPath ? `原脚本已备份到 ${result.backupPath}。` : "原脚本与模板一致，未产生备份。";
-	return `企微联动脚本已更新：${from} → ${to}。${backup}`;
+	return `企微联动脚本已更新：${from} → ${to}。`;
 }
 
 /**

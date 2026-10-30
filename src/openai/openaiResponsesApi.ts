@@ -25,7 +25,7 @@ import {
 	mapRole,
 } from "../utils";
 
-import { CommonApi } from "../commonApi";
+import { CommonApi, CommitStreamChunk, CommitStreamIncompleteReason } from "../commonApi";
 import { logger } from "../logger";
 
 export interface ResponsesInputMessage {
@@ -912,8 +912,9 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 		systemPrompt: string,
 		messages: { role: string; content: string }[],
 		baseUrl: string,
-		apiKey: string
-	): AsyncGenerator<{ type: "text"; text: string }> {
+		apiKey: string,
+		signal?: AbortSignal
+	): AsyncGenerator<CommitStreamChunk> {
 		// Convert to Responses API format
 		const input: ResponsesInputItem[] = [];
 
@@ -959,6 +960,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			method: "POST",
 			headers,
 			body: JSON.stringify(requestBody),
+			signal,
 		});
 
 		if (!response.ok) {
@@ -975,8 +977,124 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 		const decoder = new TextDecoder();
 		let buffer = "";
 
+		/** 已向前端发出的正文字符数（用于与权威全文做差量补齐）。 */
+		let emitted = "";
+		/** 服务端 done 事件里给出的完整正文（比增量拼接更可信）。 */
+		let authoritative = "";
+		/** 是否收到过终止信号（completed / incomplete / failed / [DONE]）。 */
+		let terminated = false;
+		let incompleteReason: CommitStreamIncompleteReason | undefined;
+
+		const takeAuthoritative = (text: unknown): void => {
+			if (typeof text === "string" && text.length > authoritative.length) {
+				authoritative = text;
+			}
+		};
+
+		const takeAuthoritativeFromItem = (item: unknown): void => {
+			const it = item as Record<string, unknown> | undefined;
+			if (!it || it.type !== "message" || !Array.isArray(it.content)) {
+				return;
+			}
+			const text = (it.content as unknown[])
+				.map((part) => {
+					const p = part as Record<string, unknown> | undefined;
+					return typeof p?.text === "string" ? p.text : "";
+				})
+				.join("");
+			takeAuthoritative(text);
+		};
+
+		const takeAuthoritativeFromResponse = (value: unknown): void => {
+			const resp = value as Record<string, unknown> | undefined;
+			const output = resp?.output;
+			if (Array.isArray(output)) {
+				for (const item of output) {
+					takeAuthoritativeFromItem(item);
+				}
+			}
+		};
+
+		// 单行解析：返回该行携带的正文增量，同时记录终止信号与权威全文。
+		const parseLine = (rawLine: string): string | undefined => {
+			const line = rawLine.trim();
+			if (!line.startsWith("data:")) {
+				return undefined;
+			}
+			const data = line.slice(5).trim();
+			if (!data) {
+				return undefined;
+			}
+			if (data === "[DONE]") {
+				terminated = true;
+				return undefined;
+			}
+
+			try {
+				const parsed = JSON.parse(data) as Record<string, unknown>;
+				const eventType = typeof parsed.type === "string" ? parsed.type : "";
+
+				if (eventType === "response.completed" || eventType === "response.done" || parsed.done === true) {
+					terminated = true;
+					takeAuthoritativeFromResponse(parsed.response);
+					return undefined;
+				}
+
+				if (eventType === "response.incomplete") {
+					terminated = true;
+					takeAuthoritativeFromResponse(parsed.response);
+					const resp = parsed.response as Record<string, unknown> | undefined;
+					const details = resp?.incomplete_details as Record<string, unknown> | undefined;
+					// content_filter 之类的非长度截断归入 failed，便于上层给不同提示。
+					incompleteReason = details?.reason === "content_filter" ? "failed" : "length";
+					return undefined;
+				}
+
+				if (eventType === "response.failed") {
+					terminated = true;
+					incompleteReason = "failed";
+					return undefined;
+				}
+
+				if (eventType === "response.output_text.done") {
+					takeAuthoritative(parsed.text);
+					return undefined;
+				}
+
+				if (eventType === "response.output_item.done") {
+					takeAuthoritativeFromItem(parsed.item);
+					return undefined;
+				}
+
+				// Only handle text output events, skip reasoning/thinking events
+				if (eventType !== "response.output_text.delta" && eventType) {
+					return undefined;
+				}
+
+				// Extract text from various possible locations
+				const candidates: unknown[] = [parsed.delta, parsed.text, parsed.content];
+				if (Array.isArray(parsed.output)) {
+					const firstItem = parsed.output[0] as Record<string, unknown> | undefined;
+					const firstContent = firstItem?.content;
+					if (Array.isArray(firstContent)) {
+						candidates.push((firstContent[0] as Record<string, unknown> | undefined)?.text);
+					}
+				}
+
+				for (const candidate of candidates) {
+					if (typeof candidate === "string" && candidate) {
+						return candidate;
+					}
+				}
+				return undefined;
+			} catch (e) {
+				console.error("[OpenAI-Responses Provider] Failed to parse SSE chunk:", e, "data:", data);
+				return undefined;
+			}
+		};
+
 		try {
-			while (true) {
+			while (!terminated) {
 				const { done, value } = await reader.read();
 				if (done) {
 					break;
@@ -987,46 +1105,47 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 				buffer = lines.pop() || "";
 
 				for (const line of lines) {
-					if (!line.startsWith("data:")) {
-						continue;
+					const text = parseLine(line);
+					if (text) {
+						emitted += text;
+						yield { type: "text", text };
 					}
-					const data = line.slice(5).trim();
-					if (data === "[DONE]") {
-						continue;
+					if (terminated) {
+						break;
 					}
+				}
+			}
 
-					try {
-						const parsed = JSON.parse(data);
-						const eventType = typeof parsed.type === "string" ? parsed.type : "";
-
-						// Only handle text output events, skip reasoning/thinking events
-						const textOutputEvents = ["response.output_text.delta"];
-
-						const isTextEvent = textOutputEvents.includes(eventType) || !eventType; // Also support events without explicit type
-
-						if (isTextEvent) {
-							// Extract text from various possible locations
-							const textSources = [parsed.delta, parsed.text, parsed.content, parsed.output?.[0]?.content?.[0]?.text];
-
-							for (const textSource of textSources) {
-								if (typeof textSource === "string" && textSource) {
-									yield { type: "text", text: textSource };
-									break;
-								}
-							}
-						}
-
-						// Check for completion
-						if (parsed.done || parsed.type === "response.completed" || parsed.type === "response.done") {
-							break;
-						}
-					} catch (e) {
-						console.error("[OpenAI-Responses Provider] Failed to parse SSE chunk:", e, "data:", data);
-					}
+			// 收尾：解码器与行缓冲里可能还留着最后一段（末尾无换行时不会被 split 出来）。
+			buffer += decoder.decode();
+			if (!terminated && buffer.trim()) {
+				const text = parseLine(buffer);
+				if (text) {
+					emitted += text;
+					yield { type: "text", text };
 				}
 			}
 		} finally {
 			reader.releaseLock();
+		}
+
+		// 权威全文补齐：网关可能吞掉尾部 delta，done 事件里的全文能补回丢失的部分。
+		if (authoritative.length > emitted.length) {
+			if (authoritative.startsWith(emitted)) {
+				const rest = authoritative.slice(emitted.length);
+				if (rest) {
+					yield { type: "text", text: rest };
+				}
+			} else {
+				yield { type: "replace", text: authoritative };
+			}
+		}
+
+		// 流结束校验：区分「正常结束」「服务端截断」「意外断连」。
+		if (incompleteReason) {
+			yield { type: "incomplete", reason: incompleteReason };
+		} else if (!terminated) {
+			yield { type: "incomplete", reason: "unexpected-end" };
 		}
 	}
 }

@@ -29,7 +29,7 @@ import {
 	mapRole,
 } from "../utils";
 
-import { CommonApi } from "../commonApi";
+import { CommonApi, CommitStreamChunk } from "../commonApi";
 import { logger } from "../logger";
 
 export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBody> {
@@ -721,8 +721,9 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		systemPrompt: string,
 		messages: { role: string; content: string }[],
 		baseUrl: string,
-		apiKey: string
-	): AsyncGenerator<{ type: "text"; text: string }> {
+		apiKey: string,
+		signal?: AbortSignal
+	): AsyncGenerator<CommitStreamChunk> {
 		// For Anthropic, we need to separate system prompt from messages
 		const anthropicMessages: AnthropicMessage[] = messages.map((m) => ({
 			role: m.role === "user" || m.role === "assistant" ? m.role : "user",
@@ -750,6 +751,7 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			method: "POST",
 			headers,
 			body: JSON.stringify(requestBody),
+			signal,
 		});
 
 		if (!response.ok) {
@@ -766,8 +768,62 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		const decoder = new TextDecoder();
 		let buffer = "";
 
+		/** 是否收到过终止信号（message_stop / [DONE]）。 */
+		let terminated = false;
+		/** message_start / message_delta 里的 stop_reason，用于识别 max_tokens 截断。 */
+		let stopReason: string | undefined;
+		/** 流内 error 事件：服务端中途报错，不能当正常结束。 */
+		let streamError = "";
+
+		// 单行解析：返回该行携带的正文增量，同时记录终止信号与 stop_reason。
+		const parseLine = (rawLine: string): string | undefined => {
+			const line = rawLine.trim();
+			if (!line.startsWith("data:")) {
+				return undefined;
+			}
+			const data = line.slice(5).trim();
+			if (!data) {
+				return undefined;
+			}
+			if (data === "[DONE]") {
+				terminated = true;
+				return undefined;
+			}
+
+			try {
+				const chunk: AnthropicStreamChunk = JSON.parse(data);
+
+				// text_delta 是正文；thinking / input_json / signature 分片不属于提交信息正文。
+				if (chunk.delta?.type === "text_delta" && chunk.delta.text) {
+					return chunk.delta.text;
+				}
+
+				// stop_reason 分两处送达：message_start 的 message 与 message_delta 的 delta。
+				const reason = chunk.delta?.stop_reason ?? chunk.message?.stop_reason;
+				if (typeof reason === "string" && reason) {
+					stopReason = reason;
+				}
+
+				if (chunk.type === "message_stop") {
+					terminated = true;
+					return undefined;
+				}
+
+				if (chunk.type === "error") {
+					// 记下服务端错误：流可能就此断掉，不能只打 console 当无事发生。
+					const errorType = chunk.error?.type || "unknown_error";
+					const errorMessage = chunk.error?.message || "Anthropic API streaming error";
+					streamError = `${errorType}: ${errorMessage}`;
+					terminated = true;
+				}
+			} catch (e) {
+				console.error("[Anthropic Provider] Failed to parse SSE chunk:", e, "data:", data);
+			}
+			return undefined;
+		};
+
 		try {
-			while (true) {
+			while (!terminated) {
 				const { done, value } = await reader.read();
 				if (done) {
 					break;
@@ -778,44 +834,38 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 				buffer = lines.pop() || "";
 
 				for (const line of lines) {
-					if (line.trim() === "") {
-						continue;
+					const text = parseLine(line);
+					if (text) {
+						yield { type: "text", text };
 					}
-					if (!line.startsWith("data:")) {
-						continue;
+					if (terminated) {
+						break;
 					}
+				}
+			}
 
-					const data = line.slice(5).trim();
-					if (data === "[DONE]") {
-						continue;
-					}
-
-					try {
-						const chunk: AnthropicStreamChunk = JSON.parse(data);
-
-						// Anthropic streaming response
-						if (chunk.type === "content_block_delta" && chunk.delta?.type === "text_delta" && chunk.delta?.text) {
-							yield { type: "text", text: chunk.delta.text };
-						}
-
-						// Handle message stop
-						if (chunk.type === "message_stop") {
-							break;
-						}
-
-						// Handle error responses
-						if (chunk.type === "error") {
-							const errorType = chunk.error?.type || "unknown_error";
-							const errorMessage = chunk.error?.message || "Anthropic API streaming error";
-							console.error(`[Anthropic Provider] Streaming error: ${errorType} - ${errorMessage}`);
-						}
-					} catch (e) {
-						console.error("[Anthropic Provider] Failed to parse SSE chunk:", e, "data:", data);
-					}
+			// 收尾：解码器与行缓冲里可能还留着最后一段（末尾无换行时不会被 split 出来）。
+			buffer += decoder.decode();
+			if (!terminated && buffer.trim()) {
+				const text = parseLine(buffer);
+				if (text) {
+					yield { type: "text", text };
 				}
 			}
 		} finally {
 			reader.releaseLock();
+		}
+
+		// 流结束校验：区分「正常结束」「服务端截断」「异常结束」。
+		if (streamError) {
+			console.error(`[Anthropic Provider] Streaming error: ${streamError}`);
+			yield { type: "incomplete", reason: "failed" };
+		} else if (stopReason === "max_tokens" || stopReason === "model_context_window_exceeded") {
+			yield { type: "incomplete", reason: "length" };
+		} else if (stopReason === "refusal") {
+			yield { type: "incomplete", reason: "failed" };
+		} else if (!terminated && !stopReason) {
+			yield { type: "incomplete", reason: "unexpected-end" };
 		}
 	}
 }

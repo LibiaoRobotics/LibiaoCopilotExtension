@@ -10,7 +10,7 @@ import {
 import type { HFModelItem } from "../types";
 import type { OpenAIFunctionToolDef } from "../openai/openaiTypes";
 
-import { CommonApi } from "../commonApi";
+import { CommonApi, CommitStreamChunk } from "../commonApi";
 import { logger } from "../logger";
 import {
 	getConfiguredReasoningEffort,
@@ -28,6 +28,7 @@ import {
 } from "../utils";
 
 import type {
+	GeminiContent,
 	GeminiGenerateContentRequest,
 	GeminiGenerateContentResponse,
 	GeminiPart,
@@ -1148,15 +1149,162 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 		}
 	}
 
-	// eslint-disable-next-line require-yield
 	async *createMessage(
-		_model: HFModelItem,
-		_systemPrompt: string,
-		_messages: { role: string; content: string }[],
-		_baseUrl: string,
-		_apiKey: string
-	): AsyncGenerator<{ type: "text"; text: string }> {
-		throw new Error("Method not implemented.");
+		model: HFModelItem,
+		systemPrompt: string,
+		messages: { role: string; content: string }[],
+		baseUrl: string,
+		apiKey: string,
+		signal?: AbortSignal
+	): AsyncGenerator<CommitStreamChunk> {
+		const contents: GeminiContent[] = messages.map((m) => ({
+			role: m.role === "assistant" ? "model" : "user",
+			parts: [{ text: m.content }],
+		}));
+
+		let requestBody: GeminiGenerateContentRequest = { contents };
+		if (systemPrompt) {
+			requestBody.systemInstruction = { role: "user", parts: [{ text: systemPrompt }] };
+		}
+		requestBody = this.prepareRequestBody(requestBody, model, undefined);
+
+		const headers = CommonApi.prepareHeaders(apiKey, model.apiMode ?? "gemini", model.headers);
+
+		const url = buildGeminiGenerateContentUrl(baseUrl, model.id, true);
+		if (!url) {
+			throw new Error(`Gemini API 地址无效，无法构造 streamGenerateContent 请求：${baseUrl}`);
+		}
+
+		const response = await fetch(url, {
+			method: "POST",
+			headers,
+			body: JSON.stringify(requestBody),
+			signal,
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			throw new Error(`Gemini API request failed: [${response.status}] ${response.statusText}\n${errorText}`);
+		}
+
+		if (!response.body) {
+			throw new Error("No response body from Gemini API");
+		}
+
+		// Process SSE streaming response
+		const reader = response.body.getReader();
+		const decoder = new TextDecoder();
+		let buffer = "";
+
+		/** 已发出的正文：部分网关发全量快照而非增量，需要按状态折算增量。 */
+		const textState: StreamDeltaState = { soFar: "" };
+		/** 是否收到过 finishReason 终止信号。 */
+		let terminated = false;
+		let finishReason = "";
+
+		/** 非正常收尾的 finishReason：内容安全拦截或服务端判定异常。 */
+		const blockingFinishReasons = new Set([
+			"SAFETY",
+			"RECITATION",
+			"BLOCKLIST",
+			"PROHIBITED_CONTENT",
+			"SPII",
+			"IMAGE_SAFETY",
+			"IMAGE_PROHIBITED_CONTENT",
+			"LANGUAGE",
+			"MALFORMED_FUNCTION_CALL",
+			"UNEXPECTED_TOOL_CALL",
+			"OTHER",
+		]);
+
+		// 单行解析：返回该行携带的正文增量，同时记录终止信号与 finishReason。
+		const parseLine = (rawLine: string): string | undefined => {
+			const line = rawLine.trim();
+			if (!line.startsWith("data:")) {
+				return undefined;
+			}
+			const data = line.slice(5).trim();
+			if (!data) {
+				return undefined;
+			}
+			if (data === "[DONE]") {
+				terminated = true;
+				return undefined;
+			}
+
+			let payload: GeminiGenerateContentResponse;
+			try {
+				payload = JSON.parse(data) as GeminiGenerateContentResponse;
+			} catch (e) {
+				console.error("[Gemini Provider] Failed to parse streaming chunk:", e, "data:", data);
+				return undefined;
+			}
+
+			const cand = Array.isArray(payload.candidates) ? payload.candidates[0] : undefined;
+			const reason = String(cand?.finishReason ?? cand?.finish_reason ?? "").toUpperCase();
+			if (reason) {
+				finishReason = reason;
+				terminated = true;
+			}
+
+			const parts = Array.isArray(cand?.content?.parts) ? cand.content.parts : [];
+			const text = parts
+				.map((p) => {
+					const obj = p as unknown as Record<string, unknown> | null | undefined;
+					// 思考分片（thought: true）不属于提交信息正文。
+					if (obj?.thought === true) {
+						return "";
+					}
+					return typeof p?.text === "string" ? p.text : "";
+				})
+				.join("");
+
+			return text ? computeStreamDelta(text, textState) : undefined;
+		};
+
+		try {
+			while (!terminated) {
+				const { done, value } = await reader.read();
+				if (done) {
+					break;
+				}
+
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split("\n");
+				buffer = lines.pop() || "";
+
+				for (const line of lines) {
+					const text = parseLine(line);
+					if (text) {
+						yield { type: "text", text };
+					}
+					if (terminated) {
+						break;
+					}
+				}
+			}
+
+			// 收尾：解码器与行缓冲里可能还留着最后一段（末尾无换行时不会被 split 出来）。
+			buffer += decoder.decode();
+			if (!terminated && buffer.trim()) {
+				const text = parseLine(buffer);
+				if (text) {
+					yield { type: "text", text };
+				}
+			}
+		} finally {
+			reader.releaseLock();
+		}
+
+		// 流结束校验：区分「正常结束」「服务端截断」「异常结束」。
+		if (finishReason === "MAX_TOKENS") {
+			yield { type: "incomplete", reason: "length" };
+		} else if (blockingFinishReasons.has(finishReason)) {
+			console.error(`[Gemini Provider] Streaming ended abnormally: finishReason=${finishReason}`);
+			yield { type: "incomplete", reason: "failed" };
+		} else if (!terminated) {
+			yield { type: "incomplete", reason: "unexpected-end" };
+		}
 	}
 }
 

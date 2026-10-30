@@ -34,7 +34,7 @@ export function initStatusBar(context: vscode.ExtensionContext): vscode.StatusBa
 export function initWechatNotifyStatusBar(context: vscode.ExtensionContext): vscode.StatusBarItem {
 	const wechatNotifyStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
 	wechatNotifyStatusBarItem.name = "企微联动";
-	wechatNotifyStatusBarItem.text = "$(circle-outline) 企微联动";
+	wechatNotifyStatusBarItem.text = "$(broadcast) 企微联动";
 	wechatNotifyStatusBarItem.tooltip = "企微联动 - 点击打开配置界面";
 	wechatNotifyStatusBarItem.command = "libiaoCopilot.openWechatNotifyConfig";
 	context.subscriptions.push(wechatNotifyStatusBarItem);
@@ -45,13 +45,14 @@ export function initWechatNotifyStatusBar(context: vscode.ExtensionContext): vsc
 /**
  * 主状态 → 图标。$(warning) 只留给"配了但发不出去"的故障态。
  *
- * 未创建用空心圆而非 $(circle-slash)：禁用符会让用户以为功能坏了，
- * 而实际只是还没初始化，点一下即可用。
+ * 未创建用 $(broadcast) 而非空心圆：圆圈是零语义符号，读不出功能也不出状态；
+ * broadcast 的外扩弧线直指"往外推送"这个动作，与已启用的 $(bell) 成族但形状差异大，
+ * 小尺寸下不会和 $(bell-slash) 互相混淆。也不用 $(circle-slash)：禁用符会让人以为功能坏了。
  */
 const WECHAT_NOTIFY_STATUS_ICON: Record<WechatNotifyStatus, string> = {
 	active: "$(bell)",
 	disabled: "$(bell-slash)",
-	"not-created": "$(circle-outline)",
+	"not-created": "$(broadcast)",
 	"no-workspace": "$(circle-slash)",
 	incomplete: "$(warning)",
 };
@@ -129,7 +130,9 @@ export function updateWechatNotifyStatusBar(
 		scriptMarkable && (script?.status === "outdated" || script?.status === "unknown");
 
 	const icon = WECHAT_NOTIFY_STATUS_ICON[status];
-	item.text = scriptPending ? `${icon} 企微联动 $(arrow-up)` : `${icon} 企微联动`;
+	// not-created 的图标不带状态色，文字必须自己说清"还没接上"，否则读起来像已生效。
+	const label = status === "not-created" ? "企微未联动" : "企微联动";
+	item.text = scriptPending ? `${icon} ${label} $(arrow-up)` : `${icon} ${label}`;
 	item.color = WECHAT_NOTIFY_DIM_STATUS.has(status)
 		? new vscode.ThemeColor("disabledForeground")
 		: undefined;

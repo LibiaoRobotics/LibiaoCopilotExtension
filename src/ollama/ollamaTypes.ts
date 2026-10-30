@@ -65,9 +65,12 @@ export interface OllamaStreamChunk {
 		tool_calls?: OllamaToolCall[];
 	};
 	done: boolean;
+	/** 收尾原因：stop / length / load / unload。length 表示被输出上限截断。 */
 	done_reason?: string;
 	prompt_eval_count?: number;
 	eval_count?: number;
+	/** 流内错误：服务端无法完成请求时以该字段返回，而不是走 HTTP 状态码。 */
+	error?: string;
 }
 
 /**

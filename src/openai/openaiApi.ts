@@ -33,7 +33,7 @@ import {
 	mapRole,
 } from "../utils";
 
-import { CommonApi } from "../commonApi";
+import { CommonApi, CommitStreamChunk } from "../commonApi";
 import { logger } from "../logger";
 
 export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unknown>> {
@@ -508,8 +508,9 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 		systemPrompt: string,
 		messages: { role: string; content: string }[],
 		baseUrl: string,
-		apiKey: string
-	): AsyncGenerator<{ type: "text"; text: string }> {
+		apiKey: string,
+		signal?: AbortSignal
+	): AsyncGenerator<CommitStreamChunk> {
 		// Combine system prompt with first user message or as separate system message
 		const openaiMessages = [...messages];
 		if (systemPrompt) {
@@ -532,6 +533,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 			method: "POST",
 			headers,
 			body: JSON.stringify(requestBody),
+			signal,
 		});
 
 		if (!response.ok) {
@@ -547,9 +549,50 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 		const reader = response.body.getReader();
 		const decoder = new TextDecoder();
 		let buffer = "";
+		let finishReason: string | undefined;
+		let sawDone = false;
+
+		// 单行解析：返回该行携带的正文增量，同时记录终止信号。
+		const parseLine = (rawLine: string): string | undefined => {
+			const line = rawLine.trim();
+			if (!line.startsWith("data:")) {
+				return undefined;
+			}
+			const data = line.slice(5).trim();
+			if (!data) {
+				return undefined;
+			}
+			if (data === "[DONE]") {
+				sawDone = true;
+				return undefined;
+			}
+
+			try {
+				const parsed = JSON.parse(data) as Record<string, unknown>;
+
+				// OpenAI-compatible streaming response
+				const choice = (parsed.choices as Record<string, unknown>[] | undefined)?.[0];
+				if (!choice) {
+					return undefined;
+				}
+
+				if (typeof choice.finish_reason === "string") {
+					finishReason = choice.finish_reason;
+				}
+
+				const deltaObj = choice.delta as Record<string, unknown> | undefined;
+				if (typeof deltaObj?.content === "string" && deltaObj.content) {
+					return deltaObj.content;
+				}
+				return undefined;
+			} catch (e) {
+				console.error("[OpenAI Provider] Failed to parse SSE chunk:", e, "data:", data);
+				return undefined;
+			}
+		};
 
 		try {
-			while (true) {
+			while (!sawDone) {
 				const { done, value } = await reader.read();
 				if (done) {
 					break;
@@ -560,39 +603,33 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 				buffer = lines.pop() || "";
 
 				for (const line of lines) {
-					if (!line.startsWith("data:")) {
-						continue;
+					const text = parseLine(line);
+					if (text) {
+						yield { type: "text", text };
 					}
-					const data = line.slice(5).trim();
-					if (data === "[DONE]") {
-						continue;
+					if (sawDone) {
+						break;
 					}
+				}
+			}
 
-					try {
-						const parsed = JSON.parse(data);
-
-						// OpenAI-compatible streaming response
-						const choice = (parsed.choices as Record<string, unknown>[] | undefined)?.[0];
-						if (!choice) {
-							continue;
-						}
-
-						const deltaObj = choice.delta as Record<string, unknown> | undefined;
-						if (deltaObj?.content) {
-							const content = String(deltaObj.content);
-							yield { type: "text", text: content };
-						}
-						// Handle finish reason
-						if (choice.finish_reason) {
-							break;
-						}
-					} catch (e) {
-						console.error("[OpenAI Provider] Failed to parse SSE chunk:", e, "data:", data);
-					}
+			// 收尾：解码器与行缓冲里可能还留着最后一段（末尾无换行时不会被 split 出来）。
+			buffer += decoder.decode();
+			if (!sawDone && buffer.trim()) {
+				const text = parseLine(buffer);
+				if (text) {
+					yield { type: "text", text };
 				}
 			}
 		} finally {
 			reader.releaseLock();
+		}
+
+		// 流结束校验：区分「正常结束」「服务端截断」「意外断连」。
+		if (finishReason === "length") {
+			yield { type: "incomplete", reason: "length" };
+		} else if (!finishReason && !sawDone) {
+			yield { type: "incomplete", reason: "unexpected-end" };
 		}
 	}
 }

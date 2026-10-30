@@ -36,8 +36,7 @@ export interface WechatNotifyCreateResult {
 }
 
 export interface WechatNotifyUpdateResult {
-	/** 覆盖前的备份文件绝对路径；内容与模板一致时为空 */
-	backupPath?: string;
+	/** 覆盖前的脚本版本号 */
 	previousVersion: string;
 	templateVersion: string;
 }
@@ -260,26 +259,11 @@ export async function createWechatNotifyHook(
 	return { created, skipped, gitIgnore };
 }
 
-/** 备份文件名：同一秒内多次更新时追加序号，绝不覆盖已有备份 */
-async function createBackupUri(dir: vscode.Uri, baseName: string): Promise<vscode.Uri> {
-	const now = new Date();
-	const pad = (value: number) => String(value).padStart(2, "0");
-	const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-	for (let index = 1; index <= 20; index += 1) {
-		const suffix = index === 1 ? "" : `-${index}`;
-		const uri = vscode.Uri.joinPath(dir, `${baseName}.bak-${stamp}${suffix}`);
-		if (!(await fileExists(uri))) {
-			return uri;
-		}
-	}
-	throw new Error("无法生成备份文件名，请清理 .github/hooks 下的历史备份后重试。");
-}
-
 /**
  * 用内置模板覆盖工作区脚本。
  *
- * 用户改脚本是常态，覆盖前一律先备份；模板读不到就中止，
- * 绝不把脚本写成空文件（那会让 Stop hook 静默失效）。
+ * 不做磁盘备份：旧版会在 .github/hooks 下堆出永不清理的 .bak-* 文件。
+ * 模板读不到就中止，绝不把脚本写成空文件（那会让 Stop hook 静默失效）。
  */
 export async function updateWechatNotifyScript(extensionUri: vscode.Uri): Promise<WechatNotifyUpdateResult> {
 	const dir = resolveHookDirUri();
@@ -309,17 +293,11 @@ export async function updateWechatNotifyScript(extensionUri: vscode.Uri): Promis
 	}
 
 	const before = evaluateWechatNotifyScript(installedText, new TextDecoder("utf-8").decode(template));
-	const result: WechatNotifyUpdateResult = {
+
+	// 按模板字节写出，保住 UTF-8 BOM
+	await vscode.workspace.fs.writeFile(scriptUri, template);
+	return {
 		previousVersion: before.installedVersion,
 		templateVersion: before.templateVersion,
 	};
-	if (!before.identical) {
-		const backupUri = await createBackupUri(dir, WECHAT_NOTIFY_SCRIPT_FILE_NAME);
-		// 按原始字节备份，BOM 与换行都保持原样
-		await vscode.workspace.fs.writeFile(backupUri, installedBytes);
-		result.backupPath = backupUri.fsPath;
-	}
-	// 按模板字节写出，保住 UTF-8 BOM
-	await vscode.workspace.fs.writeFile(scriptUri, template);
-	return result;
 }

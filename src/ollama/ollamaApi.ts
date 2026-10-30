@@ -13,7 +13,7 @@ import type { OllamaMessage, OllamaRequestBody, OllamaStreamChunk, OllamaToolCal
 
 import { isToolResultPart, collectToolResultText, convertToolsToOpenAI, mapRole } from "../utils";
 
-import { CommonApi } from "../commonApi";
+import { CommonApi, CommitStreamChunk } from "../commonApi";
 import { logger } from "../logger";
 
 export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
@@ -285,8 +285,9 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 		systemPrompt: string,
 		messages: { role: string; content: string }[],
 		baseUrl: string,
-		apiKey: string
-	): AsyncGenerator<{ type: "text"; text: string }> {
+		apiKey: string,
+		signal?: AbortSignal
+	): AsyncGenerator<CommitStreamChunk> {
 		// Convert to Ollama message format
 		const ollamaMessages: OllamaMessage[] = [];
 
@@ -319,6 +320,7 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 			method: "POST",
 			headers,
 			body: JSON.stringify(requestBody),
+			signal,
 		});
 
 		if (!response.ok) {
@@ -335,8 +337,47 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 		const decoder = new TextDecoder();
 		let buffer = "";
 
+		/** 是否收到过 done 终止块。 */
+		let terminated = false;
+		/** done_reason：length 表示被输出上限截断。 */
+		let doneReason: string | undefined;
+		/** 流内 error 字段：服务端中途报错。 */
+		let streamError = "";
+
+		// 单行解析：返回该行携带的正文增量，同时记录终止信号与 done_reason。
+		const parseLine = (rawLine: string): string | undefined => {
+			const line = rawLine.trim();
+			if (!line) {
+				return undefined;
+			}
+
+			try {
+				const chunk: OllamaStreamChunk = JSON.parse(line);
+
+				// Ollama 把流内错误写在 error 字段里，而不是走 HTTP 状态码。
+				if (typeof chunk.error === "string" && chunk.error) {
+					streamError = chunk.error;
+					terminated = true;
+					return undefined;
+				}
+
+				if (chunk.done) {
+					terminated = true;
+					if (typeof chunk.done_reason === "string" && chunk.done_reason) {
+						doneReason = chunk.done_reason;
+					}
+				}
+
+				const text = chunk.message?.content;
+				return typeof text === "string" && text ? text : undefined;
+			} catch (e) {
+				console.error("[Ollama Provider] Failed to parse streaming chunk:", e, "data:", line);
+				return undefined;
+			}
+		};
+
 		try {
-			while (true) {
+			while (!terminated) {
 				const { done, value } = await reader.read();
 				if (done) {
 					break;
@@ -347,26 +388,36 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 				buffer = lines.pop() || "";
 
 				for (const line of lines) {
-					if (!line.trim()) {
-						continue;
+					const text = parseLine(line);
+					if (text) {
+						yield { type: "text", text };
 					}
-
-					try {
-						const chunk: OllamaStreamChunk = JSON.parse(line);
-						if (chunk.message?.content) {
-							yield { type: "text", text: chunk.message.content };
-						}
-
-						if (chunk.done) {
-							break;
-						}
-					} catch (e) {
-						console.error("[Ollama Provider] Failed to parse streaming chunk:", e, "data:", line);
+					if (terminated) {
+						break;
 					}
+				}
+			}
+
+			// 收尾：解码器与行缓冲里可能还留着最后一个对象（末尾无换行时不会被 split 出来）。
+			buffer += decoder.decode();
+			if (!terminated && buffer.trim()) {
+				const text = parseLine(buffer);
+				if (text) {
+					yield { type: "text", text };
 				}
 			}
 		} finally {
 			reader.releaseLock();
+		}
+
+		// 流结束校验：区分「正常结束」「服务端截断」「异常结束」。
+		if (streamError) {
+			console.error(`[Ollama Provider] Streaming error: ${streamError}`);
+			yield { type: "incomplete", reason: "failed" };
+		} else if (doneReason === "length") {
+			yield { type: "incomplete", reason: "length" };
+		} else if (!terminated) {
+			yield { type: "incomplete", reason: "unexpected-end" };
 		}
 	}
 }

@@ -153,6 +153,12 @@ export interface AnthropicStreamChunk {
 		thinking?: string;
 		partial_json?: string;
 		signature?: string;
+		/**
+		 * message_delta 事件携带的收尾原因（end_turn / max_tokens / refusal / model_context_window_exceeded 等）。
+		 * 该事件的 delta 只有这个字段，没有 type。
+		 */
+		stop_reason?: string;
+		stop_sequence?: string | null;
 	};
 	usage?: {
 		input_tokens: number;
