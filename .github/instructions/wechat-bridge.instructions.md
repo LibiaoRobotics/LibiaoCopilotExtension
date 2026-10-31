@@ -20,6 +20,13 @@ applyTo: "**/wechatBridge*.ts,**/WechatNotify*.ps1,assets/hooks/**"
 - **「等你选择」只能走 `preToolUse` hook**：`vscode_askQuestions` 回答前不返回、不写 `turn_end`，本轮永远判不了结束；它的 `tool.execution_start` **也观测不到**——transcript 只在 `flush()` 时真正写盘，而 `flush()` 全仓只在 hook 执行前与上下文压缩前调用。2026-10-31 实测：等待期间文件大小 686185 字节，90 秒内零增长，答完那次才一次写进 `start`（事件时间戳 13:51:09）与 `complete`（13:52:35）。所以按顺序消费时 `start` 与 `complete` 必然同一批到达，即时消费也会被当成“已答完”而永不推送（曾据此上过一版从未生效的实现）。
   现在的通道：`.github/hooks/WechatInteract.js`（`PreToolUse`，命令 `node`，不用 pwsh）把 `{toolCallId, arguments}` 追加到 `<扩展数据目录>/wechatPending/<sessionId>.jsonl`，`InteractionInbox` 增量跟读并渲染成 `pushMarkdown(..., "live-interaction")`。三条不变量：hook 必须 `exit 0`（`exit 2` = deny）、stdout 必须为空、目录名 `wechatPending` 两边硬编码必须一致。hook 配置按轮次缓存，改了要下一轮才生效；workspace trust 与 `chat.useHooks` 任一关闭就静默不跑。这条**不做来源去重**：企微发起的轮次卡在提问上，手机端更需要知道。
 - **通用工具审批拍不了**：`preToolUse` hook 的输入里没有「这个工具会不会弹确认」的字段（它在 `prepareToolInvocation` 之前触发），无法区分自动批准与待审批。只对 `vscode_askQuestions` 这类确定会阻塞的工具精确可靠，不要靠“长时间没有 complete”去猜（长命令会误报）。
+- **提醒是双向的，但作答路径必须拦住注入**：`vscode_askQuestions` 在核心里不是确认框，而是往对话追加 `questionCarousel` 进度部件后 `await` 它的 `DeferredPromise`（`askQuestionsTool.ts:222-232`），答案只能来自 UI。企微回一条「1」若走正常注入路径，`chatWidget.ts:3964-3975` 发现 `requestNeedsInput` 为真、`requestInProgress` 为假，就 `cancelCurrentRequestForSession('acceptInput-needsInput')`，轮播被 `dismiss(undefined)`、提问抛 `CancellationError` 而被**跳过**，「1」变成一条**新的 user 消息**。所以 `handleInboundMessage` 在入队**之前**先看 `pendingInteraction`：能答就提交答案，答不了也必须回提示，**绝不退回注入**。
+  - 提交通道是内部命令 `_chat.notifyQuestionCarouselAnswer(resolveId, answers)`（`chat.shared.contribution.ts:290`，语音输入在用），失败是静默的。
+  - `resolveId = chatStreamToolCallId ?? callId`（`askQuestionsTool.ts:207`），而 `chatStreamToolCallId = props.toolCall.id.split('__vscode')[0]`（`toolCalling.tsx:325-327`）；hook 拿到的 `tool_use_id` 是 `props.toolCall.id` **原值**（`chatHookService.ts:350-356`）。二者**不相等**，必须用 `toResolveId()` 削掉 `__vscode` 后缀，否则命令匹配不上且不报错。
+  - 答案键 `${resolveId}:${index}`；值：文本题 → 字符串，单选 → `{selectedValue}`，多选 → `{selectedValues}`；**选项值只能传 `options[].label` 原文**，传带 ` — description` 的显示文本会匹配不上。`answers` 传 `undefined` = 全部跳过（工具正常返回 `skipped: true`，不抛取消）。
+  - **时序坑**：PreToolUse hook 在 `toolCalling.tsx:301` 触发，而轮播追加与监听注册在 `askQuestionsTool.ts:219-229`，比它晚。**在 hook 里同步调这个命令必定空转**。现在的实现在用户回复时（秒级之后）才调，所以安全；若将来改成一收到 sidecar 就自动作答，必须先延后到轮播注册之后。
+  - 监听器守卫 `event.resolveId !== carousel.resolveId || carousel.isUsed` 会在工具 `finally` 里 dispose（`:239`），工具返回后命令即失效；autopilot / `chat.autoReply` 会预置 `isUsed = true`，外部作答一律被挡。所以待答状态必须带 10 分钟 TTL，过期就不能再假装作答成功。
+  - 扩展侧没有、也不该有「取消当前轮次」的调用：取消是 VS Code 自己在提交新消息时做的，扩展不知情。
 
 ## 2. 正文来源必须是 transcripts，不是 chatSessions
 

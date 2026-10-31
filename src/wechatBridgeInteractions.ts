@@ -35,14 +35,39 @@ export interface PendingInteraction {
 	sessionId: string;
 	/** 提问工具的 toolCallId，用于去重 */
 	toolCallId: string;
+	/**
+	 * 核心里的提问轮播 id。注意**不是** toolCallId：核心把 copilot 内部 id 的
+	 * `__vscode-<n>` 后缀剥掉才当作轮播 id（见 toResolveId）。
+	 */
+	resolveId: string;
+	/** 本次提问的结构化内容，作答时要按 index 与 options 组装答案 */
+	questions: PendingQuestion[];
 	/** 已渲染成 markdown 的提问正文 */
 	markdown: string;
+}
+
+/** 一个待回答的问题，字段与核心的 IChatQuestion 对齐（只保留作答需要的那部分） */
+export interface PendingQuestion {
+	/** 0 基下标，与核心的 `${resolveId}:${index}` 一致 */
+	index: number;
+	header: string;
+	text: string;
+	/** 选项，顺序即用户看到的编号。作答必须用 `label`，不能用拼了描述的显示文本 */
+	options: PendingOption[];
+	multiSelect: boolean;
+}
+
+export interface PendingOption {
+	label: string;
+	description: string;
 }
 
 /** 把 hook 写下的 sidecar 行解析成事件 */
 interface InteractionEvent {
 	toolCallId: string;
 	sessionId: string;
+	resolveId: string;
+	questions: PendingQuestion[];
 	markdown: string;
 }
 
@@ -57,41 +82,65 @@ function readText(value: unknown): string {
 }
 
 /**
+ * 剥掉 copilot 内部 tool call id 的 `__vscode-<n>` 后缀。
+ *
+ * 两侧取值不同源同一个变量：hook 拿到的 tool_use_id 是完整的 `props.toolCall.id`，
+ * 而核心给提问轮播用的 resolveId 是 `props.toolCall.id.split('__vscode')[0]`
+ * （toolCalling.tsx:301 与 :327）。不剥后缀，作答命令必然匹配不上而静默失效。
+ */
+export function toResolveId(toolCallId: string): string {
+	const at = toolCallId.indexOf("__vscode");
+	return at >= 0 ? toolCallId.slice(0, at) : toolCallId;
+}
+
+/**
+ * 把 vscode_askQuestions 的参数解析成结构化问题。
+ * 类型推导与核心一致：没有选项是 text，有选项且 multiSelect 是 multiSelect，其余 singleSelect。
+ */
+export function parseQuestions(value: unknown): PendingQuestion[] {
+	const list = asRecord(value)?.questions;
+	if (!Array.isArray(list)) {
+		return [];
+	}
+	const questions: PendingQuestion[] = [];
+	for (const raw of list) {
+		const record = asRecord(raw);
+		if (!record) {
+			continue;
+		}
+		const options = (Array.isArray(record.options) ? record.options : [])
+			.map((option) => asRecord(option))
+			.filter((option): option is Record<string, unknown> => option !== undefined)
+			.map((option) => ({ label: readText(option.label).trim(), description: readText(option.description).trim() }))
+			.filter((option) => option.label.length > 0);
+		questions.push({
+			index: questions.length,
+			header: readText(record.header).trim(),
+			text: readText(record.question).trim(),
+			options,
+			multiSelect: options.length > 0 && Boolean(record.multiSelect),
+		});
+	}
+	return questions;
+}
+
+/**
  * 把 vscode_askQuestions 的参数渲染成企微可读的 markdown。
  * 参数结构见 copilot 的 IAskQuestionsParams：{ questions: [{ header, question, options[], multiSelect }] }
  */
 export function renderQuestions(value: unknown): string {
-	const list = asRecord(value)?.questions;
-	if (!Array.isArray(list)) {
-		return "";
-	}
+	const questions = parseQuestions(value);
 	const blocks: string[] = [];
-	for (const raw of list) {
-		const question = asRecord(raw);
-		if (!question) {
-			continue;
-		}
+	for (const question of questions) {
 		const lines: string[] = [];
-		const header = readText(question.header).trim();
-		const text = readText(question.question).trim();
-		if (header) {
-			lines.push(`**${header}**`);
+		if (question.header) {
+			lines.push(`**${question.header}**`);
 		}
-		if (text) {
-			lines.push(text);
+		if (question.text) {
+			lines.push(question.text);
 		}
-		const options = Array.isArray(question.options) ? question.options : [];
-		options.forEach((option, index) => {
-			const record = asRecord(option);
-			if (!record) {
-				return;
-			}
-			const label = readText(record.label).trim();
-			if (!label) {
-				return;
-			}
-			const description = readText(record.description).trim();
-			lines.push(`${index + 1}. ${label}${description ? ` — ${description}` : ""}`);
+		question.options.forEach((option, index) => {
+			lines.push(`${index + 1}. ${option.label}${option.description ? ` — ${option.description}` : ""}`);
 		});
 		if (lines.length > 0) {
 			blocks.push(lines.join("\n"));
@@ -100,10 +149,13 @@ export function renderQuestions(value: unknown): string {
 	if (blocks.length === 0) {
 		return "";
 	}
+	const multi = questions.length > 1;
 	return [
 		"❓ **VS Code 在等你选择**",
 		blocks.join("\n\n"),
-		"请回到 VS Code 里点选，选完我会继续。",
+		multi
+			? `✍️ 直接回复 ${questions.length} 个编号作答（如 \`${questions.map(() => "1").join(" ")}\`），回「跳过」可略过。`
+			: "✍️ 直接回复编号作答，回「跳过」可略过；也可以在 VS Code 里点选。",
 	].join("\n\n");
 }
 
@@ -200,11 +252,18 @@ class InteractionTail {
 			if (!toolCallId) {
 				continue;
 			}
+			const questions = parseQuestions(record.arguments);
 			const markdown = renderQuestions(record.arguments);
 			if (!markdown) {
 				continue;
 			}
-			this.events.push({ toolCallId, sessionId: this.sessionId, markdown });
+			this.events.push({
+				toolCallId,
+				sessionId: this.sessionId,
+				resolveId: toResolveId(toolCallId),
+				questions,
+				markdown,
+			});
 		}
 	}
 }

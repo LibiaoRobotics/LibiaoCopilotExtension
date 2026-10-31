@@ -8,6 +8,7 @@ import {
 	INTERACTIONS_DIR_NAME,
 	renderQuestions,
 	resolveInteractionsDir,
+	toResolveId,
 } from "../wechatBridgeInteractions";
 
 /**
@@ -42,6 +43,24 @@ suite("企微桥接的等待选择提醒", () => {
 			assert.ok(pending[0].markdown.includes("部署到哪个环境？"));
 			assert.ok(pending[0].markdown.includes("1. 生产"));
 			assert.ok(pending[0].markdown.includes("2. 测试 — 先试一下"));
+			// 结构要够作答：下标、原始 label、多选标记都得在
+			assert.deepStrictEqual(pending[0].questions, [
+				{
+					index: 0,
+					header: "目标环境",
+					text: "部署到哪个环境？",
+					options: [
+						{ label: "生产", description: "" },
+						{ label: "测试", description: "先试一下" },
+					],
+					multiSelect: false,
+				},
+			]);
+			// 文案必须告诉用户能直接回编号，否则他会以为还得回电脑
+			assert.ok(
+				pending[0].markdown.includes("直接回复编号作答"),
+				"必须提示企微侧可以直接回编号"
+			);
 			// 消费即清空：同一个 toolCallId 不会被推两遍
 			assert.deepStrictEqual(inbox.poll(), []);
 		} finally {
@@ -111,6 +130,31 @@ suite("企微桥接的等待选择提醒", () => {
 			resolveInteractionsDir(transcripts),
 			path.join(os.tmpdir(), "hash", "GitHub.copilot-chat", INTERACTIONS_DIR_NAME)
 		);
+	});
+
+	test("resolveId 去掉 hook 侧多出来的 __vscode 后缀", () => {
+		// hook 拿到的是 props.toolCall.id 原值，核心注册轮播时用的是 split('__vscode')[0]，
+		// 不剥掉后缀提交答案会因 resolveId 不匹配而被静默丢弃
+		assert.strictEqual(toResolveId("call_00_x__vscode-1793455973765"), "call_00_x");
+		assert.strictEqual(toResolveId("call_00_plain"), "call_00_plain");
+		assert.strictEqual(toResolveId(""), "");
+	});
+
+	test("sidecar 每行都带上剥好后缀的 resolveId", () => {
+		const dir = makeTempInteractions();
+		try {
+			const inbox = new InteractionInbox(dir);
+			inbox.prime();
+			appendHookEvent(dir, "s2", "call_ab__vscode-123", {
+				questions: [{ question: "选一个", options: [{ label: "A" }, { label: "B" }] }],
+			});
+			const pending = inbox.poll();
+			assert.strictEqual(pending.length, 1);
+			assert.strictEqual(pending[0].toolCallId, "call_ab__vscode-123");
+			assert.strictEqual(pending[0].resolveId, "call_ab");
+		} finally {
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
 	});
 
 	test("hook 脚本对提问工具写出 sidecar，对其它工具一个字都不写", () => {

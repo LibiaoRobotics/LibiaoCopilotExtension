@@ -40,6 +40,7 @@ import {
 	resolveInteractionsDir,
 	type PendingInteraction,
 } from "./wechatBridgeInteractions";
+import { planQuestionAnswers } from "./wechatBridgeAnswers";
 import {
 	buildAuthResultCardRequest,
 	buildAuthorizeCardRequest,
@@ -153,6 +154,14 @@ const PUSH_PER_MINUTE_LIMIT = 25;
 const PUSH_PER_HOUR_LIMIT = 900;
 /** 企微注入过但没等到轮次的 prompt 哈希，留一段时间避免迟到的轮次被重复推送 */
 const ORPHAN_HASH_TTL_MS = 30 * 60_000;
+/**
+ * 「等你选择」的作答有效期。
+ *
+ * 超过这个时间还挂着，说明用户已经在 VS Code 里点过了或那一轮被取消了；再拿它去作答，
+ * 命令会因 carousel.isUsed 而静默失效，却仍回给用户一句「已提交」。宁可当它过期、
+ * 退回正常注入，也不能骗人。
+ */
+const PENDING_ANSWER_TTL_MS = 10 * 60_000;
 
 function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -176,6 +185,13 @@ export class WechatBridgeService implements vscode.Disposable {
 	private scanner: ChatSessionScanner | undefined;
 	private liveScanner: LiveTurnScanner | undefined;
 	private liveInbox: InteractionInbox | undefined;
+	/**
+	 * 最近一次「VS Code 在等你选择」。企微来的文字要先过它：
+	 * 提问未答时直接注入会把提问取消掉（chatWidget 的 acceptInput-needsInput 分支），
+	 * 所以要么作答，要么回一句说明，绝不再往里塞新请求。
+	 */
+	private pendingInteraction: PendingInteraction | undefined;
+	private pendingInteractionAt = 0;
 	private livePumpTimer: NodeJS.Timeout | undefined;
 	/** 正在等企微注入轮次的等待者，键是归一化后的 prompt */
 	private readonly liveWaits = new Map<string, (turn: LiveTurn) => void>();
@@ -606,9 +622,85 @@ export class WechatBridgeService implements vscode.Disposable {
 			msgid: message.msgid,
 			length: prompt.length,
 		});
+		const pending = this.takePendingInteraction();
+		if (pending) {
+			void this.answerPendingQuestion(pending, prompt, message);
+			return;
+		}
 		this.queue.push({ msgid: message.msgid, reqId: message.reqId, userId: message.userId, prompt });
 		this.emitChange();
 		void this.drainQueue();
+	}
+
+	/** 取出仍然有效的待答提问；过期的直接丢弃，避免对着已经关闭的轮播作答 */
+	private takePendingInteraction(): PendingInteraction | undefined {
+		const pending = this.pendingInteraction;
+		if (!pending) {
+			return undefined;
+		}
+		if (Date.now() - this.pendingInteractionAt > PENDING_ANSWER_TTL_MS) {
+			logger.info("wechat-bridge", { event: "pending-interaction-expired", sessionId: pending.sessionId });
+			this.pendingInteraction = undefined;
+			return undefined;
+		}
+		return pending;
+	}
+
+	/**
+	 * 把企微里的一条回复当作提问的答案提交。
+	 *
+	 * 不注入、不排队：这一轮正卡在提问上，注入会把提问取消掉。解析不了也要回一句说明，
+	 * 绝不能退回注入。
+	 */
+	private async answerPendingQuestion(
+		pending: PendingInteraction,
+		message: string,
+		inbound: WechatInboundMessage
+	): Promise<void> {
+		const plan = planQuestionAnswers(pending, message);
+		if (plan.kind === "hint") {
+			logger.info("wechat-bridge", { event: "question-answer-hint", sessionId: pending.sessionId });
+			this.replyInbound(inbound, message, plan.text, false);
+			return;
+		}
+		// 轮播只能被消费一次：isUsed 之后核心会忽略后续作答，所以先清掉状态再提交
+		this.pendingInteraction = undefined;
+		try {
+			await vscode.commands.executeCommand(
+				"_chat.notifyQuestionCarouselAnswer",
+				pending.resolveId,
+				plan.kind === "answers" ? plan.answers : undefined
+			);
+		} catch (error) {
+			logger.warn("wechat-bridge", { event: "question-answer-failed", detail: errorMessage(error) });
+			this.replyInbound(inbound, message, `❌ 提交答案失败：${errorMessage(error)}`, false);
+			return;
+		}
+		logger.info("wechat-bridge", {
+			event: "question-answered",
+			sessionId: pending.sessionId,
+			resolveId: pending.resolveId,
+			kind: plan.kind,
+		});
+		this.replyInbound(
+			inbound,
+			message,
+			plan.kind === "answers" ? `✅ ${plan.summary}` : `⏭️ ${plan.summary}`,
+			true
+		);
+	}
+
+	/** 立即回一条短答复：走原回调，不排队也不进对话 */	private replyInbound(inbound: WechatInboundMessage, prompt: string, text: string, ok: boolean): void {
+		const content = fitWechatMessage(text);
+		const sent = this.connection?.send(buildStreamRespondRequest(inbound.reqId, inbound.msgid, content)) ?? false;
+		this.lastActivity = {
+			at: Date.now(),
+			prompt: `（选择答复）${prompt.slice(0, 60)}`,
+			ok: ok && sent,
+			detail: sent ? "" : "回复发送失败（连接已断开）",
+		};
+		logger.info("wechat-bridge", { event: "question-answer-replied", ok, sent, length: content.length });
+		this.emitChange();
 	}
 
 	private isDuplicate(msgid: string): boolean {
@@ -903,6 +995,8 @@ export class WechatBridgeService implements vscode.Disposable {
 			return;
 		}
 		for (const turn of turns) {
+			// 这一轮结束了，之前挂着的提问一定已经收场，别让它再拦下一条普通消息
+			this.clearPendingInteraction(turn.sessionId);
 			if (this.settleLiveWait(turn)) {
 				continue;
 			}
@@ -962,7 +1056,15 @@ export class WechatBridgeService implements vscode.Disposable {
 	 * 不像企微发起的轮次，这条不做来源去重：手机端更需要知道有人在等它。
 	 */
 	private pushInteraction(interaction: PendingInteraction): void {
+		this.pendingInteraction = interaction;
+		this.pendingInteractionAt = Date.now();
 		this.pushMarkdown(interaction.markdown, "live-interaction", { sessionId: interaction.sessionId });
+	}
+
+	private clearPendingInteraction(sessionId: string): void {
+		if (this.pendingInteraction?.sessionId === sessionId) {
+			this.pendingInteraction = undefined;
+		}
 	}
 
 	/** 主动推送一条 markdown；订阅、目标白名单与限流都在这里收口 */
