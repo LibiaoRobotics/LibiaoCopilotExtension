@@ -6,6 +6,13 @@
         "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \".github/hooks/WechatNotify.ps1\"",
         "timeout": 15
       }
+    ],
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "node \".github/hooks/WechatInteract.js\"",
+        "timeout": 10
+      }
     ]
   }
 }

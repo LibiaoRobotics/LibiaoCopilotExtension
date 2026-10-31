@@ -1,4 +1,7 @@
 const vscode = acquireVsCodeApi();
+// 面板里还有第二个脚本负责「企微对话」那一区，而 acquireVsCodeApi 每个 webview 只能调一次，
+// 所以把它挂到 window 上共享，两个脚本各管自己的 DOM。
+window.__libiaoCopilotApi = vscode;
 
 const DEFAULT_MIN_DURATION_SECONDS = 600;
 const DEFAULT_SESSION_SUMMARY_CHARS = 60;

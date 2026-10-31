@@ -29,8 +29,18 @@ function stateWith(settings: Partial<WechatNotifySettings>): WechatNotifyConfigS
 	};
 }
 
-const READY_PRESENCE: WechatNotifyHookPresence = { json: true, script: true, config: true };
-const MISSING_PRESENCE: WechatNotifyHookPresence = { json: false, script: false, config: false };
+const READY_PRESENCE: WechatNotifyHookPresence = {
+	json: true,
+	script: true,
+	config: true,
+	interact: true,
+};
+const MISSING_PRESENCE: WechatNotifyHookPresence = {
+	json: false,
+	script: false,
+	config: false,
+	interact: false,
+};
 
 suite("企微联动状态栏文案", () => {
 	test("未创建：图标与文字均为黄色，文案为「企微未联动」", () => {

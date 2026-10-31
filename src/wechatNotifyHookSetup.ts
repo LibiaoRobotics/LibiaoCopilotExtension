@@ -1,4 +1,6 @@
 import {
+	WECHAT_INTERACT_SCRIPT_FILE_NAME,
+	WECHAT_INTERACT_SCRIPT_RELATIVE_PATH,
 	WECHAT_NOTIFY_CONFIG_FILE_NAME,
 	WECHAT_NOTIFY_JSON_FILE_NAME,
 	WECHAT_NOTIFY_SCRIPT_FILE_NAME,
@@ -9,11 +11,20 @@ import {
 export const WECHAT_NOTIFY_HOOK_COMMAND = `pwsh -NoProfile -ExecutionPolicy Bypass -File "${WECHAT_NOTIFY_SCRIPT_RELATIVE_PATH}"`;
 export const WECHAT_NOTIFY_HOOK_TIMEOUT_SECONDS = 15;
 
-/** 需要检查与创建的文件（psd1 由面板保存，另外两个来自扩展内置模板） */
+/**
+ * preToolUse 命令固定走 node：它每个工具调用都要跑一次，冷启动开销直接压在工具延迟上。
+ * 实测 pwsh -NoProfile 约 0.33–0.41s，node 约 0.07–0.14s。
+ */
+export const WECHAT_INTERACT_HOOK_COMMAND = `node "${WECHAT_INTERACT_SCRIPT_RELATIVE_PATH}"`;
+export const WECHAT_INTERACT_HOOK_TIMEOUT_SECONDS = 10;
+
+/** 需要检查与创建的文件（psd1 由面板保存，其余来自扩展内置模板） */
 export interface WechatNotifyHookPresence {
 	json: boolean;
 	script: boolean;
 	config: boolean;
+	/** preToolUse 脚本；缺失时 hook 每次工具调用都会报错，必须参与就绲检测 */
+	interact: boolean;
 }
 
 export type WechatNotifyHookFileKey = keyof WechatNotifyHookPresence;
@@ -80,17 +91,50 @@ function createWechatNotifyStopEntry(): Record<string, unknown> {
 	};
 }
 
+function createWechatInteractEntry(): Record<string, unknown> {
+	return {
+		type: "command",
+		command: WECHAT_INTERACT_HOOK_COMMAND,
+		timeout: WECHAT_INTERACT_HOOK_TIMEOUT_SECONDS,
+	};
+}
+
+/**
+ * 需要注册的两类 hook。提问提醒靠 PreToolUse，Stop 负责把本轮结果推回群，
+ * 两者独立存在，所以合并要逐类型补齐，不能“有一类就整体不动”。
+ */
+const WECHAT_HOOK_KINDS: {
+	kind: string;
+	create: () => Record<string, unknown>;
+	matcher: (entry: unknown) => boolean;
+}[] = [
+	{ kind: "Stop", create: createWechatNotifyStopEntry, matcher: mentionsWechatNotifyScript },
+	{ kind: "PreToolUse", create: createWechatInteractEntry, matcher: mentionsWechatInteractScript },
+];
+
 export function createWechatNotifyHookJson(): string {
-	return `${JSON.stringify({ hooks: { Stop: [createWechatNotifyStopEntry()] } }, undefined, 2)}\n`;
+	const hooks: Record<string, unknown> = {};
+	for (const item of WECHAT_HOOK_KINDS) {
+		hooks[item.kind] = [item.create()];
+	}
+	return `${JSON.stringify({ hooks }, undefined, 2)}\n`;
 }
 
 /** command / windows / linux / osx 都可能承载路径，统一按文件名匹配 */
-function mentionsWechatNotifyScript(entry: unknown): boolean {
+function mentionsFile(entry: unknown, fileName: string): boolean {
 	const text = JSON.stringify(entry === undefined ? null : entry).toLowerCase();
-	return text.includes(WECHAT_NOTIFY_SCRIPT_FILE_NAME.toLowerCase());
+	return text.includes(fileName.toLowerCase());
 }
 
-function readStopEntries(text: string): { stop?: unknown[]; error?: string } {
+function mentionsWechatNotifyScript(entry: unknown): boolean {
+	return mentionsFile(entry, WECHAT_NOTIFY_SCRIPT_FILE_NAME);
+}
+
+function mentionsWechatInteractScript(entry: unknown): boolean {
+	return mentionsFile(entry, WECHAT_INTERACT_SCRIPT_FILE_NAME);
+}
+
+function readHookEntries(text: string, kind: string): { entries?: unknown[]; error?: string } {
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(text);
@@ -107,14 +151,14 @@ function readStopEntries(text: string): { stop?: unknown[]; error?: string } {
 	if (typeof hooksValue !== "object" || hooksValue === null || Array.isArray(hooksValue)) {
 		return { error: '"hooks" 不是 JSON 对象' };
 	}
-	const stopValue = (hooksValue as Record<string, unknown>).Stop;
-	if (stopValue === undefined) {
+	const entries = (hooksValue as Record<string, unknown>)[kind];
+	if (entries === undefined) {
 		return {};
 	}
-	if (!Array.isArray(stopValue)) {
-		return { error: '"hooks.Stop" 不是数组' };
+	if (!Array.isArray(entries)) {
+		return { error: `"hooks.${kind}" 不是数组` };
 	}
-	return { stop: stopValue };
+	return { entries };
 }
 
 /**
@@ -129,19 +173,49 @@ export function mergeWechatNotifyHookJson(existing: string | undefined): WechatN
 		return { kind: "updated", text: createWechatNotifyHookJson() };
 	}
 
-	const { stop, error } = readStopEntries(trimmed);
-	if (error) {
-		return { kind: "invalid", error };
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(trimmed);
+	} catch (error) {
+		return { kind: "invalid", error: error instanceof Error ? error.message : String(error) };
 	}
-	if (stop?.some(mentionsWechatNotifyScript)) {
-		return { kind: "unchanged", text: existing ?? trimmed };
+	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+		return { kind: "invalid", error: "顶层不是 JSON 对象" };
 	}
 
-	const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-	const hooks = (parsed.hooks ?? {}) as Record<string, unknown>;
-	hooks.Stop = [...(stop ?? []), createWechatNotifyStopEntry()];
-	parsed.hooks = hooks;
-	return { kind: "updated", text: `${JSON.stringify(parsed, undefined, 2)}\n` };
+	const root = parsed as Record<string, unknown>;
+	const hooksValue = root.hooks;
+	if (
+		hooksValue !== undefined &&
+		(typeof hooksValue !== "object" || hooksValue === null || Array.isArray(hooksValue))
+	) {
+		return { kind: "invalid", error: '"hooks" 不是 JSON 对象' };
+	}
+	const hooks = (hooksValue ?? {}) as Record<string, unknown>;
+
+	let changed = false;
+	for (const item of WECHAT_HOOK_KINDS) {
+		const current = hooks[item.kind];
+		if (current === undefined) {
+			hooks[item.kind] = [item.create()];
+			changed = true;
+			continue;
+		}
+		if (!Array.isArray(current)) {
+			return { kind: "invalid", error: `"hooks.${item.kind}" 不是数组` };
+		}
+		if (current.some(item.matcher)) {
+			continue;
+		}
+		current.push(item.create());
+		changed = true;
+	}
+
+	if (!changed) {
+		return { kind: "unchanged", text: existing ?? trimmed };
+	}
+	root.hooks = hooks;
+	return { kind: "updated", text: `${JSON.stringify(root, undefined, 2)}\n` };
 }
 
 /** Stop 条目是否已指向 WechatNotify.ps1；解析失败按"没有"处理 */
@@ -150,17 +224,18 @@ export function hasWechatNotifyStopHook(text: string | undefined): boolean {
 	if (!trimmed) {
 		return false;
 	}
-	const { stop } = readStopEntries(trimmed);
-	return Boolean(stop?.some(mentionsWechatNotifyScript));
+	const { entries } = readHookEntries(trimmed, "Stop");
+	return Boolean(entries?.some(mentionsWechatNotifyScript));
 }
 
 const HOOK_FILE_DESCRIPTIONS: Record<WechatNotifyHookFileKey, { fileName: string; description: string }> = {
-	json: { fileName: WECHAT_NOTIFY_JSON_FILE_NAME, description: "hook 注册声明，VS Code 靠它发现 Stop hook" },
+	json: { fileName: WECHAT_NOTIFY_JSON_FILE_NAME, description: "hook 注册声明，VS Code 靠它发现 Stop 与 PreToolUse hook" },
 	script: { fileName: WECHAT_NOTIFY_SCRIPT_FILE_NAME, description: "通知脚本本体，由扩展内置模板复制" },
+	interact: { fileName: WECHAT_INTERACT_SCRIPT_FILE_NAME, description: "提问提醒脚本，把「在等你选择」写给对话桥接" },
 	config: { fileName: WECHAT_NOTIFY_CONFIG_FILE_NAME, description: "可调参数与 webhook，不入库、按需由面板生成" },
 };
 
-const HOOK_FILE_ORDER: WechatNotifyHookFileKey[] = ["json", "script", "config"];
+const HOOK_FILE_ORDER: WechatNotifyHookFileKey[] = ["json", "script", "interact", "config"];
 
 export function buildWechatNotifyHookFileItems(
 	presence: WechatNotifyHookPresence
@@ -259,7 +334,8 @@ export function evaluateWechatNotifySetup(input: {
 }): WechatNotifySetupState {
 	const items = buildWechatNotifyHookFileItems(input.presence);
 	const base = {
-		created: input.presence.json && input.presence.script && input.presence.config,
+		created:
+			input.presence.json && input.presence.script && input.presence.interact && input.presence.config,
 		workspaceReady: input.workspaceReady,
 		hookDirPath: input.hookDirPath,
 		items,
@@ -279,7 +355,7 @@ export function evaluateWechatNotifySetup(input: {
 		return { ...base, level: "blocked", canModify: false, message: input.powershell.detail };
 	}
 
-	const hookReady = input.presence.json && input.presence.script;
+	const hookReady = input.presence.json && input.presence.script && input.presence.interact;
 	if (hookReady) {
 		return { ...base, level: "ready", canModify: true, message: "" };
 	}

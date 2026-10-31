@@ -25,3 +25,6 @@ applyTo: "**/*.{ps1,bat,cmd,json}"
 ## 4. 打包与版本号
 - 打包统一为 `npm run build`（保留运行时依赖），严禁加 `--no-dependencies`。
 - `package-lock.json` 的 `version` 字段长期滞后（如 1.1.1 而 `package.json` 为 1.3.x），发版时不要误改它。
+
+## 5. 工具侧执行注意事项
+- 本机 pwsh 终面对多行命令（换行拼接）不可靠：只执行首行或只回显片段。用单行 `;` 串联，或写 `.ps1` 再 `pwsh -File` 执行。

@@ -785,7 +785,7 @@
 						{
 							"id": "glm-5.3-aliyun",
 							"displayName": "GLM 5.3（阿里云）",
-							"priceNote": "\u2B50\uFE0F阿里云特供，性价比略逊一筹\u2B50\uFE0F 旗舰能力过硬，略贵但也算推荐",
+							"priceNote": "⭐️阿里云特供，性价比略逊一筹⭐️ 旗舰能力过硬，略贵但也算推荐",
 							"owned_by": "libiaorobot",
 							"apiMode": "anthropic",
 							"context_length": 1048576,
@@ -1272,7 +1272,8 @@
 		"build": "vsce package -o extension.vsix"
 	},
 	"dependencies": {
-		"@microsoft/tiktokenizer": "^1.0.10"
+		"@microsoft/tiktokenizer": "^1.0.10",
+		"ws": "^8.22.0"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.13.0",
@@ -1280,6 +1281,7 @@
 		"@types/mocha": "^10.0.6",
 		"@types/node": "^22",
 		"@types/vscode": "^1.104.0",
+		"@types/ws": "^8.18.2",
 		"@vscode/dts": "^0.4.1",
 		"@vscode/test-cli": "^0.0.11",
 		"@vscode/test-electron": "^2.5.2",

@@ -345,3 +345,26 @@ section.locked {
 .steps-card .steps li {
 	margin-bottom: 4px;
 }
+select {
+	width: 100%;
+	padding: 10px 12px;
+	box-sizing: border-box;
+	border-radius: 8px;
+	border: 1px solid var(--vscode-editorWidget-border);
+	background: var(--vscode-editor-background);
+	color: var(--vscode-foreground);
+}
+select:focus {
+	outline: 2px solid var(--vscode-focusBorder);
+	border-color: var(--vscode-focusBorder);
+}
+/* 桥接连接状态：只换边框色，不加底色，避免和上方的警告条抢注意力 */
+.bridge-status-ok {
+	border-color: var(--vscode-testing-iconPassed, #3fb950);
+}
+.bridge-status-warn {
+	border-color: var(--vscode-editorWarning-foreground, #cca700);
+}
+.bridge-status-error {
+	border-color: var(--vscode-inputValidation-errorBorder, #be1100);
+}

@@ -5,15 +5,53 @@ $ErrorActionPreference = 'Stop'
 
 # 脚本版本（语义化）。扩展拿它和内置模板比对，判断工作区副本是否为旧版。
 # 改动本脚本的行为后请同步递增此版本号，否则升级提醒会错判。
-$ScriptVersion = '1.2.6'
+$ScriptVersion = '1.2.7'
 
 $StateFile = Join-Path $env:TEMP 'libiao-copilot-wechatnotify.state'
 $LogFile = Join-Path $env:TEMP 'libiao-copilot-wechatnotify.log'
+
+# 扩展在把企微消息注入对话前，会把 prompt 的 SHA-256 追加到这里（只存哈希，不存原文）。
+# 命中就说明这一轮的回复已经原路发回企微了，不要再推群通知。
+$BridgePromptLedgerFile = Join-Path $env:TEMP 'libiao-copilot-bridge-prompts.jsonl'
+$BridgePromptLedgerTtlSeconds = 1800
 
 function Write-WechatNotifyLog([string] $Message) {
 	try {
 		Add-Content -LiteralPath $LogFile -Value ('[{0}] {1}' -f (Get-Date -Format 'o'), $Message) -Encoding utf8
 	} catch { }
+}
+
+# 扩展侧用 SHA-256 over UTF-8（先 Trim）计算，两边必须保持一致，否则去重静默失效。
+function Get-BridgePromptHash([string] $Text) {
+	if ([string]::IsNullOrWhiteSpace($Text)) { return '' }
+	$sha = [System.Security.Cryptography.SHA256]::Create()
+	try {
+		$hash = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($Text.Trim()))
+	} finally {
+		$sha.Dispose()
+	}
+	return [System.BitConverter]::ToString($hash).Replace('-', '').ToLowerInvariant()
+}
+
+# 命中台账 = 这一轮是从企微发起的，回复已经回给企微，不必再推群通知。
+function Test-BridgeInjectedPrompt([string] $Prompt) {
+	if ([string]::IsNullOrWhiteSpace($Prompt)) { return $false }
+	if (-not (Test-Path -LiteralPath $BridgePromptLedgerFile)) { return $false }
+	$target = Get-BridgePromptHash $Prompt
+	if ([string]::IsNullOrEmpty($target)) { return $false }
+	$now = [datetimeoffset]::UtcNow.ToUnixTimeMilliseconds()
+	$ttlMs = [long] $BridgePromptLedgerTtlSeconds * 1000
+	try {
+		foreach ($line in [System.IO.File]::ReadLines($BridgePromptLedgerFile)) {
+			if ([string]::IsNullOrWhiteSpace($line)) { continue }
+			try { $record = $line | ConvertFrom-Json } catch { continue }
+			if ($null -eq $record -or $record.h -ne $target) { continue }
+			$at = [long] 0
+			if (-not [long]::TryParse([string] $record.at, [ref] $at)) { $at = 0 }
+			if (($now - $at) -le $ttlMs) { return $true }
+		}
+	} catch { }
+	return $false
 }
 
 # ---- 可调参数 ----
@@ -161,18 +199,25 @@ try {
 	if ([string]::IsNullOrWhiteSpace($transcriptPath)) { exit 0 }
 	if (-not (Test-Path -LiteralPath $transcriptPath)) { exit 0 }
 
-	# 只关心 user.message：第一条当会话摘要，最后一条当本轮起点
+	# 只关心 user.message：第一条当会话摘要，最后一条当本轮起点与去重依据
 	$firstUserContent = $null
+	$lastUserContent = $null
 	$lastUserTimestamp = $null
 	foreach ($line in [System.IO.File]::ReadLines($transcriptPath)) {
 		if ($line -notmatch '"type"\s*:\s*"user\.message"') { continue }
 		try { $entry = $line | ConvertFrom-Json } catch { continue }
 		if ($entry.type -ne 'user.message') { continue }
 		if ($null -eq $firstUserContent) { $firstUserContent = [string] $entry.data.content }
+		$lastUserContent = [string] $entry.data.content
 		$lastUserTimestamp = ([datetimeoffset] $entry.timestamp).ToString('o')
 	}
 
 	if ($null -eq $lastUserTimestamp) { exit 0 }
+
+	if (Test-BridgeInjectedPrompt $lastUserContent) {
+		Write-WechatNotifyLog '该轮由企微对话发起，回复已原路返回，跳过群通知'
+		exit 0
+	}
 
 	$startTime = [datetimeoffset]::Parse($lastUserTimestamp)
 	$endTime = [datetimeoffset] $evt.timestamp

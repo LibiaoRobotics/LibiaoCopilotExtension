@@ -16,6 +16,7 @@ import { schedulePowerShellPrompt } from "./powershellManager";
 import { WorkspaceGuardDecorationProvider } from "./workspaceGuardDecoration";
 import { resolveTargetProjectRoot } from "./workspaceGuard";
 import { registerHarnessGuard } from "./harnessGuard";
+import { WechatBridgeService } from "./wechatBridgeService";
 
 export function activate(context: vscode.ExtensionContext) {
 	const officialExtension = vscode.extensions.getExtension("johnny-zhao.oai-compatible-copilot");
@@ -50,6 +51,12 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	const tokenCountStatusBarItem: vscode.StatusBarItem = initStatusBar(context);
+
+	// 企微对话（双向）：长连接常驻，收到消息就注入到对话里并把结果发回去。
+	// 未配置凭证或未启用时只会空转，不会发起任何网络请求。
+	const wechatBridge = new WechatBridgeService(context);
+	context.subscriptions.push(wechatBridge);
+	void wechatBridge.start();
 
 	// 企微联动图标：读的是工作区里的 hook 配置文件，与 WechatNotify.ps1 同源
 	const wechatNotifyStatusBarItem: vscode.StatusBarItem = initWechatNotifyStatusBar(context);
@@ -176,9 +183,13 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand("libiaoCopilot.openWechatNotifyConfig", () => {
-			WechatNotifyViewPanel.openPanel(context.extensionUri, () => {
-				void refreshWechatNotifyStatusBar();
-			});
+			WechatNotifyViewPanel.openPanel(
+				context.extensionUri,
+				() => {
+					void refreshWechatNotifyStatusBar();
+				},
+				wechatBridge
+			);
 		})
 	);
 

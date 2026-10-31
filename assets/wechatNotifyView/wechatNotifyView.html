@@ -95,6 +95,124 @@
 			</div>
 		</section>
 
+		<section id="bridgeSection">
+			<div class="section-header">
+				<h2>企微对话（双向）</h2>
+				<div class="section-actions">
+					<span id="bridgeSaveHint" class="save-hint"></span>
+				</div>
+			</div>
+
+			<div class="section-description">
+				<span>
+					在企业微信里直接给机器人发消息，内容会注入到本窗口的 Copilot 对话，回答再原路发回企微。走的是「智能机器人 → API 模式 → 长连接」，不需要公网地址，也不影响上面的群消息推送。
+				</span>
+			</div>
+
+			<div class="notice" id="bridgeStatusNotice">
+				<span class="notice-label">连接状态</span>
+				<span id="bridgeStatusText"></span>
+				<button id="bridgeReconnect" class="secondary inline" type="button" data-keep-enabled>连接 / 重连</button>
+				<button id="bridgeDisconnect" class="secondary inline" type="button" data-keep-enabled>断开</button>
+			</div>
+
+			<div class="notice warn" id="bridgeRejectedNotice" hidden>
+				<span class="notice-label">未授权发送者</span>
+				<span id="bridgeRejectedText"></span>
+				<button id="bridgeAuthorize" class="secondary inline" type="button" data-keep-enabled>授权此人</button>
+			</div>
+
+			<div class="notice" id="bridgeAuthNotice">
+				<span class="notice-label">授权</span>
+				<span id="bridgeAuthText"></span>
+				<button id="bridgeAuthorizeWechat" class="secondary inline" type="button" data-keep-enabled>在企微里发起授权</button>
+				<button id="bridgeRevoke" class="secondary inline" type="button" data-keep-enabled>撤销授权</button>
+			</div>
+
+			<div class="field">
+				<label class="checkbox-label" for="bridgeEnabled">
+					<input id="bridgeEnabled" type="checkbox" class="checkbox" />
+					<span>启用企微对话</span>
+				</label>
+			</div>
+
+			<div class="row">
+				<div class="field">
+					<label for="bridgeBotId">BotID</label>
+					<div class="field-description">企微管理后台「智能机器人 → API 模式 → 长连接」里获取。</div>
+					<input id="bridgeBotId" type="text" placeholder="机器人 ID" autocomplete="off" />
+				</div>
+				<div class="field">
+					<label for="bridgeSecret">Secret</label>
+					<div class="field-description">存在 VS Code 的加密存储里，不写工作区文件；留空表示不修改。</div>
+					<input id="bridgeSecret" type="password" placeholder="留空表示不修改" autocomplete="off" />
+				</div>
+			</div>
+
+			<div class="row">
+				<button id="bridgeSaveCredentials" class="secondary lead" type="button" data-keep-enabled>保存凭证并连接</button>
+			</div>
+
+			<div class="row">
+				<div class="field">
+					<label for="bridgeAllowedUser">授权 userid</label>
+					<div class="field-description">先让本人给机器人发一条消息，再点下方「授权此人」自动填入；留空表示谁都不处理。</div>
+					<input id="bridgeAllowedUser" type="text" placeholder="点「授权此人」自动填入" autocomplete="off" />
+				</div>
+				<div class="field">
+					<label for="bridgeInjectTarget">注入位置</label>
+					<div class="field-description">当前会话会跟你在看的对话混在一起；专用会话在首次注入前先新建一个。</div>
+					<select id="bridgeInjectTarget">
+						<option value="current">当前会话</option>
+						<option value="dedicated">专用会话</option>
+					</select>
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="field">
+					<label for="bridgeTimeoutSeconds">单轮等待上限（秒）</label>
+					<div class="field-description">超时后回一条失败提示，而不是无限等待。</div>
+					<div class="input-with-hint">
+						<input id="bridgeTimeoutSeconds" type="number" min="30" max="86400" step="1" />
+						<span class="field-hint" id="bridgeTimeoutHuman"></span>
+					</div>
+				</div>
+				<div class="field">
+					<label>桥接会话</label>
+					<div class="field-description">你手动切到别的对话后，下一次注入会跟着过去；想重新锚定就点这里。</div>
+					<button id="bridgeResetSession" class="secondary" type="button" data-keep-enabled>重置桥接会话</button>
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="field">
+					<label class="checkbox-label" for="bridgeGroupNotify">
+						<input id="bridgeGroupNotify" type="checkbox" class="checkbox" />
+						<span>企微发起的轮次也推群通知</span>
+					</label>
+					<div class="field-description">默认不推：那一轮的回复已经原路发回企微，再推群就是同一件事通知两遍。勾上后群里会多一条留痕，企微那边也会照常收到回复。</div>
+				</div>
+			</div>
+
+			<div class="notice" id="bridgeActivityNotice" hidden>
+				<span class="notice-label">最近一轮</span>
+				<span id="bridgeActivityText"></span>
+			</div>
+
+			<details class="steps-card" id="bridgeHelp">
+				<summary>如何拿到 BotID / Secret</summary>
+				<ol class="steps">
+					<li>企业微信管理后台 → 应用管理 → 智能机器人，新建一个「智能机器人」。</li>
+					<li>在机器人详情里打开「API 模式」，连接方式选「长连接」，页面会给出 BotID 与 Secret。</li>
+					<li>把两个值填到上面并保存 —— 同一个机器人只允许一条长连接，另一个窗口要用就得先断开。</li>
+					<li>先在企微里给机器人发一句话，面板会出现「未授权发送者」，点「授权此人」即可（方式一：企微 → 面板）。</li>
+					<li>也可以反过来：点面板上的「在企微里发起授权」，企微会收到一张卡片，在里面点「允许」即可（方式二：面板 → 企微）。这种方式要求对方此前已经给机器人发过消息。</li>
+				</ol>
+			</details>
+		</section>
+
 		<script src="%SCRIPT_URI%" nonce="%NONCE%"></script>
+		<script src="%BRIDGE_SCRIPT_URI%" nonce="%NONCE%"></script>
 	</body>
 </html>

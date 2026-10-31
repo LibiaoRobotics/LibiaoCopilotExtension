@@ -18,6 +18,7 @@ CLAUDE.md
 .doc/**
 docs/**
 scripts/**
+秘密信息/**
 out/test/**
 *.zip
 *.vsix

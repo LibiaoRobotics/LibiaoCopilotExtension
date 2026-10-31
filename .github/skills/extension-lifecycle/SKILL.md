@@ -47,6 +47,9 @@ npm run compile
 npm run lint
 ```
 
+* **`npm run lint` 有既有错误基线**：整体 exit 1，来源是 `src/test/userMemory.test.ts`、`src/views/configView.ts`、`src/workspaceGuard.ts`、`src/workspaceGuardDecoration.ts` 等既有文件。判错只看**本次改动文件**是否出现新告警（`npx eslint <files>`），不要试图把整体 lint 跑到 0。
+* **`out/` 是打包输入**：`npm run build` 会把 `out/` 下所有文件打进 VSIX。临时预览/验证产物只能放 `out/__preview/`、`out/__verify/`，并在打包前删除，否则文件数会变多（曾因多 2 个文件变成 72 files）。
+
 ---
 
 ### 场景 B：运行自动化测试
@@ -80,7 +83,8 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\Install-LibiaoCopilot.ps1
 ```
 
 * **执行完毕后提醒**：
-  安装完成后，提醒用户：**“请完全退出 VS Code（关闭所有窗口）再重新打开，以让 argv.json 权限和新插件生效。”**
+  1. **必须在最终回复中显式告知「已重装插件」**（跑了安装却不能不说，特哥无法判断当前会话是旧版还是新版，见总纲仓库红线第 11 条）。
+  2. 安装完成后，提醒用户：**“请完全退出 VS Code（关闭所有窗口）再重新打开，以让 argv.json 权限和新插件生效。”**
 
 ---
 

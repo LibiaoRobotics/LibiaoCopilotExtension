@@ -10,6 +10,7 @@ import {
 	type WechatNotifyStatus,
 } from "./wechatNotifyHookSetup";
 import {
+	WECHAT_INTERACT_SCRIPT_FILE_NAME,
 	WECHAT_NOTIFY_JSON_FILE_NAME,
 	WECHAT_NOTIFY_SCRIPT_FILE_NAME,
 } from "./wechatNotifyPaths";
@@ -115,7 +116,12 @@ export function updateWechatNotifyStatusBar(
 	const webhookConfigured = settings.webhook.trim().length > 0;
 
 	// 未传 presence 的旧调用按"文件齐备"处理，保持降级行为不变
-	const currentPresence: WechatNotifyHookPresence = presence ?? { json: true, script: true, config: true };
+	const currentPresence: WechatNotifyHookPresence = presence ?? {
+		json: true,
+		script: true,
+		config: true,
+		interact: true,
+	};
 	const missingHookFiles: string[] = [];
 	if (presence) {
 		if (!presence.json) {
@@ -123,6 +129,9 @@ export function updateWechatNotifyStatusBar(
 		}
 		if (!presence.script) {
 			missingHookFiles.push(WECHAT_NOTIFY_SCRIPT_FILE_NAME);
+		}
+		if (!presence.interact) {
+			missingHookFiles.push(WECHAT_INTERACT_SCRIPT_FILE_NAME);
 		}
 	}
 

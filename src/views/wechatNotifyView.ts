@@ -13,6 +13,8 @@ import {
 	type WechatNotifyUpdateResult,
 } from "../wechatNotifyHookService";
 import { launchPowerShellInstaller } from "../powershellManager";
+import type { WechatBridgeSettings } from "../wechatBridgeSettings";
+import type { WechatBridgeService } from "../wechatBridgeService";
 import type { WechatNotifySettings } from "../wechatNotifySettings";
 import { sendWechatNotifyTest } from "../wechatNotifyTest";
 
@@ -24,6 +26,25 @@ type IncomingMessage =
 	| { type: "installPowerShell" }
 	| { type: "openConfigFile" }
 	| { type: "testWebhook"; webhook: string };
+
+/** 「企微对话」那一区的消息：与上面的群消息推送完全独立 */
+type IncomingBridgeMessage =
+	| { type: "bridgeRequestState" }
+	| {
+			type: "bridgeSave";
+			settings: Pick<
+				WechatBridgeSettings,
+				"injectTarget" | "allowedUserId" | "respondTimeoutSeconds" | "notifyGroupForBridgeTurns"
+			>;
+	  }
+	| { type: "bridgeSetEnabled"; enabled: boolean }
+	| { type: "bridgeCredentials"; botId: string; secret: string }
+	| { type: "bridgeReconnect" }
+	| { type: "bridgeDisconnect" }
+	| { type: "bridgeResetSession" }
+	| { type: "bridgeAuthorize" }
+	| { type: "bridgeAuthorizeFromWechat" }
+	| { type: "bridgeRevokeAuthorization" };
 
 function describeCreateResult(result: WechatNotifyCreateResult): string {
 	const parts: string[] = [];
@@ -72,11 +93,16 @@ export class WechatNotifyViewPanel {
 	private onSaved: () => void;
 	private disposables: vscode.Disposable[] = [];
 
-	public static openPanel(extensionUri: vscode.Uri, onSaved: () => void): void {
+	public static openPanel(
+		extensionUri: vscode.Uri,
+		onSaved: () => void,
+		bridge: WechatBridgeService
+	): void {
 		const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : undefined;
 
 		if (WechatNotifyViewPanel.currentPanel) {
 			WechatNotifyViewPanel.currentPanel.onSaved = onSaved;
+			WechatNotifyViewPanel.currentPanel.bridge = bridge;
 			WechatNotifyViewPanel.currentPanel.panel.reveal(column);
 			// 面板可能开着很久：重新打开时复测环境，用户刚装完 pwsh 不必重载窗口
 			void WechatNotifyViewPanel.currentPanel.postState(true);
@@ -94,10 +120,15 @@ export class WechatNotifyViewPanel {
 			}
 		);
 
-		WechatNotifyViewPanel.currentPanel = new WechatNotifyViewPanel(panel, extensionUri, onSaved);
+		WechatNotifyViewPanel.currentPanel = new WechatNotifyViewPanel(panel, extensionUri, onSaved, bridge);
 	}
 
-	private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, onSaved: () => void) {
+	private constructor(
+		panel: vscode.WebviewPanel,
+		extensionUri: vscode.Uri,
+		onSaved: () => void,
+		private bridge: WechatBridgeService
+	) {
 		this.panel = panel;
 		this.extensionUri = extensionUri;
 		this.onSaved = onSaved;
@@ -107,7 +138,7 @@ export class WechatNotifyViewPanel {
 		this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
 
 		this.panel.webview.onDidReceiveMessage(
-			(message: IncomingMessage) => {
+			(message: IncomingMessage | IncomingBridgeMessage) => {
 				this.handleMessage(message).catch((err) => {
 					console.error("[libiaoCopilot] wechat notify panel failed", err);
 					vscode.window.showErrorMessage(
@@ -120,6 +151,9 @@ export class WechatNotifyViewPanel {
 			null,
 			this.disposables
 		);
+
+		// 桥接的连接/队列状态会自己变化（重连、被接管、回复完成），面板跟着刷新
+		this.bridge.onDidChangeState(() => void this.postBridgeState(), null, this.disposables);
 
 		void this.sendInit();
 	}
@@ -135,10 +169,54 @@ export class WechatNotifyViewPanel {
 		}
 	}
 
-	private async handleMessage(message: IncomingMessage): Promise<void> {
+	private async handleMessage(message: IncomingMessage | IncomingBridgeMessage): Promise<void> {
 		switch (message.type) {
 			case "requestInit":
 				await this.sendInit();
+				break;
+			case "bridgeRequestState":
+				await this.postBridgeState();
+				break;
+			case "bridgeSave": {
+				await this.bridge.applySettingsQuiet(message.settings);
+				await this.postBridgeState();
+				break;
+			}
+			case "bridgeSetEnabled": {
+				// 开关走"会重连"的路径：开启时要真的建立长连接
+				await this.bridge.applySettings({ enabled: message.enabled });
+				await this.postBridgeState();
+				break;
+			}
+			case "bridgeCredentials": {
+				await this.bridge.applySettings({ botId: message.botId, secret: message.secret });
+				await this.postBridgeState();
+				break;
+			}
+			case "bridgeReconnect":
+				this.bridge.reconnect();
+				await this.postBridgeState();
+				break;
+			case "bridgeDisconnect":
+				this.bridge.disconnect("在面板中手动断开");
+				await this.postBridgeState();
+				break;
+			case "bridgeResetSession":
+				this.bridge.resetSession();
+				await this.postBridgeState();
+				break;
+			case "bridgeAuthorize":
+				this.bridge.authorizeLastRejected();
+				await this.postBridgeState();
+				break;
+			case "bridgeAuthorizeFromWechat":
+				// 反方向授权：由这里推一张卡片到企微，用户在企微里点允许/拒绝
+				this.bridge.requestAuthorizationFromWechat();
+				await this.postBridgeState();
+				break;
+			case "bridgeRevokeAuthorization":
+				this.bridge.revokeAuthorization();
+				await this.postBridgeState();
 				break;
 			case "save": {
 				// 界面已禁用按钮，这里再挡一次：没有 pwsh 时保存只会制造"配好但不生效"的假象
@@ -217,6 +295,11 @@ export class WechatNotifyViewPanel {
 		const config = await readWechatNotifyConfigState();
 		const setup = await readWechatNotifySetupState(this.extensionUri, forcePowerShell);
 		await this.panel.webview.postMessage({ type: "init", config, setup });
+		await this.postBridgeState();
+	}
+
+	private async postBridgeState(): Promise<void> {
+		await this.panel.webview.postMessage({ type: "bridgeState", state: this.bridge.getState() });
 	}
 
 	private async update(): Promise<void> {
@@ -229,6 +312,7 @@ export class WechatNotifyViewPanel {
 		const templateUri = vscode.Uri.joinPath(assetsRoot, "wechatNotifyView.html");
 		const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(assetsRoot, "wechatNotifyView.css"));
 		const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(assetsRoot, "wechatNotifyView.js"));
+		const bridgeJsUri = webview.asWebviewUri(vscode.Uri.joinPath(assetsRoot, "wechatBridgeView.js"));
 		const csp = [
 			`default-src 'none'`,
 			`img-src ${webview.cspSource} https:`,
@@ -242,6 +326,7 @@ export class WechatNotifyViewPanel {
 			.replaceAll("%CSP_SOURCE%", csp)
 			.replaceAll("%NONCE%", nonce)
 			.replace("%CSS_URI%", cssUri.toString())
-			.replace("%SCRIPT_URI%", jsUri.toString());
+			.replace("%SCRIPT_URI%", jsUri.toString())
+			.replace("%BRIDGE_SCRIPT_URI%", bridgeJsUri.toString());
 	}
 }

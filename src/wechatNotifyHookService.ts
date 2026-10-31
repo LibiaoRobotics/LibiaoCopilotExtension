@@ -13,6 +13,7 @@ import {
 	type WechatNotifySetupState,
 } from "./wechatNotifyHookSetup";
 import {
+	WECHAT_INTERACT_SCRIPT_FILE_NAME,
 	WECHAT_NOTIFY_CONFIG_FILE_NAME,
 	WECHAT_NOTIFY_HOOK_DIR,
 	WECHAT_NOTIFY_JSON_FILE_NAME,
@@ -83,18 +84,19 @@ async function readTextIfExists(uri: vscode.Uri): Promise<string | undefined> {
 export async function readWechatNotifyHookPresence(): Promise<WechatNotifyHookPresence> {
 	const dir = resolveHookDirUri();
 	if (!dir) {
-		return { json: false, script: false, config: false };
+		return { json: false, script: false, config: false, interact: false };
 	}
-	const [json, script, config] = await Promise.all([
+	const [json, script, config, interact] = await Promise.all([
 		fileExists(vscode.Uri.joinPath(dir, WECHAT_NOTIFY_JSON_FILE_NAME)),
 		fileExists(vscode.Uri.joinPath(dir, WECHAT_NOTIFY_SCRIPT_FILE_NAME)),
 		fileExists(vscode.Uri.joinPath(dir, WECHAT_NOTIFY_CONFIG_FILE_NAME)),
+		fileExists(vscode.Uri.joinPath(dir, WECHAT_INTERACT_SCRIPT_FILE_NAME)),
 	]);
-	return { json, script, config };
+	return { json, script, config, interact };
 }
 
-function resolveTemplateScriptUri(extensionUri: vscode.Uri): vscode.Uri {
-	return vscode.Uri.joinPath(extensionUri, ...WECHAT_NOTIFY_TEMPLATE_DIR, WECHAT_NOTIFY_SCRIPT_FILE_NAME);
+function resolveTemplateUri(extensionUri: vscode.Uri, fileName: string): vscode.Uri {
+	return vscode.Uri.joinPath(extensionUri, ...WECHAT_NOTIFY_TEMPLATE_DIR, fileName);
 }
 
 /**
@@ -107,7 +109,7 @@ async function readTemplateScript(extensionUri: vscode.Uri): Promise<string | un
 	if (templateScriptCache !== undefined) {
 		return templateScriptCache;
 	}
-	const text = await readTextIfExists(resolveTemplateScriptUri(extensionUri));
+	const text = await readTextIfExists(resolveTemplateUri(extensionUri, WECHAT_NOTIFY_SCRIPT_FILE_NAME));
 	if (text !== undefined) {
 		templateScriptCache = text;
 	}
@@ -194,6 +196,34 @@ export async function readWechatNotifySetupState(
  * 具体能不能发出去由 webhook 是否填写决定。缺 pwsh 不拦创建——
  * 文件不需要 pwsh 就能落地，环境不匹配由面板创建后单独提示。
  */
+/**
+ * 按字节把内置模板复制到工作区。已存在的一律跳过，绝不覆盖——
+ * 脚本可能被用户改过，静默重写等于毁配置。
+ */
+async function copyTemplateFile(
+	extensionUri: vscode.Uri,
+	dir: vscode.Uri,
+	fileName: string,
+	created: string[],
+	skipped: string[]
+): Promise<void> {
+	const targetUri = vscode.Uri.joinPath(dir, fileName);
+	if (await fileExists(targetUri)) {
+		skipped.push(fileName);
+		return;
+	}
+	const templateUri = resolveTemplateUri(extensionUri, fileName);
+	let template: Uint8Array;
+	try {
+		template = await vscode.workspace.fs.readFile(templateUri);
+	} catch (error) {
+		logger.warn("wechatNotify.hook.template", { path: templateUri.fsPath, error: describeError(error) });
+		throw new Error(`扩展内置模板 ${fileName} 缺失，无法创建 hook，请重装扩展。`);
+	}
+	await vscode.workspace.fs.writeFile(targetUri, template);
+	created.push(fileName);
+}
+
 export async function createWechatNotifyHook(
 	extensionUri: vscode.Uri,
 	settings?: Partial<WechatNotifySettings>
@@ -212,24 +242,13 @@ export async function createWechatNotifyHook(
 	const created: string[] = [];
 	const skipped: string[] = [];
 
-	// 1. 脚本：模板按字节复制，保住 UTF-8 BOM 与中文注释
-	const scriptUri = vscode.Uri.joinPath(dir, WECHAT_NOTIFY_SCRIPT_FILE_NAME);
-	if (await fileExists(scriptUri)) {
-		skipped.push(WECHAT_NOTIFY_SCRIPT_FILE_NAME);
-	} else {
-		const templateUri = resolveTemplateScriptUri(extensionUri);
-		let template: Uint8Array;
-		try {
-			template = await vscode.workspace.fs.readFile(templateUri);
-		} catch (error) {
-			logger.warn("wechatNotify.hook.template", { path: templateUri.fsPath, error: describeError(error) });
-			throw new Error(`扩展内置模板 ${WECHAT_NOTIFY_SCRIPT_FILE_NAME} 缺失，无法创建 hook，请重装扩展。`);
-		}
-		await vscode.workspace.fs.writeFile(scriptUri, template);
-		created.push(WECHAT_NOTIFY_SCRIPT_FILE_NAME);
+	// 1. 脚本：模板按字节复制，保住 UTF-8 BOM 与中文注释。
+	// WechatInteract.js 同样逐字复制——它是 preToolUse hook 的命令体，缺了会每次工具调用都报错。
+	for (const fileName of [WECHAT_NOTIFY_SCRIPT_FILE_NAME, WECHAT_INTERACT_SCRIPT_FILE_NAME]) {
+		await copyTemplateFile(extensionUri, dir, fileName, created, skipped);
 	}
 
-	// 2. 注册文件：读-改-写只追加 Stop 条目，解析失败就停下，不用新内容覆盖
+	// 2. 注册文件：读-改-写逐类型补齐 Stop / PreToolUse，解析失败就停下，不用新内容覆盖
 	const jsonUri = vscode.Uri.joinPath(dir, WECHAT_NOTIFY_JSON_FILE_NAME);
 	const merged = mergeWechatNotifyHookJson(await readTextIfExists(jsonUri));
 	if (merged.kind === "invalid") {
@@ -283,7 +302,7 @@ export async function updateWechatNotifyScript(extensionUri: vscode.Uri): Promis
 	}
 	const installedText = new TextDecoder("utf-8").decode(installedBytes);
 
-	const templateUri = resolveTemplateScriptUri(extensionUri);
+	const templateUri = resolveTemplateUri(extensionUri, WECHAT_NOTIFY_SCRIPT_FILE_NAME);
 	let template: Uint8Array;
 	try {
 		template = await vscode.workspace.fs.readFile(templateUri);

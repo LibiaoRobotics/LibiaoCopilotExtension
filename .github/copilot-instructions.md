@@ -18,6 +18,7 @@
 10. **AI 记忆写入边界**：本项目的任何记忆、经验、外部事实与协作约定，**严禁写入 repo memory（`/memories/repo/`）**，只允许写入仓库内 `.github/`。理由：repo memory 绑定本机工作区哈希，换目录即失效、无法随仓库版本化与评审。
     - 分流：跨文件通用约束 → 本总纲；按路径生效的代码约束 → `instructions/`（必须配 `applyTo`）；多步复杂流程 → `skills/`（必须含验证闭环）；一次性上下文 → 会话内说明，**不落仓库**。
     - 写入前必须先能回答「不写会导致什么具体错误行为」，答不出则不写；一次性失误不立永久规则。
+11. **安装动作必须回报**：任何安装、重装或覆盖安装本插件的行为（`Install-LibiaoCopilot.ps1`、安装 `.vsix`、手工替换扩展目录、卸载后重装），都必须在**最终回复中显式告知**「已重装插件」，并说明是否需要重载窗口。只跑不说会让特哥分不清当前会话跑的是旧版还是新版代码，后续现象归因与排查方向会整条跑偏。详见 [extension-lifecycle](.github/skills/extension-lifecycle/SKILL.md)。
 
 ---
 
@@ -32,6 +33,7 @@
 | [powershell-env](.github/instructions/powershell-env.instructions.md) | `**/*.{ps1,bat,cmd,json}` | pwsh 约束、编码防损、安装与发版一致性 |
 | [gateway](.github/instructions/gateway.instructions.md) | `scripts/**` | NewAPI 地址/鉴权、Key 权限边界、`model_not_found` 判定红线 |
 | [vscode-host](.github/instructions/vscode-host.instructions.md) | `src/**/*.ts` | BYOK / Agent Host 机制、只读参考仓库、双 bundle 取证纪律 |
+| [wechat-bridge](.github/instructions/wechat-bridge.instructions.md) | `**/wechatBridge*.ts`、`**/WechatNotify*.ps1` | 企微双向数据流、正文来源（transcripts 优先）、`chat.open` 语义、协议事实与安全不变量 |
 
 ### ⚡ 场景化技能 (`.github/skills/`)
 

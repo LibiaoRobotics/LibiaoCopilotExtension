@@ -13,3 +13,10 @@ export const WECHAT_NOTIFY_CONFIG_FILE_NAME = "WechatNotify.local.psd1";
 
 /** hook 注册文件里写死的相对路径：VS Code 以工作区根目录为 cwd 执行命令 */
 export const WECHAT_NOTIFY_SCRIPT_RELATIVE_PATH = ".github/hooks/WechatNotify.ps1";
+
+/**
+ * preToolUse hook 脚本：把「VS Code 在等你选择」写给企微对话桥接。
+ * 与 Stop 通知脚本是两件事：这个只负责落盘事件，不发 webhook。
+ */
+export const WECHAT_INTERACT_SCRIPT_FILE_NAME = "WechatInteract.js";
+export const WECHAT_INTERACT_SCRIPT_RELATIVE_PATH = ".github/hooks/WechatInteract.js";
