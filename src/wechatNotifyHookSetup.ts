@@ -100,8 +100,8 @@ function createWechatInteractEntry(): Record<string, unknown> {
 }
 
 /**
- * 需要注册的两类 hook。提问提醒靠 PreToolUse，Stop 负责把本轮结果推回群，
- * 两者独立存在，所以合并要逐类型补齐，不能“有一类就整体不动”。
+ * 需要注册的三类 hook。提问提醒靠 PreToolUse，提问收场靠 PostToolUse，
+ * Stop 负责把本轮结果推回群，三者独立存在，所以合并要逐类型补齐，不能“有一类就整体不动”。
  */
 const WECHAT_HOOK_KINDS: {
 	kind: string;
@@ -110,6 +110,7 @@ const WECHAT_HOOK_KINDS: {
 }[] = [
 	{ kind: "Stop", create: createWechatNotifyStopEntry, matcher: mentionsWechatNotifyScript },
 	{ kind: "PreToolUse", create: createWechatInteractEntry, matcher: mentionsWechatInteractScript },
+	{ kind: "PostToolUse", create: createWechatInteractEntry, matcher: mentionsWechatInteractScript },
 ];
 
 export function createWechatNotifyHookJson(): string {
@@ -231,7 +232,10 @@ export function hasWechatNotifyStopHook(text: string | undefined): boolean {
 const HOOK_FILE_DESCRIPTIONS: Record<WechatNotifyHookFileKey, { fileName: string; description: string }> = {
 	json: { fileName: WECHAT_NOTIFY_JSON_FILE_NAME, description: "hook 注册声明，VS Code 靠它发现 Stop 与 PreToolUse hook" },
 	script: { fileName: WECHAT_NOTIFY_SCRIPT_FILE_NAME, description: "通知脚本本体，由扩展内置模板复制" },
-	interact: { fileName: WECHAT_INTERACT_SCRIPT_FILE_NAME, description: "提问提醒脚本，把「在等你选择」写给对话桥接" },
+	interact: {
+		fileName: WECHAT_INTERACT_SCRIPT_FILE_NAME,
+		description: "提问提醒脚本，把「在等你选择」和「已经答完」写给对话桥接",
+	},
 	config: { fileName: WECHAT_NOTIFY_CONFIG_FILE_NAME, description: "可调参数与 webhook，不入库、按需由面板生成" },
 };
 

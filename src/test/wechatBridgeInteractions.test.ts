@@ -6,9 +6,12 @@ import * as path from "node:path";
 import {
 	InteractionInbox,
 	INTERACTIONS_DIR_NAME,
+	stripOwnNumber,
 	renderQuestions,
 	resolveInteractionsDir,
 	toResolveId,
+	type InteractionNotice,
+	type PendingInteraction,
 } from "../wechatBridgeInteractions";
 
 /**
@@ -36,15 +39,14 @@ suite("企微桥接的等待选择提醒", () => {
 				],
 			});
 
-			const pending = inbox.poll();
-			assert.strictEqual(pending.length, 1);
-			assert.strictEqual(pending[0].sessionId, "s1");
-			assert.strictEqual(pending[0].toolCallId, "q1");
-			assert.ok(pending[0].markdown.includes("部署到哪个环境？"));
-			assert.ok(pending[0].markdown.includes("1. 生产"));
-			assert.ok(pending[0].markdown.includes("2. 测试 — 先试一下"));
+			const pending = onlyAsk(inbox.poll());
+			assert.strictEqual(pending.sessionId, "s1");
+			assert.strictEqual(pending.toolCallId, "q1");
+			assert.ok(pending.markdown.includes("部署到哪个环境？"));
+			assert.ok(pending.markdown.includes("1. 生产"));
+			assert.ok(pending.markdown.includes("2. 测试 — 先试一下"));
 			// 结构要够作答：下标、原始 label、多选标记都得在
-			assert.deepStrictEqual(pending[0].questions, [
+			assert.deepStrictEqual(pending.questions, [
 				{
 					index: 0,
 					header: "目标环境",
@@ -58,7 +60,7 @@ suite("企微桥接的等待选择提醒", () => {
 			]);
 			// 文案必须告诉用户能直接回编号，否则他会以为还得回电脑
 			assert.ok(
-				pending[0].markdown.includes("直接回复编号作答"),
+				pending.markdown.includes("直接回复编号作答"),
 				"必须提示企微侧可以直接回编号"
 			);
 			// 消费即清空：同一个 toolCallId 不会被推两遍
@@ -93,9 +95,8 @@ suite("企微桥接的等待选择提醒", () => {
 			assert.deepStrictEqual(inbox.poll(), []);
 
 			appendHookEvent(dir, "s1", "new", { questions: [{ question: "新的提问" }] });
-			const pending = inbox.poll();
-			assert.strictEqual(pending.length, 1);
-			assert.strictEqual(pending[0].toolCallId, "new");
+			const pending = onlyAsk(inbox.poll());
+			assert.strictEqual(pending.toolCallId, "new");
 		} finally {
 			fs.rmSync(dir, { recursive: true, force: true });
 		}
@@ -148,10 +149,43 @@ suite("企微桥接的等待选择提醒", () => {
 			appendHookEvent(dir, "s2", "call_ab__vscode-123", {
 				questions: [{ question: "选一个", options: [{ label: "A" }, { label: "B" }] }],
 			});
-			const pending = inbox.poll();
-			assert.strictEqual(pending.length, 1);
-			assert.strictEqual(pending[0].toolCallId, "call_ab__vscode-123");
-			assert.strictEqual(pending[0].resolveId, "call_ab");
+			const pending = onlyAsk(inbox.poll());
+			assert.strictEqual(pending.toolCallId, "call_ab__vscode-123");
+			assert.strictEqual(pending.resolveId, "call_ab");
+		} finally {
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("选项自带编号时不再重复编号", () => {
+		// 模型手上常把 label 写成「1 · 生产」，渲染时再加序号就成了「1. 1 · 生产」
+		assert.strictEqual(stripOwnNumber("1 · 生产", 1), "生产");
+		assert.strictEqual(stripOwnNumber("2. 测试", 2), "测试");
+		assert.strictEqual(stripOwnNumber("3、灰度", 3), "灰度");
+		assert.strictEqual(stripOwnNumber("4）回滚", 4), "回滚");
+		// 序号与位置不符就不动：那是内容，不是编号
+		assert.strictEqual(stripOwnNumber("1.5 版本", 1), "1.5 版本");
+		assert.strictEqual(stripOwnNumber("3 号方案", 1), "3 号方案");
+		assert.strictEqual(stripOwnNumber("生产", 1), "生产");
+		// 剥完只剩数字的行要保住原样，否则会渲染出空选项
+		assert.strictEqual(stripOwnNumber("1", 1), "1");
+	});
+
+	test("提问结束后产出一条 done 通知，且不产出提问", () => {
+		const dir = makeTempInteractions();
+		try {
+			const inbox = new InteractionInbox(dir);
+			inbox.prime();
+			appendHookEvent(dir, "s1", "q1", { questions: [{ question: "先问一个" }] });
+			appendHookEvent(dir, "s1", "q1", { questions: [{ question: "先问一个" }] });
+			appendDoneEvent(dir, "s1");
+
+			const notices = inbox.poll();
+			assert.deepStrictEqual(
+				notices.map((notice) => notice.kind),
+				["ask", "done"],
+				"hook 每次都跑，重复的 ask 只该出一条，done 不能因为去重被吞掉"
+			);
 		} finally {
 			fs.rmSync(dir, { recursive: true, force: true });
 		}
@@ -204,13 +238,35 @@ suite("企微桥接的等待选择提醒", () => {
 			const inbox = new InteractionInbox(sidecarDir);
 			inbox.prime();
 			appendHookEvent(sidecarDir, "s9", "q10", { questions: [{ question: "第二条" }] });
-			const pending = inbox.poll();
-			assert.strictEqual(pending.length, 1);
-			assert.strictEqual(pending[0].toolCallId, "q10");
+			const pending = onlyAsk(inbox.poll());
+			assert.strictEqual(pending.toolCallId, "q10");
 			// 上面那条 q9 在 prime 之前就写好了，属于基线，只验证脚本确实写进了文件
 			const written = fs.readFileSync(path.join(sidecarDir, "s9.jsonl"), "utf8");
 			assert.ok(written.includes("\"q9\""), "hook 应把提问事件写进 sidecar");
 			assert.ok(written.includes("继续吗？"));
+
+			// 收场信号：非提问工具的 PostToolUse 同样不该写东西
+			runHook({
+				hook_event_name: "PostToolUse",
+				tool_name: "run_in_terminal",
+				tool_use_id: "other-2",
+				session_id: "s9",
+				transcript_path: transcriptPath,
+			});
+			runHook({
+				hook_event_name: "PostToolUse",
+				tool_name: "vscode_askQuestions",
+				tool_use_id: "q10",
+				session_id: "s9",
+				transcript_path: transcriptPath,
+			});
+			const notices = inbox.poll();
+			assert.deepStrictEqual(
+				notices.map((notice) => notice.kind),
+				["done"],
+				"PostToolUse 应只产出一条 done，且不计入其它工具"
+			);
+			assert.strictEqual(notices[0].kind === "done" ? notices[0].sessionId : "", "s9");
 		} finally {
 			fs.rmSync(base, { recursive: true, force: true });
 		}
@@ -226,12 +282,31 @@ function makeTempInteractions(): string {
 	return fs.mkdtempSync(path.join(os.tmpdir(), "libiao-interact-"));
 }
 
+function onlyAsk(notices: InteractionNotice[]): PendingInteraction {
+	assert.strictEqual(notices.length, 1, `应只产出一条通知，实际 ${notices.length}`);
+	const [notice] = notices;
+	if (notice.kind !== "ask") {
+		throw new Error(`应产出 ask 通知，实际 ${notice.kind}`);
+	}
+	return notice.interaction;
+}
+
 function appendHookEvent(dir: string, sessionId: string, toolCallId: string, args: unknown): void {
 	fs.mkdirSync(dir, { recursive: true });
 	const line = `${JSON.stringify({
 		toolCallId,
 		toolName: "vscode_askQuestions",
 		arguments: args,
+		at: new Date().toISOString(),
+	})}\n`;
+	fs.appendFileSync(path.join(dir, `${sessionId}.jsonl`), line, "utf8");
+}
+
+function appendDoneEvent(dir: string, sessionId: string): void {
+	fs.mkdirSync(dir, { recursive: true });
+	const line = `${JSON.stringify({
+		kind: "done",
+		toolName: "vscode_askQuestions",
 		at: new Date().toISOString(),
 	})}\n`;
 	fs.appendFileSync(path.join(dir, `${sessionId}.jsonl`), line, "utf8");

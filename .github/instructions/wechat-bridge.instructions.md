@@ -26,6 +26,16 @@ applyTo: "**/wechatBridge*.ts,**/WechatNotify*.ps1,assets/hooks/**"
   - 答案键 `${resolveId}:${index}`；值：文本题 → 字符串，单选 → `{selectedValue}`，多选 → `{selectedValues}`；**选项值只能传 `options[].label` 原文**，传带 ` — description` 的显示文本会匹配不上。`answers` 传 `undefined` = 全部跳过（工具正常返回 `skipped: true`，不抛取消）。
   - **时序坑**：PreToolUse hook 在 `toolCalling.tsx:301` 触发，而轮播追加与监听注册在 `askQuestionsTool.ts:219-229`，比它晚。**在 hook 里同步调这个命令必定空转**。现在的实现在用户回复时（秒级之后）才调，所以安全；若将来改成一收到 sidecar 就自动作答，必须先延后到轮播注册之后。
   - 监听器守卫 `event.resolveId !== carousel.resolveId || carousel.isUsed` 会在工具 `finally` 里 dispose（`:239`），工具返回后命令即失效；autopilot / `chat.autoReply` 会预置 `isUsed = true`，外部作答一律被挡。所以待答状态必须带 10 分钟 TTL，过期就不能再假装作答成功。
+  - **`executeCommand` 的成功是假的**：轮播已关、`isUsed`、`resolveId` 不匹配都只会静默无效，命令照样 resolve。所以「手机答复成功」必须靠 `PostToolUse` 的收场信号来收回，不能信自家回覆。
+
+- **收场信号只能走 `postToolUse`**：扩展侧完全观测不到轮播被关闭，没有这条信号就会出现「用户已在电脑上答完、手机再回编号还收到一句『✅ 已提交』」的假成功。`PostToolUse` 是核心支持的 hook 类型（`hookTypes.ts:16-17`，`HOOK_TYPE_TO_SDK_KEY['PostToolUse'] = 'onPostToolUse'`），工具成功返回后触发一次。`WechatInteract.js` 对 `vscode_askQuestions` 追加 `{kind:'done'}` 行（**不扦 toolCallId**：提问工具是串行的，同一会话此刻只可能有一个待答提问），`InteractionInbox.poll()` 返回 `InteractionNotice[]`（`ask` / `done`），服务收到 `done` 就 `clearPendingInteraction(sessionId)`。hook 的 stdout 非 JSON 时核心直接忽略（`copilotPluginConverters.ts:404-430`），所以静默写盘 + `exit 0` 对两类 hook 都安全。多个问题一次提问时同属一份轮播，`done` 一次就够了。
+
+- **作答语法：编号裸回，自定义必须加前缀**：
+  - 裸数字/逗号分隔数字 → 选项索引；`跳过`/`略过`/`skip` → `answers = undefined`。
+  - `答 内容` / `答：内容` → `{freeformValue}`。**裸文字不当答案**：提问挂着时用户也可能只想正常聊一句，静默提交会把轮播关掉且不可撤回，所以裸文字只回提示。
+  - 只有 0 选项的纯文本题例外，整条消息就是答案，前缀可选也可剥。
+  - 多问题必须一次给全编号，且含多选题时直接让回电脑（一份轮播只能提交一次，不能分次补答）。
+  - 选项渲染前用 `stripOwnNumber(label, position)` 剥掉模型自己带的序号（只在序号等于该选项位置时才剥，避免误伤 `1.5 版本` 这类内容），否则会出现「1. 1 · 生产」的双编号。
   - 扩展侧没有、也不该有「取消当前轮次」的调用：取消是 VS Code 自己在提交新消息时做的，扩展不知情。
 
 ## 2. 正文来源必须是 transcripts，不是 chatSessions
@@ -61,7 +71,7 @@ applyTo: "**/wechatBridge*.ts,**/WechatNotify*.ps1,assets/hooks/**"
 - 群通知去重：注入前把 prompt 的 `sha256(UTF-8, trim)` 追加到 `%TEMP%/libiao-copilot-bridge-prompts.jsonl`（只存哈希，30 分钟 TTL），`WechatNotify.ps1` 的 `Test-BridgeInjectedPrompt` 命中就跳过群通知。两侧哈希算法已实测一致（含 emoji）。
 - 去重开关在扩展侧：`notifyGroupForBridgeTurns`（默认 false = 跳过）。要改行为改这里，**别去动 ps1**。
 - `assets/hooks/WechatNotify.ps1` 改行为必须递增 `$ScriptVersion`（扩展动态解析头部版本号判断「工作区副本过时」，无硬编码常量）；工作区副本在 `<workspace>/.github/hooks/`，同步时要一并覆盖，否则面板会一直提示过时。
-- `assets/hooks/WechatInteract.js` 是 `PreToolUse` 的命令体，工作区副本同样要同步（面板的「创建企微联动」会逐字复制，已存在则跳过）。它不发 webhook、只落盘 sidecar，所以没有版本号机制。**缺这个文件比不提醒更糟**：`node` 会非 0 退出，核心把每次工具调用的 hook 失败当 warning 报给用户。
+- `assets/hooks/WechatInteract.js` 同时是 `PreToolUse` 与 `PostToolUse` 的命令体，工作区副本同样要同步（面板的「创建企微联动」会逐字复制，已存在则跳过）。它不发 webhook、只落盘 sidecar，所以没有版本号机制。**缺这个文件比不提醒更糟**：`node` 会非 0 退出，核心把每次工具调用的 hook 失败当 warning 报给用户。
 
 ## 6. 排查证据
 

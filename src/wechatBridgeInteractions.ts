@@ -25,6 +25,9 @@ export const INTERACTIONS_DIR_NAME = "wechatPending";
 /** hook 侧只会为这个工具写事件：它是唯一确定会阻塞等用户回答的工具 */
 export const ASK_QUESTIONS_TOOL_NAME = "vscode_askQuestions";
 
+/** sidecar 里标记「提问已收场」的行；与 hook 脚本里的同名常量必须一致 */
+export const INTERACTION_DONE_KIND = "done";
+
 /** 去重表上限：只防止长期运行无限增长，正常一次会话远到不了 */
 const MAX_TRACKED_IDS = 500;
 
@@ -70,6 +73,21 @@ interface InteractionEvent {
 	questions: PendingQuestion[];
 	markdown: string;
 }
+
+/**
+ * 一次轮询里看到的通知。
+ *
+ * `done` 来自 PostToolUse hook：提问工具一旦返回（无论谁答的、还是被取消），
+ * 那个轮播就再也不能作答了。没有它就只能靠 TTL 猜，用户会在电脑上答完后又
+ * 收到一句「已提交」。只按工具名匹配，不需要 toolCallId 配对 —— 提问工具是串行的。
+ */
+export type InteractionNotice =
+	| { kind: "ask"; interaction: PendingInteraction }
+	| { kind: "done"; sessionId: string };
+
+type TailEvent =
+	| { kind: "ask"; event: InteractionEvent }
+	| { kind: "done"; sessionId: string };
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
 	return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -125,6 +143,21 @@ export function parseQuestions(value: unknown): PendingQuestion[] {
 }
 
 /**
+ * 剥掉 label 自带的序号，避免渲染成「1. 1. 生产」。
+ *
+ * 模型生成参数时经常自己给选项编号（实测写成 `1 · 手机端显示…`），我们再补一层就重复了。
+ * 只剥「序号等于这一项位置」的前缀，且 `1.5` 这种不算（点号后必须有空白），
+ * 免得把本身就以数字开头的标签改坏。
+ */
+export function stripOwnNumber(label: string, position: number): string {
+	const match = /^(\d+)\s*(?:[、·:：)）]|\.(?=\s))\s*(?=\S)/.exec(label);
+	if (!match || Number(match[1]) !== position) {
+		return label;
+	}
+	return label.slice(match[0].length).trim();
+}
+
+/**
  * 把 vscode_askQuestions 的参数渲染成企微可读的 markdown。
  * 参数结构见 copilot 的 IAskQuestionsParams：{ questions: [{ header, question, options[], multiSelect }] }
  */
@@ -140,7 +173,8 @@ export function renderQuestions(value: unknown): string {
 			lines.push(question.text);
 		}
 		question.options.forEach((option, index) => {
-			lines.push(`${index + 1}. ${option.label}${option.description ? ` — ${option.description}` : ""}`);
+			const label = stripOwnNumber(option.label, index + 1);
+			lines.push(`${index + 1}. ${label}${option.description ? ` — ${option.description}` : ""}`);
 		});
 		if (lines.length > 0) {
 			blocks.push(lines.join("\n"));
@@ -155,7 +189,7 @@ export function renderQuestions(value: unknown): string {
 		blocks.join("\n\n"),
 		multi
 			? `✍️ 直接回复 ${questions.length} 个编号作答（如 \`${questions.map(() => "1").join(" ")}\`），回「跳过」可略过。`
-			: "✍️ 直接回复编号作答，回「跳过」可略过；也可以在 VS Code 里点选。",
+			: "✍️ 直接回复编号作答，发「答 你的内容」可自定义，回「跳过」可略过；也可以在 VS Code 里点选。",
 	].join("\n\n");
 }
 
@@ -167,7 +201,7 @@ export function resolveInteractionsDir(transcriptsDir: string): string {
 /** 增量跟随单个 sidecar 文件。只在完整行上推进 offset，不会切碎多字节字符 */
 class InteractionTail {
 	private offset = 0;
-	private readonly events: InteractionEvent[] = [];
+	private readonly events: TailEvent[] = [];
 
 	constructor(
 		private readonly sessionId: string,
@@ -187,7 +221,7 @@ class InteractionTail {
 		this.events.length = 0;
 	}
 
-	collect(): InteractionEvent[] {
+	collect(): TailEvent[] {
 		this.readNewLines();
 		if (this.events.length === 0) {
 			return [];
@@ -248,6 +282,11 @@ class InteractionTail {
 			if (!record) {
 				continue;
 			}
+			// 完成事件在 hook 侧就标了 kind，不需要再解析参数
+			if (readText(record.kind).trim() === INTERACTION_DONE_KIND) {
+				this.events.push({ kind: "done", sessionId: this.sessionId });
+				continue;
+			}
 			const toolCallId = readText(record.toolCallId).trim();
 			if (!toolCallId) {
 				continue;
@@ -258,11 +297,14 @@ class InteractionTail {
 				continue;
 			}
 			this.events.push({
-				toolCallId,
-				sessionId: this.sessionId,
-				resolveId: toResolveId(toolCallId),
-				questions,
-				markdown,
+				kind: "ask",
+				event: {
+					toolCallId,
+					sessionId: this.sessionId,
+					resolveId: toResolveId(toolCallId),
+					questions,
+					markdown,
+				},
 			});
 		}
 	}
@@ -292,24 +334,28 @@ export class InteractionInbox {
 		}
 	}
 
-	poll(): PendingInteraction[] {
+	poll(): InteractionNotice[] {
 		this.prime();
-		const pending: PendingInteraction[] = [];
+		const notices: InteractionNotice[] = [];
 		for (const filePath of this.listFiles()) {
-			for (const event of this.tailFor(filePath).collect()) {
+			for (const item of this.tailFor(filePath).collect()) {
+				if (item.kind === "done") {
+					notices.push(item);
+					continue;
+				}
 				// hook 每次工具调用都会跑，同一 toolCallId 理论上只写一次；去重防的是重复行
-				const key = `${event.sessionId}\u0000${event.toolCallId}`;
+				const key = `${item.event.sessionId}\u0000${item.event.toolCallId}`;
 				if (this.seen.has(key)) {
 					continue;
 				}
 				this.seen.add(key);
-				pending.push(event);
+				notices.push({ kind: "ask", interaction: item.event });
 			}
 		}
 		if (this.seen.size > MAX_TRACKED_IDS) {
 			this.seen.clear();
 		}
-		return pending;
+		return notices;
 	}
 
 	private tailFor(filePath: string): InteractionTail {

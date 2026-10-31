@@ -44,13 +44,53 @@ suite("企微回复转提问答案", () => {
 		assert.strictEqual(planQuestionAnswers(single(), "SKIP").kind, "skip");
 	});
 
-	test("单选题里的自由文本 → freeformValue", () => {
-		const plan = planQuestionAnswers(single(), "部署到预发");
+	test("自定义作答要带「答」前缀 → freeformValue", () => {
+		const plan = planQuestionAnswers(single(), "答 部署到预发");
 		assert.strictEqual(plan.kind, "answers");
 		if (plan.kind !== "answers") {
 			return;
 		}
 		assert.deepStrictEqual(plan.answers, { "call_x:0": { freeformValue: "部署到预发" } });
+		assert.ok(plan.summary.includes("部署到预发"));
+		// 冒号、多余空格都不该被当成内容
+		const plan2 = planQuestionAnswers(single(), "答：部署到预发");
+		assert.strictEqual(plan2.kind, "answers");
+		if (plan2.kind !== "answers") {
+			return;
+		}
+		assert.deepStrictEqual(plan2.answers, { "call_x:0": { freeformValue: "部署到预发" } });
+	});
+
+	test("没有前缀的裸文字只回提示，不能默默当成答案把提问答掉", () => {
+		// 提问挂着时用户也可能只是想正常聊一句，静默提交会把轮播关掉且无法撤回
+		const plan = planQuestionAnswers(single(), "部署到预发");
+		assert.strictEqual(plan.kind, "hint");
+		if (plan.kind !== "hint") {
+			return;
+		}
+		// 提示里必须把三条出路都说清楚，否则用户只会反复试
+		assert.ok(plan.text.includes("编号"), "应提示回编号");
+		assert.ok(plan.text.includes("答"), "应提示「答」前缀");
+		assert.ok(plan.text.includes("跳过"), "应提示跳过");
+	});
+
+	test("纯文本题不需要前缀，加了前缀也能剥掉", () => {
+		const interaction = make({ index: 0, header: "", text: "分支名？", options: [], multiSelect: false });
+		const plan = planQuestionAnswers(interaction, "答 feature/a");
+		assert.strictEqual(plan.kind, "answers");
+		if (plan.kind !== "answers") {
+			return;
+		}
+		assert.deepStrictEqual(plan.answers, { "call_x:0": "feature/a" });
+	});
+
+	test("单选题里的纯编号仍然优先按选项解析，不会被前缀规则截走", () => {
+		const plan = planQuestionAnswers(single(), "1");
+		assert.strictEqual(plan.kind, "answers");
+		if (plan.kind !== "answers") {
+			return;
+		}
+		assert.deepStrictEqual(plan.answers, { "call_x:0": { selectedValue: "生产" } });
 	});
 
 	test("无选项的纯文本题把整条消息当答案", () => {

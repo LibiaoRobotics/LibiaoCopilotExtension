@@ -38,6 +38,7 @@ import { LiveTurnScanner, resolveTranscriptsDir, type LiveTurn } from "./wechatB
 import {
 	InteractionInbox,
 	resolveInteractionsDir,
+	type InteractionNotice,
 	type PendingInteraction,
 } from "./wechatBridgeInteractions";
 import { planQuestionAnswers } from "./wechatBridgeAnswers";
@@ -690,7 +691,8 @@ export class WechatBridgeService implements vscode.Disposable {
 		);
 	}
 
-	/** 立即回一条短答复：走原回调，不排队也不进对话 */	private replyInbound(inbound: WechatInboundMessage, prompt: string, text: string, ok: boolean): void {
+	/** 立即回一条短答复：走原回调，不排队也不进对话 */
+	private replyInbound(inbound: WechatInboundMessage, prompt: string, text: string, ok: boolean): void {
 		const content = fitWechatMessage(text);
 		const sent = this.connection?.send(buildStreamRespondRequest(inbound.reqId, inbound.msgid, content)) ?? false;
 		this.lastActivity = {
@@ -1006,15 +1008,20 @@ export class WechatBridgeService implements vscode.Disposable {
 		if (!inbox) {
 			return;
 		}
-		let interactions: PendingInteraction[];
+		let notices: InteractionNotice[];
 		try {
-			interactions = inbox.poll();
+			notices = inbox.poll();
 		} catch (error) {
 			logger.warn("wechat-bridge", { event: "interaction-poll-failed", detail: errorMessage(error) });
 			return;
 		}
-		for (const interaction of interactions) {
-			this.pushInteraction(interaction);
+		for (const notice of notices) {
+			if (notice.kind === "done") {
+				// 提问工具返回了：轮播已关，此刻再拿旧编号去提交只会静默失效
+				this.clearPendingInteraction(notice.sessionId);
+				continue;
+			}
+			this.pushInteraction(notice.interaction);
 		}
 	}
 

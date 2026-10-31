@@ -28,6 +28,14 @@ export type ChatQuestionAnswers = Record<string, ChatQuestionAnswerValue>;
 /** 用户明确表示不想答时的关键词 */
 const SKIP_WORDS = new Set(["跳过", "略过", "skip"]);
 
+/**
+ * 自定义作答前缀。
+ *
+ * 故意不用「裸文字就是自定义答案」：提问挂着时用户也可能只是想正常聊一句，
+ * 那样会被默默当成答案提交、并把提问关掉。前缀让两种意图各自明确。
+ */
+const CUSTOM_PREFIX = /^答\s*(\d+)?\s*[:：]?\s*([\s\S]+)$/;
+
 export type AnswerPlan =
 	| { kind: "answers"; answers: ChatQuestionAnswers; summary: string }
 	| { kind: "skip"; summary: string }
@@ -44,6 +52,14 @@ function optionText(question: PendingQuestion, pick: number): string {
 
 function questionTitle(question: PendingQuestion, position: number): string {
 	return question.header || question.text || `问题 ${position + 1}`;
+}
+
+/** 裸文字时的提示：把三种可用回复都摆出来，免得用户猜 */
+function customHint(question: PendingQuestion, position: number): string {
+	return [
+		`「${questionTitle(question, position)}」还在等你选。`,
+		`回编号作答（1~${question.options.length}），或者发「答 你的内容」自定义作答，回「跳过」略过。`,
+	].join("");
 }
 
 /** 只认「1」「1 2」「1,2」，避免把普通句子里的数字当成选项 */
@@ -72,15 +88,16 @@ export function planQuestionAnswers(interaction: PendingInteraction, message: st
 		return { kind: "skip", summary: "已跳过这次提问，我继续往下走。" };
 	}
 	const picks = readPicks(text);
+	const custom = CUSTOM_PREFIX.exec(text);
 
 	if (questions.length === 1) {
 		const question = questions[0];
 		if (question.options.length === 0) {
-			// 纯文本问题：整条消息就是答案
+			// 纯文本题：本来就只有输入框，整条消息就是答案，不再要求前缀
 			return {
 				kind: "answers",
-				answers: { [answerKey(interaction, question)]: text },
-				summary: `已提交「${questionTitle(question, 0)}」：${text}`,
+				answers: { [answerKey(interaction, question)]: custom ? custom[2].trim() : text },
+				summary: `已提交「${questionTitle(question, 0)}」：${custom ? custom[2].trim() : text}`,
 			};
 		}
 		if (picks) {
@@ -111,19 +128,23 @@ export function planQuestionAnswers(interaction: PendingInteraction, message: st
 				summary: `已提交「${questionTitle(question, 0)}」：${selectedValue}`,
 			};
 		}
-		// 单选问题也允许自由输入（核心默认 allowFreeformInput = true）
-		return {
-			kind: "answers",
-			answers: { [answerKey(interaction, question)]: { freeformValue: text } },
-			summary: `已提交「${questionTitle(question, 0)}」：${text}`,
-		};
+		if (custom) {
+			const freeformValue = custom[2].trim();
+			return {
+				kind: "answers",
+				answers: { [answerKey(interaction, question)]: { freeformValue } },
+				summary: `已提交自定义作答：${freeformValue}`,
+			};
+		}
+		// 裸文字不当答案：否则用户想聊一句就把提问答掉了
+		return { kind: "hint", text: customHint(question, 0) };
 	}
 
-	// 多个问题：必须按顺序一次给全，逐条对应，避免把编号错位到别的问题上
+	// 多个问题：同一份轮播只能提交一次，必须一次给全，避免把编号错位到别的问题上
 	if (!picks) {
 		return {
 			kind: "hint",
-			text: `这条提问有 ${questions.length} 个问题，请按顺序回复 ${questions.length} 个编号（如 \`${questions.map(() => "1").join(" ")}\`），或回到 VS Code 里点选。`,
+			text: `这条提问有 ${questions.length} 个问题，请按顺序回复 ${questions.length} 个编号（如 \`${questions.map(() => "1").join(" ")}\`），或回「跳过」。`,
 		};
 	}
 	if (questions.some((question) => question.multiSelect)) {
